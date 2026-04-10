@@ -30,6 +30,10 @@ import {
 } from './script-to-storyboard-helpers'
 import { buildPrompt, getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
+import {
+  buildVoiceAnalysisDialogueSource,
+  mergeVoiceAnalysisWithScreenplay,
+} from '@/lib/novel-promotion/screenplay-dialogue'
 import { createArtifact } from '@/lib/run-runtime/service'
 import { assertWorkflowRunActive, withWorkflowRunLease } from '@/lib/run-runtime/workflow-lease'
 import {
@@ -454,15 +458,23 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
         }
       }
 
-      if (!episode.novelText || !episode.novelText.trim()) {
-        throw new Error('No novel text to analyze')
+      const dialogueSource = buildVoiceAnalysisDialogueSource({
+        novelText: episode.novelText,
+        clips: selectedClips.map((clip) => ({
+          id: clip.id,
+          screenplay: clip.screenplay,
+        })),
+      })
+
+      if (!dialogueSource.input) {
+        throw new Error('No dialogue source to analyze')
       }
 
       const voicePrompt = buildPrompt({
         promptId: PROMPT_IDS.NP_VOICE_ANALYSIS,
         locale: job.data.locale,
         variables: {
-          input: episode.novelText,
+          input: dialogueSource.input,
           characters_lib_name: (novelData.characters || []).length > 0
             ? (novelData.characters || []).map((item) => item.name).join('、')
             : '无',
@@ -491,7 +503,10 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
               callbacks,
               async () => await runStep(meta, voicePrompt, 'voice_analyze', 2600),
             )
-            voiceLineRows = parseVoiceLinesJson(voiceOutput.text)
+            voiceLineRows = mergeVoiceAnalysisWithScreenplay(
+              parseVoiceLinesJson(voiceOutput.text),
+              dialogueSource.dialogueItems,
+            ) as JsonRecord[]
             break
           } catch (error) {
             if (error instanceof TaskTerminatedError) {

@@ -12,6 +12,10 @@ import {
   parseVoiceLinesJson,
   type VoiceLinePayload,
 } from './voice-analyze-helpers'
+import {
+  buildVoiceAnalysisDialogueSource,
+  mergeVoiceAnalysisWithScreenplay,
+} from '@/lib/novel-promotion/screenplay-dialogue'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
 
@@ -55,6 +59,13 @@ export async function handleVoiceAnalyzeTask(job: Job<TaskJobData>) {
   const episode = await prisma.novelPromotionEpisode.findUnique({
     where: { id: episodeId },
     include: {
+      clips: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          screenplay: true,
+        },
+      },
       storyboards: {
         include: {
           clip: true,
@@ -73,9 +84,15 @@ export async function handleVoiceAnalyzeTask(job: Job<TaskJobData>) {
     throw new Error('Episode does not belong to this project')
   }
 
-  const novelText = episode.novelText
-  if (!novelText) {
-    throw new Error('No novel text to analyze')
+  const dialogueSource = buildVoiceAnalysisDialogueSource({
+    novelText: episode.novelText,
+    clips: (episode.clips || []).map((clip) => ({
+      id: clip.id,
+      screenplay: clip.screenplay,
+    })),
+  })
+  if (!dialogueSource.input) {
+    throw new Error('No dialogue source to analyze')
   }
 
   const analysisModel = await resolveAnalysisModel({
@@ -93,7 +110,7 @@ export async function handleVoiceAnalyzeTask(job: Job<TaskJobData>) {
     promptId: PROMPT_IDS.NP_VOICE_ANALYSIS,
     locale: job.data.locale,
     variables: {
-      input: novelText,
+      input: dialogueSource.input,
       characters_lib_name: charactersLibName,
       characters_introduction: charactersIntroduction,
       storyboard_json: storyboardJson,
@@ -159,7 +176,11 @@ export async function handleVoiceAnalyzeTask(job: Job<TaskJobData>) {
         }
 
         const parsedLines = parseVoiceLinesJson(responseText)
-        const strictLines: StrictVoiceLine[] = parsedLines.map((lineData: VoiceLinePayload, index: number) => {
+        const resolvedLines = mergeVoiceAnalysisWithScreenplay(
+          parsedLines,
+          dialogueSource.dialogueItems,
+        ) as VoiceLinePayload[]
+        const strictLines: StrictVoiceLine[] = resolvedLines.map((lineData: VoiceLinePayload, index: number) => {
           if (typeof lineData.lineIndex !== 'number' || !Number.isFinite(lineData.lineIndex)) {
             throw new Error(`voice line ${index + 1} is missing valid lineIndex`)
           }

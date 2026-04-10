@@ -93,6 +93,7 @@ describe('worker voice-analyze behavior', () => {
       id: 'episode-1',
       novelPromotionProjectId: 'np-project-1',
       novelText: '这是可以用于台词分析的文本',
+      clips: [],
       storyboards: [
         {
           id: 'storyboard-1',
@@ -225,5 +226,60 @@ describe('worker voice-analyze behavior', () => {
 
     const job = buildJob({ episodeId: 'episode-1' })
     await expect(handleVoiceAnalyzeTask(job)).rejects.toThrow('references non-existent panel')
+  })
+
+  it('uses structured screenplay as dialogue truth even without novelText', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: null,
+      clips: [
+        {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Hero', lines: '按剧本这句才是正确的' },
+                ],
+              },
+            ],
+          }),
+        },
+      ],
+      storyboards: [
+        {
+          id: 'storyboard-1',
+          clip: { id: 'clip-1' },
+          panels: [{ id: 'panel-1', panelIndex: 0 }],
+        },
+      ],
+    })
+    helperMock.parseVoiceLinesJson.mockReturnValueOnce([
+      {
+        lineIndex: 1,
+        speaker: 'Wrong Speaker',
+        content: '小说里猜出来的错误台词',
+        emotionStrength: 0.3,
+        matchedPanel: {
+          storyboardId: 'storyboard-1',
+          panelIndex: 0,
+        },
+      },
+    ])
+
+    const result = await handleVoiceAnalyzeTask(buildJob({ episodeId: 'episode-1' }))
+
+    expect(result).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      count: 1,
+      matchedCount: 1,
+    }))
+    expect(txState.createdRows[0]).toEqual(expect.objectContaining({
+      speaker: 'Hero',
+      content: '按剧本这句才是正确的',
+      emotionStrength: 0.3,
+    }))
   })
 })

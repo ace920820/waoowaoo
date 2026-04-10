@@ -390,6 +390,56 @@ describe('worker script-to-storyboard behavior', () => {
     })
   })
 
+  it('script-to-storyboard voice analysis prefers structured screenplay lines', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: null,
+      clips: [
+        {
+          id: 'clip-1',
+          content: 'clip content',
+          characters: JSON.stringify(['Narrator']),
+          location: 'Office',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Narrator', lines: '剧本里定义的台词' },
+                ],
+              },
+            ],
+          }),
+        },
+      ],
+    })
+    parseVoiceLinesJsonMock.mockReturnValueOnce([
+      {
+        lineIndex: 1,
+        speaker: 'Wrong Speaker',
+        content: '来自小说猜测的错误内容',
+        emotionStrength: 0.2,
+        matchedPanel: {
+          storyboardId: 'storyboard-1',
+          panelIndex: 1,
+        },
+      },
+    ])
+
+    const result = await handleScriptToStoryboardTask(buildJob({ episodeId: 'episode-1' }))
+
+    expect(result).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      voiceLineCount: 1,
+    }))
+    expect(txState.createdRows[0]).toEqual(expect.objectContaining({
+      speaker: 'Narrator',
+      content: '剧本里定义的台词',
+      emotionStrength: 0.2,
+    }))
+  })
+
   it('phase 级重试: 仅执行原子 phase，不走整图重跑', async () => {
     parseStoryboardRetryTargetMock.mockReturnValue({
       stepKey: 'clip_clip-1_phase3_detail',
