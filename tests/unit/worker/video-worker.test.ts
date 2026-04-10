@@ -291,6 +291,80 @@ describe('worker video processor behavior', () => {
         }),
       }),
     )
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat this panel as intentionally non-speaking.'),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 为 dialogue panel 注入显式口播执行指令', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat the listed lines as intentional on-screen spoken dialogue for this panel.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Hero: 第一句台词'),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 为 voiceover panel 注入旁白执行指令', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '城市从不真正入睡。',
+      matchedVoiceLines: [],
+      storyboard: {
+        clip: {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'voiceover', text: '城市从不真正入睡。' },
+                ],
+              },
+            ],
+          }),
+        },
+      },
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat the listed lines as off-screen narration or voiceover.'),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 显式 generateAudio=false 时使用统一禁音控制面', async () => {

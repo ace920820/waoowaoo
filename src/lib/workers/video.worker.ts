@@ -18,7 +18,7 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
-import { buildPanelSpeechPlanPrompt, derivePanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import { buildPanelVideoGenerationPrompt, derivePanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
@@ -165,8 +165,15 @@ async function generateVideoForPanel(
     ? generationOptions.generateAudio
     : undefined
   const effectiveGenerateAudio = requestedGenerateAudio ?? speechPlan.generatedAudioRequired
-  const prompt = buildPanelSpeechPlanPrompt({
+  const prompt = buildPanelVideoGenerationPrompt({
     basePrompt,
+    panel: {
+      shotType: panel.shotType,
+      cameraMove: panel.cameraMove,
+      description: panel.description,
+      duration: panel.duration,
+      srtSegment: panel.srtSegment,
+    },
     speechPlan,
     generateAudio: effectiveGenerateAudio,
   })

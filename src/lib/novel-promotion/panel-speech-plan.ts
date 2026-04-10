@@ -47,6 +47,14 @@ type StoryboardLike<TPanel extends StoryboardPanelLike> = {
   panels?: TPanel[]
 } & Record<string, unknown>
 
+type VideoPromptPanelContext = {
+  shotType?: string | null
+  cameraMove?: string | null
+  description?: string | null
+  duration?: number | null
+  srtSegment?: string | null
+}
+
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return ''
   return value
@@ -258,6 +266,60 @@ function buildSpeechInstruction(params: {
   return 'Generate audio for the listed speech and keep any visible performance aligned to these lines.'
 }
 
+function buildSpeechModeExecutionBlock(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio: boolean
+}): string {
+  const header = [
+    `Mode: ${params.speechPlan.mode}`,
+    `Audio: ${params.generateAudio ? 'enabled' : 'disabled'}`,
+  ]
+
+  if (!params.generateAudio) {
+    return [
+      ...header,
+      '- Do not generate spoken dialogue, narration, sung lyrics, or other verbal audio.',
+      '- Keep any generated audio non-verbal only, such as ambience, Foley, motion, or environmental sound.',
+      '- Avoid visible mouth-sync performance that implies unheard dialogue.',
+    ].join('\n')
+  }
+
+  if (params.speechPlan.mode === 'silent') {
+    return [
+      ...header,
+      '- Treat this panel as intentionally non-speaking.',
+      '- Do not add spoken dialogue, narration, ad-libs, or implied speech beats.',
+      '- Keep character behavior and facial performance non-speaking; avoid lip-sync-like mouth performance.',
+      '- Audio should stay non-verbal: ambience, movement, impacts, room tone, or scene sound only.',
+    ].join('\n')
+  }
+
+  const numberedLines = params.speechPlan.lines.map((line, index) => {
+    const parenthetical = line.parenthetical ? ` (${line.parenthetical})` : ''
+    return `${index + 1}. ${line.speaker}${parenthetical}: ${line.content}`
+  })
+
+  if (params.speechPlan.mode === 'voiceover') {
+    return [
+      ...header,
+      '- Treat the listed lines as off-screen narration or voiceover.',
+      '- Do not stage these lines as on-screen mouth speech unless the visual prompt explicitly requires it.',
+      '- Keep character blocking and facial performance consistent with listening, acting, or silent reaction rather than speaking these words.',
+      '- Voiceover lines:',
+      ...numberedLines,
+    ].join('\n')
+  }
+
+  return [
+    ...header,
+    '- Treat the listed lines as intentional on-screen spoken dialogue for this panel.',
+    '- If the speaker is visible, align mouth movement and speaking performance to these exact lines.',
+    '- Do not add extra spoken lines, narration, or substitute wording beyond the structured speech plan.',
+    '- Spoken lines:',
+    ...numberedLines,
+  ].join('\n')
+}
+
 function buildStructuredSpeechPlanPayload(params: {
   speechPlan: PanelSpeechPlan
   generateAudio: boolean
@@ -293,5 +355,55 @@ export function buildPanelSpeechPlanPrompt(params: {
     generateAudio,
   })
 
-  return `${basePrompt}\n\n[Structured Speech Plan JSON]\n${JSON.stringify(structuredPayload, null, 2)}`
+  const speechExecutionBlock = buildSpeechModeExecutionBlock({
+    speechPlan: params.speechPlan,
+    generateAudio,
+  })
+
+  return `${basePrompt}\n\n[Speech Direction]\n${speechExecutionBlock}\n\n[Structured Speech Plan JSON]\n${JSON.stringify(structuredPayload, null, 2)}`
+}
+
+function buildPanelVisualContextBlock(params: {
+  panel?: VideoPromptPanelContext | null
+}): string | null {
+  const panel = params.panel
+  if (!panel) return null
+
+  const lines: string[] = []
+  if (typeof panel.shotType === 'string' && panel.shotType.trim()) {
+    lines.push(`Shot type: ${panel.shotType.trim()}`)
+  }
+  if (typeof panel.cameraMove === 'string' && panel.cameraMove.trim()) {
+    lines.push(`Camera move: ${panel.cameraMove.trim()}`)
+  }
+  if (typeof panel.description === 'string' && panel.description.trim()) {
+    lines.push(`Action/visual description: ${panel.description.trim()}`)
+  }
+  if (typeof panel.duration === 'number' && Number.isFinite(panel.duration) && panel.duration > 0) {
+    lines.push(`Target duration seconds: ${panel.duration}`)
+  }
+  if (typeof panel.srtSegment === 'string' && panel.srtSegment.trim()) {
+    lines.push(`Panel text reference: ${panel.srtSegment.trim()}`)
+  }
+
+  if (lines.length === 0) return null
+  return `[Panel Visual Context]\n${lines.join('\n')}`
+}
+
+export function buildPanelVideoGenerationPrompt(params: {
+  basePrompt: string
+  panel?: VideoPromptPanelContext | null
+  speechPlan: PanelSpeechPlan
+  generateAudio?: boolean
+}): string {
+  const visualContextBlock = buildPanelVisualContextBlock({ panel: params.panel })
+  const basePrompt = visualContextBlock
+    ? `${params.basePrompt.trim()}\n\n${visualContextBlock}`
+    : params.basePrompt
+
+  return buildPanelSpeechPlanPrompt({
+    basePrompt,
+    speechPlan: params.speechPlan,
+    generateAudio: params.generateAudio,
+  })
 }

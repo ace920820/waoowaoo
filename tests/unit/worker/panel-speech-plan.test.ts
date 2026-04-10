@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   attachSpeechPlanToStoryboards,
   buildPanelSpeechPlanPrompt,
+  buildPanelVideoGenerationPrompt,
   derivePanelSpeechPlan,
 } from '@/lib/novel-promotion/panel-speech-plan'
 
@@ -210,7 +211,10 @@ describe('panel speech plan helpers', () => {
       speechPlan: storyboard.panels[0].speechPlan,
     })
 
+    expect(prompt).toContain('[Speech Direction]')
     expect(prompt).toContain('[Structured Speech Plan JSON]')
+    expect(prompt).toContain('Mode: dialogue')
+    expect(prompt).toContain('Spoken lines:')
     const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(payload).toMatchObject({
       mode: 'dialogue',
@@ -279,5 +283,67 @@ describe('panel speech plan helpers', () => {
     const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(payload.generateAudio).toBe(false)
     expect(payload.instruction).toContain('Audio generation is disabled')
+  })
+
+  it('emits explicit voiceover execution guidance', () => {
+    const prompt = buildPanelSpeechPlanPrompt({
+      basePrompt: 'Rainy alley, slow dolly in.',
+      speechPlan: {
+        mode: 'voiceover',
+        source: 'screenplay_panel_match',
+        generatedAudioRequired: true,
+        primaryText: '城市从不真正入睡。',
+        speakers: ['Narrator'],
+        lines: [
+          {
+            lineIndex: 3,
+            type: 'voiceover',
+            speaker: 'Narrator',
+            content: '城市从不真正入睡。',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(prompt).toContain('Mode: voiceover')
+    expect(prompt).toContain('off-screen narration or voiceover')
+    expect(prompt).toContain('Narrator: 城市从不真正入睡。')
+  })
+
+  it('builds video prompts from panel visual context plus speech contract', () => {
+    const prompt = buildPanelVideoGenerationPrompt({
+      basePrompt: 'Use strong rim light and shallow depth of field.',
+      panel: {
+        shotType: '近景',
+        cameraMove: '推镜',
+        description: '主角停在门口，缓慢抬头。',
+        duration: 4,
+        srtSegment: '你终于来了。',
+      },
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_panel_match',
+        generatedAudioRequired: true,
+        primaryText: '你终于来了。',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 1,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '你终于来了。',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(prompt).toContain('[Panel Visual Context]')
+    expect(prompt).toContain('Shot type: 近景')
+    expect(prompt).toContain('Camera move: 推镜')
+    expect(prompt).toContain('Action/visual description: 主角停在门口，缓慢抬头。')
+    expect(prompt).toContain('Target duration seconds: 4')
+    expect(prompt).toContain('Mode: dialogue')
   })
 })

@@ -85,6 +85,7 @@ export interface VideoPanel {
   storyboardId: string
   panelIndex: number
   textPanel?: TextPanel
+  speechPlan?: PanelSpeechPlan | null
   firstLastFramePrompt?: string
   imageUrl?: string
   videoUrl?: string

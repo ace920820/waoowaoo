@@ -61,6 +61,7 @@ export function useVideoPanelsProjection({
           panelId,
           storyboardId: storyboard.id,
           panelIndex: actualPanelIndex,
+          speechPlan: panel.speechPlan ?? null,
           textPanel: {
             panel_number: panel.panelNumber || actualPanelIndex + 1,
             shot_type: panel.shotType || '',
