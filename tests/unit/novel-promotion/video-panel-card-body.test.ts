@@ -12,6 +12,10 @@ vi.mock('@/components/ui/config-modals/ModelCapabilityDropdown', () => ({
   ModelCapabilityDropdown: () => React.createElement('div', null, 'model-dropdown'),
 }))
 
+vi.mock('@/components/media/MediaImageWithLoading', () => ({
+  MediaImageWithLoading: ({ alt }: { alt: string }) => React.createElement('div', null, alt),
+}))
+
 vi.mock('@/components/ui/icons', () => ({
   AppIcon: ({ name }: { name: string }) => React.createElement('span', null, name),
 }))
@@ -26,6 +30,28 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     }
     if (key === 'firstLastFrame.generate') return '生成首尾帧视频'
     if (key === 'firstLastFrame.generated') return '首尾帧视频已生成'
+    if (key === 'firstLastFrame.firstFrame') return '首帧'
+    if (key === 'firstLastFrame.lastFrame') return '尾帧'
+    if (key === 'firstLastFrame.firstFrameSource') {
+      return `使用当前镜头 ${String(values?.number ?? '')} 的当前图片作为首帧来源`
+    }
+    if (key === 'firstLastFrame.lastFrameSourceLinked') {
+      return `使用下一镜头 ${String(values?.number ?? '')} 的当前图片作为尾帧来源`
+    }
+    if (key === 'firstLastFrame.lastFrameSourceAvailable') {
+      return `可链接下一镜头 ${String(values?.number ?? '')} 的当前图片作为尾帧来源`
+    }
+    if (key === 'firstLastFrame.tailFrameLinkedDescription') {
+      return `该镜头会从自己的当前图片开始，并以镜头 ${String(values?.number ?? '')} 的当前图片作为尾帧结束。`
+    }
+    if (key === 'firstLastFrame.tailFrameAvailableDescription') {
+      return `你可以把镜头 ${String(values?.number ?? '')} 的当前图片链接为该镜头的尾帧。`
+    }
+    if (key === 'firstLastFrame.noNextPanelDescription') return '没有下一镜头，因此当前镜头只能使用自己的当前图片生成。'
+    if (key === 'firstLastFrame.noNextPanel') return '没有下一镜头'
+    if (key === 'firstLastFrame.noNextPanelSource') return '没有下一镜头，无法提供尾帧来源'
+    if (key === 'firstLastFrame.noSourceImage') return '当前还没有可用的当前图片'
+    if (key === 'firstLastFrame.noTailFrameImage') return '下一镜头还没有当前图片'
     if (key === 'promptModal.promptLabel') return '视频提示词'
     if (key === 'promptModal.placeholder') return '输入首尾帧视频提示词...'
     if (key === 'panelCard.clickToEditPrompt') return '点击编辑提示词...'
@@ -161,7 +187,45 @@ describe('VideoPanelCardBody', () => {
 
     expect(markup).toContain('作为镜头 2 的尾帧')
     expect(markup).toContain('作为镜头 4 的首帧')
+    expect(markup).toContain('使用当前镜头 3 的当前图片作为首帧来源')
+    expect(markup).toContain('使用下一镜头 4 的当前图片作为尾帧来源')
     expect(markup).toContain('视频提示词')
     expect(markup).toContain('生成首尾帧视频')
+  })
+
+  it('renders available tail-frame source when next panel exists but is not linked', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          layout: {
+            ...createRuntime().layout,
+            isLinked: false,
+            isLastFrame: false,
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('你可以把镜头 4 的当前图片链接为该镜头的尾帧。')
+    expect(markup).toContain('可链接下一镜头 4 的当前图片作为尾帧来源')
+  })
+
+  it('renders empty tail-frame state when there is no next panel', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          layout: {
+            ...createRuntime().layout,
+            hasNext: false,
+            nextPanel: null,
+            isLinked: false,
+            isLastFrame: false,
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('没有下一镜头，因此当前镜头只能使用自己的当前图片生成。')
+    expect(markup).toContain('没有下一镜头，无法提供尾帧来源')
   })
 })

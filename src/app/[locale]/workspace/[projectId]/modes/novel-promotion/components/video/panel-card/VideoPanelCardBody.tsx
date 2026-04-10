@@ -3,6 +3,7 @@ import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
+import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import type { VideoPanelRuntime } from './hooks/useVideoPanelActions'
 
 interface VideoPanelCardBodyProps {
@@ -50,6 +51,48 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
   const showsOutgoingLinkBadge = layout.isLinked && !!layout.nextPanel
   const showsPromptEditor = !layout.isLastFrame || layout.isLinked
   const showsFirstLastFrameActions = layout.isLinked && !!layout.nextPanel
+  const hasTailFrameCandidate = layout.hasNext && !!layout.nextPanel
+  const cssAspectRatio = layout.videoRatio.replace(':', '/')
+
+  const renderFramePreview = ({
+    imageUrl,
+    title,
+    source,
+    emptyLabel,
+    accentClassName,
+  }: {
+    imageUrl?: string
+    title: string
+    source: string
+    emptyLabel: string
+    accentClassName: string
+  }) => (
+    <div className="space-y-2 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${accentClassName}`}>
+          {title}
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-lg bg-[var(--glass-bg-surface)]" style={{ aspectRatio: cssAspectRatio }}>
+        {imageUrl ? (
+          <MediaImageWithLoading
+            src={imageUrl}
+            alt={title}
+            containerClassName="h-full w-full"
+            className={`h-full w-full object-cover ${runtime.media.onPreviewImage ? 'cursor-zoom-in' : ''}`}
+            onClick={() => {
+              if (imageUrl) runtime.media.onPreviewImage?.(imageUrl)
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center px-3 text-center text-xs text-[var(--glass-text-tertiary)]">
+            {emptyLabel}
+          </div>
+        )}
+      </div>
+      <div className="text-[11px] text-[var(--glass-text-tertiary)]">{source}</div>
+    </div>
+  )
 
   return (
     <div className="p-4 space-y-2">
@@ -82,6 +125,68 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
             )}
           </div>
         )}
+
+        <div className="mb-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-[var(--glass-text-primary)]">{t('firstLastFrame.title')}</div>
+              <div className="mt-1 text-[11px] text-[var(--glass-text-tertiary)]">
+                {hasTailFrameCandidate
+                  ? t(
+                    layout.isLinked
+                      ? 'firstLastFrame.tailFrameLinkedDescription'
+                      : 'firstLastFrame.tailFrameAvailableDescription',
+                    { number: panelIndex + 2 },
+                  )
+                  : t('firstLastFrame.noNextPanelDescription')}
+              </div>
+            </div>
+            {hasTailFrameCandidate ? (
+              <button
+                onClick={() => actions.onToggleLink(panelKey, panel.storyboardId, panel.panelIndex)}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${layout.isLinked
+                  ? 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)]'
+                  : 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] border border-[var(--glass-stroke-base)]'
+                  }`}
+              >
+                <AppIcon name={layout.isLinked ? 'link' : 'unplug'} className="h-3 w-3" />
+                {layout.isLinked ? t('firstLastFrame.unlinkAction') : t('firstLastFrame.linkToNext')}
+              </button>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-[var(--glass-stroke-base)] px-3 py-1 text-[11px] text-[var(--glass-text-tertiary)]">
+                {t('firstLastFrame.noNextPanel')}
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {renderFramePreview({
+              imageUrl: panel.imageUrl,
+              title: t('firstLastFrame.firstFrame'),
+              source: t('firstLastFrame.firstFrameSource', { number: panelIndex + 1 }),
+              emptyLabel: t('firstLastFrame.noSourceImage'),
+              accentClassName: 'bg-[var(--glass-accent-from)] text-white',
+            })}
+            {renderFramePreview({
+              imageUrl: layout.nextPanel?.imageUrl,
+              title: t('firstLastFrame.lastFrame'),
+              source: hasTailFrameCandidate
+                ? t(
+                  layout.isLinked
+                    ? 'firstLastFrame.lastFrameSourceLinked'
+                    : 'firstLastFrame.lastFrameSourceAvailable',
+                  { number: panelIndex + 2 },
+                )
+                : t('firstLastFrame.noNextPanelSource'),
+              emptyLabel: hasTailFrameCandidate
+                ? t('firstLastFrame.noTailFrameImage')
+                : t('firstLastFrame.noNextPanel'),
+              accentClassName: layout.isLinked
+                ? 'bg-[var(--glass-tone-warning-fg)] text-white'
+                : 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] border border-[var(--glass-stroke-base)]',
+            })}
+          </div>
+        </div>
 
         {showsPromptEditor && (
           <>
