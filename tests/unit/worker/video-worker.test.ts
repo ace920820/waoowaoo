@@ -6,12 +6,29 @@ type WorkerProcessor = (job: Job<TaskJobData>) => Promise<unknown>
 
 type PanelRow = {
   id: string
+  storyboardId: string
+  panelIndex: number
+  srtSegment: string | null
   videoUrl: string | null
   imageUrl: string | null
   videoPrompt: string | null
   description: string | null
   firstLastFramePrompt: string | null
   duration: number | null
+  storyboard?: {
+    clip: {
+      id: string
+      screenplay: string | null
+    } | null
+  }
+  matchedVoiceLines?: Array<{
+    lineIndex: number
+    speaker: string
+    content: string
+    matchedPanelId: string
+    matchedStoryboardId: string
+    matchedPanelIndex: number
+  }>
 }
 
 const workerState = vi.hoisted(() => ({
@@ -102,12 +119,40 @@ vi.mock('@/lib/workers/user-concurrency-gate', () => concurrencyGateMock)
 function buildPanel(overrides?: Partial<PanelRow>): PanelRow {
   return {
     id: 'panel-1',
+    storyboardId: 'storyboard-1',
+    panelIndex: 0,
+    srtSegment: '第一句台词',
     videoUrl: 'cos/base-video.mp4',
     imageUrl: 'cos/panel-image.png',
     videoPrompt: 'panel prompt',
     description: 'panel description',
     firstLastFramePrompt: null,
     duration: 5,
+    storyboard: {
+      clip: {
+        id: 'clip-1',
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '第一句台词' },
+              ],
+            },
+          ],
+        }),
+      },
+    },
+    matchedVoiceLines: [
+      {
+        lineIndex: 1,
+        speaker: 'Hero',
+        content: '第一句台词',
+        matchedPanelId: 'panel-1',
+        matchedStoryboardId: 'storyboard-1',
+        matchedPanelIndex: 0,
+      },
+    ],
     ...(overrides || {}),
   }
 }
@@ -193,6 +238,58 @@ describe('worker video processor behavior', () => {
       {
         Authorization: 'Bearer oa-key',
       },
+    )
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          prompt: expect.stringContaining('[Structured Speech Plan]'),
+        }),
+      }),
+    )
+  })
+
+  it('VIDEO_PANEL: 为 silent panel 注入结构化静音 speech plan', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '人物只是沉默地看着窗外',
+      storyboard: {
+        clip: {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'action', text: '人物只是沉默地看着窗外' },
+                ],
+              },
+            ],
+          }),
+        },
+      },
+      matchedVoiceLines: [],
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          prompt: expect.stringContaining('mode=silent'),
+        }),
+      }),
     )
   })
 

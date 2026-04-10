@@ -1,5 +1,6 @@
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
+import type { PanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
 
 // ============================================
 // 基础项目类型
@@ -192,6 +193,7 @@ export interface NovelPromotionPanel {
   previousImageMedia?: MediaRef | null
   photographyRules: string | null  // 单镜头摄影规则JSON
   actingNotes: string | null        // 演技指导数据JSON
+  speechPlan?: PanelSpeechPlan | null
   // 任务态字段（由 tasks + hook 派生，不再依赖数据库持久化）
   imageTaskRunning?: boolean
   videoTaskRunning?: boolean
