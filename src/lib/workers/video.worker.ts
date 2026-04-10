@@ -161,9 +161,14 @@ async function generateVideoForPanel(
     clip: panel.storyboard?.clip || null,
     voiceLines: panel.matchedVoiceLines,
   })
+  const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
+    ? generationOptions.generateAudio
+    : undefined
+  const effectiveGenerateAudio = requestedGenerateAudio ?? speechPlan.generatedAudioRequired
   const prompt = buildPanelSpeechPlanPrompt({
     basePrompt,
     speechPlan,
+    generateAudio: effectiveGenerateAudio,
   })
 
   const sourceImageUrl = toSignedUrlIfCos(panel.imageUrl, 3600)
@@ -174,9 +179,6 @@ async function generateVideoForPanel(
 
   let lastFrameImageBase64: string | undefined
   const generationMode: VideoGenerationMode = firstLastFramePayload ? 'firstlastframe' : 'normal'
-  const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
-    ? generationOptions.generateAudio
-    : undefined
   let model = modelId
 
   if (firstLastFramePayload) {
@@ -215,7 +217,7 @@ async function generateVideoForPanel(
       ...(projectVideoRatio ? { aspectRatio: projectVideoRatio } : {}),
       ...generationOptions,
       generationMode,
-      ...(typeof requestedGenerateAudio === 'boolean' ? { generateAudio: requestedGenerateAudio } : {}),
+      generateAudio: effectiveGenerateAudio,
       ...(lastFrameImageBase64 ? { lastFrameImageUrl: lastFrameImageBase64 } : {}),
     },
   })

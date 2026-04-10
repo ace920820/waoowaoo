@@ -244,7 +244,7 @@ describe('worker video processor behavior', () => {
       expect.anything(),
       expect.objectContaining({
         options: expect.objectContaining({
-          prompt: expect.stringContaining('[Structured Speech Plan]'),
+          prompt: expect.stringContaining('[Structured Speech Plan JSON]'),
         }),
       }),
     )
@@ -287,7 +287,34 @@ describe('worker video processor behavior', () => {
       expect.anything(),
       expect.objectContaining({
         options: expect.objectContaining({
-          prompt: expect.stringContaining('mode=silent'),
+          prompt: expect.stringContaining('"mode": "silent"'),
+        }),
+      }),
+    )
+  })
+
+  it('VIDEO_PANEL: 显式 generateAudio=false 时使用统一禁音控制面', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+        generationOptions: {
+          generateAudio: false,
+        },
+      },
+    })
+
+    await processor!(job)
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          generateAudio: false,
+          prompt: expect.stringContaining('"generateAudio": false'),
         }),
       }),
     )

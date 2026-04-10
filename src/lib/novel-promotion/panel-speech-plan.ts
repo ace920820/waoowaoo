@@ -18,7 +18,7 @@ export type PanelSpeechLine = {
 export type PanelSpeechPlan = {
   mode: PanelSpeechMode
   source: 'screenplay_voice_lines' | 'screenplay_panel_match' | 'none'
-  generatedAudioRequired: true
+  generatedAudioRequired: boolean
   primaryText: string | null
   speakers: string[]
   lines: PanelSpeechLine[]
@@ -116,20 +116,53 @@ function toSpeechLineFromVoiceLine(
   }
 }
 
-function matchSpeechItemsByPanelSourceText(
+type PanelSpeechTextMatch = {
+  item: ScreenplayDialogueItem
+  quality: 'exact' | 'narrow_fuzzy'
+}
+
+function pickSinglePanelSpeechMatch(
   panel: PanelSpeechPlanPanel,
   screenplayItems: ScreenplayDialogueItem[],
-): PanelSpeechLine[] {
+): PanelSpeechTextMatch[] {
   const panelText = normalizeText(panel.srtSegment)
   if (!panelText) return []
 
-  return screenplayItems
-    .filter((item) => {
-      const itemText = normalizeText(item.content)
-      if (!itemText) return false
-      return panelText.includes(itemText) || itemText.includes(panelText)
-    })
-    .map(toSpeechLineFromScreenplay)
+  const exactMatches = screenplayItems.filter((item) => {
+    const itemText = normalizeText(item.content)
+    return itemText.length > 0 && itemText === panelText
+  })
+
+  if (exactMatches.length === 1) {
+    return [{ item: exactMatches[0], quality: 'exact' }]
+  }
+
+  if (exactMatches.length > 1) {
+    return []
+  }
+
+  const narrowFuzzyMatches = screenplayItems.filter((item) => {
+    const itemText = normalizeText(item.content)
+    if (!itemText) return false
+
+    const shorterLength = Math.min(panelText.length, itemText.length)
+    const longerLength = Math.max(panelText.length, itemText.length)
+    const lengthRatio = shorterLength / longerLength
+    const boundedDelta = longerLength - shorterLength
+    const hasContainment = panelText.includes(itemText) || itemText.includes(panelText)
+
+    if (!hasContainment) return false
+    if (shorterLength < 6) return false
+    if (lengthRatio < 0.8) return false
+    if (boundedDelta > 4) return false
+    return true
+  })
+
+  if (narrowFuzzyMatches.length !== 1) {
+    return []
+  }
+
+  return [{ item: narrowFuzzyMatches[0], quality: 'narrow_fuzzy' }]
 }
 
 export function derivePanelSpeechPlan(params: {
@@ -176,9 +209,9 @@ export function derivePanelSpeechPlan(params: {
     return buildSpeechPlan(matchedVoiceLines, 'screenplay_voice_lines')
   }
 
-  const screenplayMatches = matchSpeechItemsByPanelSourceText(params.panel, screenplayItems)
+  const screenplayMatches = pickSinglePanelSpeechMatch(params.panel, screenplayItems)
   if (screenplayMatches.length > 0) {
-    return buildSpeechPlan(screenplayMatches, 'screenplay_panel_match')
+    return buildSpeechPlan(screenplayMatches.map((match) => toSpeechLineFromScreenplay(match.item)), 'screenplay_panel_match')
   }
 
   return buildSpeechPlan([], 'none')
@@ -206,26 +239,59 @@ export function attachSpeechPlanToStoryboards<
   }))
 }
 
+function buildSpeechInstruction(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio: boolean
+}): string {
+  if (!params.generateAudio) {
+    return 'Audio generation is disabled for this request. Do not add spoken dialogue, narration, ambience, or other generated audio.'
+  }
+
+  if (params.speechPlan.mode === 'silent') {
+    return 'No spoken dialogue or narration in this panel. Keep generated audio non-verbal, such as ambience, movement, or scene sound only.'
+  }
+
+  if (params.speechPlan.mode === 'voiceover') {
+    return 'Generate audio for the listed speech only as off-screen narration or voiceover. Avoid visible mouth-sync performance unless the visuals explicitly require it.'
+  }
+
+  return 'Generate audio for the listed speech and keep any visible performance aligned to these lines.'
+}
+
+function buildStructuredSpeechPlanPayload(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio: boolean
+}) {
+  return {
+    mode: params.speechPlan.mode,
+    source: params.speechPlan.source,
+    generateAudio: params.generateAudio,
+    primaryText: params.speechPlan.primaryText,
+    speakers: params.speechPlan.speakers,
+    lines: params.speechPlan.lines.map((line) => ({
+      lineIndex: line.lineIndex,
+      type: line.type,
+      speaker: line.speaker,
+      content: line.content,
+      parenthetical: line.parenthetical,
+    })),
+    instruction: buildSpeechInstruction(params),
+  }
+}
+
 export function buildPanelSpeechPlanPrompt(params: {
   basePrompt: string
   speechPlan: PanelSpeechPlan
+  generateAudio?: boolean
 }): string {
   const basePrompt = params.basePrompt.trim()
-  const linesBlock = params.speechPlan.lines.length > 0
-    ? params.speechPlan.lines
-      .map((line, index) => `${index + 1}. type=${line.type}; speaker=${line.speaker}; content=${line.content}`)
-      .join('\n')
-    : 'none'
+  const generateAudio = typeof params.generateAudio === 'boolean'
+    ? params.generateAudio
+    : params.speechPlan.generatedAudioRequired
+  const structuredPayload = buildStructuredSpeechPlanPayload({
+    speechPlan: params.speechPlan,
+    generateAudio,
+  })
 
-  const speechInstruction = (() => {
-    if (params.speechPlan.mode === 'silent') {
-      return 'No spoken dialogue or narration in this panel. Keep generated audio non-verbal, such as ambience, movement, or scene sound only.'
-    }
-    if (params.speechPlan.mode === 'voiceover') {
-      return 'Generated audio remains required. Use the listed speech only as off-screen narration or voiceover. Avoid visible mouth-sync performance unless the visuals explicitly require it.'
-    }
-    return 'Generated audio remains required. Use the listed speech as the spoken content for this panel and keep any visible performance aligned to these lines.'
-  })()
-
-  return `${basePrompt}\n\n[Structured Speech Plan]\nmode=${params.speechPlan.mode}\nsource=${params.speechPlan.source}\ngenerated_audio_required=true\nspeakers=${params.speechPlan.speakers.join(', ') || 'none'}\nprimary_text=${params.speechPlan.primaryText || 'none'}\nlines:\n${linesBlock}\ninstruction=${speechInstruction}`
+  return `${basePrompt}\n\n[Structured Speech Plan JSON]\n${JSON.stringify(structuredPayload, null, 2)}`
 }
