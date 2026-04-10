@@ -7,6 +7,7 @@ import { PanelEditData } from '../PanelEditForm'
 import { ASPECT_RATIO_CONFIGS } from '@/lib/constants'
 import PanelCard from './PanelCard'
 import type { PanelSaveState } from './hooks/usePanelCrudActions'
+import type { PanelImageStatus } from './hooks/image-generation-runtime'
 
 interface StoryboardPanelListProps {
   storyboardId: string
@@ -37,6 +38,10 @@ interface StoryboardPanelListProps {
   onConfirmPanelCandidate: (panelId: string, imageUrl: string) => Promise<void>
   onCancelPanelCandidate: (panelId: string) => void
   onClearPanelTaskError: (panelId: string) => void
+  onDownloadPanelImage: (panelId: string, imageUrl: string | null) => void
+  onReplacePanelImage: (panelId: string, file: File) => Promise<void>
+  onRestorePanelImage: (panelId: string) => Promise<void>
+  getPanelImageStatus: (panelId: string) => PanelImageStatus
   onPreviewImage: (url: string) => void
   onInsertAfter: (panelIndex: number) => void
   onVariant: (panelIndex: number) => void
@@ -72,6 +77,10 @@ export default function StoryboardPanelList({
   onConfirmPanelCandidate,
   onCancelPanelCandidate,
   onClearPanelTaskError,
+  onDownloadPanelImage,
+  onReplacePanelImage,
+  onRestorePanelImage,
+  getPanelImageStatus,
   onPreviewImage,
   onInsertAfter,
   onVariant,
@@ -123,6 +132,8 @@ export default function StoryboardPanelList({
               isSubmittingPanelImageTask={panelTaskRunning}
               failedError={panelFailedError}
               candidateData={panelCandidateData}
+              previousImageUrl={panel.previousImageUrl}
+              imageStatus={getPanelImageStatus(panel.id)}
               onUpdate={(updates) => onPanelUpdate(panel.id, panel, updates)}
               onDelete={() => onPanelDelete(panel.id)}
               onOpenCharacterPicker={() => onOpenCharacterPicker(panel.id)}
@@ -137,6 +148,9 @@ export default function StoryboardPanelList({
               onConfirmCandidate={onConfirmPanelCandidate}
               onCancelCandidate={onCancelPanelCandidate}
               onClearError={() => onClearPanelTaskError(panel.id)}
+              onDownloadImage={() => onDownloadPanelImage(panel.id, imageUrl)}
+              onReplaceImage={(file) => onReplacePanelImage(panel.id, file)}
+              onRestoreImage={() => onRestorePanelImage(panel.id)}
               onPreviewImage={onPreviewImage}
               onInsertAfter={() => onInsertAfter(index)}
               onVariant={() => onVariant(index)}

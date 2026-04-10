@@ -57,6 +57,10 @@ export default function StoryboardGroup({
   onOpenEditModal,
   onOpenAIDataModal,
   getPanelCandidates,
+  onDownloadPanelImage,
+  onReplacePanelImage,
+  onRestorePanelImage,
+  getPanelImageStatus,
   onSelectPanelCandidateIndex,
   onConfirmPanelCandidate,
   onCancelPanelCandidate,
@@ -229,6 +233,10 @@ export default function StoryboardGroup({
         onConfirmPanelCandidate={onConfirmPanelCandidate}
         onCancelPanelCandidate={onCancelPanelCandidate}
         onClearPanelTaskError={clearPanelTaskError}
+        onDownloadPanelImage={onDownloadPanelImage}
+        onReplacePanelImage={onReplacePanelImage}
+        onRestorePanelImage={onRestorePanelImage}
+        getPanelImageStatus={getPanelImageStatus}
         onPreviewImage={onPreviewImage}
         onInsertAfter={handleOpenInsertModal}
         onVariant={handleOpenVariantModal}

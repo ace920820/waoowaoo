@@ -118,6 +118,8 @@ export {
     useRegenerateProjectPanelImage,
     useModifyProjectStoryboardImage,
     useDownloadProjectImages,
+    useUploadProjectStoryboardPanelImage,
+    useRestoreProjectStoryboardPanelImage,
     useUpdateProjectPanel,
     useCreateProjectPanel,
     useDeleteProjectPanel,

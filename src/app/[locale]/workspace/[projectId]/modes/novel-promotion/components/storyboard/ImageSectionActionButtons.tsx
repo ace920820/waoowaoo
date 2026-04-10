@@ -1,6 +1,7 @@
 'use client'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { useTranslations } from 'next-intl'
+import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import ImageGenerationInlineCountButton from '@/components/image-generation/ImageGenerationInlineCountButton'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
@@ -12,12 +13,15 @@ interface ImageSectionActionButtonsProps {
   panelId: string
   imageUrl: string | null
   previousImageUrl?: string | null
+  canDownload: boolean
   isSubmittingPanelImageTask: boolean
   isModifying: boolean
   onRegeneratePanelImage: (panelId: string, count?: number, force?: boolean) => void
   onOpenEditModal: () => void
   onOpenAIDataModal: () => void
-  onUndo?: (panelId: string) => void
+  onDownloadImage?: () => void
+  onReplaceImage?: (file: File) => Promise<void>
+  onRestoreImage?: () => Promise<void>
   triggerPulse: () => void
 }
 
@@ -25,22 +29,65 @@ export default function ImageSectionActionButtons({
   panelId,
   imageUrl,
   previousImageUrl,
+  canDownload,
   isSubmittingPanelImageTask,
   isModifying,
   onRegeneratePanelImage,
   onOpenEditModal,
   onOpenAIDataModal,
-  onUndo,
+  onDownloadImage,
+  onReplaceImage,
+  onRestoreImage,
   triggerPulse,
 }: ImageSectionActionButtonsProps) {
   const t = useTranslations('storyboard')
   const { count, setCount } = useImageGenerationCount('storyboard-candidates')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.currentTarget.value = ''
+          if (!file || !onReplaceImage) return
+          void onReplaceImage(file)
+        }}
+      />
       <div className={`absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 transition-opacity ${isSubmittingPanelImageTask ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
         <div className="relative glass-surface-modal border border-[var(--glass-stroke-base)] rounded-lg p-0.5">
           <div className="flex items-center gap-0.5">
+            {canDownload && onDownloadImage && (
+              <>
+                <button
+                  onClick={onDownloadImage}
+                  className="glass-btn-base glass-btn-secondary flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-95"
+                  title={t('image.downloadCurrent')}
+                >
+                  <AppIcon name="download" className="w-3 h-3" />
+                </button>
+                <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
+              </>
+            )}
+
+            {onReplaceImage && (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmittingPanelImageTask || isModifying}
+                  className="glass-btn-base glass-btn-secondary flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-50"
+                  title={t('image.uploadReplace')}
+                >
+                  <AppIcon name="upload" className="w-3 h-3" />
+                </button>
+                <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
+              </>
+            )}
+
             <ImageGenerationInlineCountButton
               prefix={
                 <>
@@ -86,16 +133,16 @@ export default function ImageSectionActionButtons({
               </button>
             )}
 
-            {previousImageUrl && onUndo && (
+            {previousImageUrl && onRestoreImage && (
               <>
                 <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
                 <button
-                  onClick={() => onUndo(panelId)}
-                  disabled={isSubmittingPanelImageTask}
+                  onClick={() => void onRestoreImage()}
+                  disabled={isSubmittingPanelImageTask || isModifying}
                   className="glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95 disabled:opacity-50"
-                  title={t('assets.image.undo')}
+                  title={t('image.restorePrevious')}
                 >
-                  <span>{t('assets.image.undo')}</span>
+                  <span>{t('image.restorePrevious')}</span>
                 </button>
               </>
             )}

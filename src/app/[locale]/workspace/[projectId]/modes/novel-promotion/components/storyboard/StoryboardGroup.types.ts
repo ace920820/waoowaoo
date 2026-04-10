@@ -3,6 +3,7 @@ import type { StoryboardPanel } from './hooks/useStoryboardState'
 import type { PanelEditData } from '../PanelEditForm'
 import type { VariantData, VariantOptions } from './hooks/usePanelVariant'
 import type { PanelSaveState } from './hooks/usePanelCrudActions'
+import type { PanelImageStatus } from './hooks/image-generation-runtime'
 
 export interface StoryboardGroupProps {
   storyboard: NovelPromotionStoryboard
@@ -46,6 +47,10 @@ export interface StoryboardGroupProps {
   onOpenEditModal: (panelIndex: number) => void
   onOpenAIDataModal: (panelIndex: number) => void
   getPanelCandidates: (panel: NovelPromotionPanel) => { candidates: string[]; selectedIndex: number } | null
+  onDownloadPanelImage: (panelId: string, imageUrl: string | null) => void
+  onReplacePanelImage: (panelId: string, file: File) => Promise<void>
+  onRestorePanelImage: (panelId: string) => Promise<void>
+  getPanelImageStatus: (panelId: string) => PanelImageStatus
   onSelectPanelCandidateIndex: (panelId: string, index: number) => void
   onConfirmPanelCandidate: (panelId: string, imageUrl: string) => Promise<void>
   onCancelPanelCandidate: (panelId: string) => void

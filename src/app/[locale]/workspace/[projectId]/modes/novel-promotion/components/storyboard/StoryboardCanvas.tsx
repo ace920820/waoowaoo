@@ -7,6 +7,7 @@ import { StoryboardPanel } from './hooks/useStoryboardState'
 import { PanelEditData } from '../PanelEditForm'
 import { VariantData, VariantOptions } from './hooks/usePanelVariant'
 import type { PanelSaveState } from './hooks/usePanelCrudActions'
+import type { PanelImageStatus } from './hooks/image-generation-runtime'
 import { AppIcon } from '@/components/ui/icons'
 import { GlassButton } from '@/components/ui/primitives'
 
@@ -56,6 +57,10 @@ interface StoryboardCanvasProps {
   onOpenEditModal: (storyboardId: string, panelIndex: number) => void
   onOpenAIDataModal: (storyboardId: string, panelIndex: number) => void
   getPanelCandidates: (panel: NovelPromotionPanel) => { candidates: string[]; selectedIndex: number } | null
+  onDownloadPanelImage: (panelId: string, imageUrl: string | null) => void
+  onReplacePanelImage: (panelId: string, file: File) => Promise<void>
+  onRestorePanelImage: (panelId: string) => Promise<void>
+  getPanelImageStatus: (panelId: string) => PanelImageStatus
   onSelectPanelCandidateIndex: (panelId: string, index: number) => void
   onConfirmPanelCandidate: (panelId: string, imageUrl: string) => Promise<void>
   onCancelPanelCandidate: (panelId: string) => void
@@ -114,6 +119,10 @@ export default function StoryboardCanvas({
   onOpenEditModal,
   onOpenAIDataModal,
   getPanelCandidates,
+  onDownloadPanelImage,
+  onReplacePanelImage,
+  onRestorePanelImage,
+  getPanelImageStatus,
   onSelectPanelCandidateIndex,
   onConfirmPanelCandidate,
   onCancelPanelCandidate,
@@ -187,6 +196,10 @@ export default function StoryboardCanvas({
               onOpenEditModal={(panelIndex) => onOpenEditModal(storyboard.id, panelIndex)}
               onOpenAIDataModal={(panelIndex) => onOpenAIDataModal(storyboard.id, panelIndex)}
               getPanelCandidates={getPanelCandidates}
+              onDownloadPanelImage={onDownloadPanelImage}
+              onReplacePanelImage={onReplacePanelImage}
+              onRestorePanelImage={onRestorePanelImage}
+              getPanelImageStatus={getPanelImageStatus}
               onSelectPanelCandidateIndex={onSelectPanelCandidateIndex}
               onConfirmPanelCandidate={onConfirmPanelCandidate}
               onCancelPanelCandidate={onCancelPanelCandidate}

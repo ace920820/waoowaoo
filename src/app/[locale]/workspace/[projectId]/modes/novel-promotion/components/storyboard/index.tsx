@@ -90,6 +90,10 @@ export default function StoryboardStage({
     selectPanelCandidateIndex,
     cancelPanelCandidate,
     getPanelCandidates,
+    downloadPanelImage,
+    replacePanelImage,
+    restorePanelImage,
+    getPanelImageStatus,
     downloadAllImages,
     clearStoryboardError,
 
@@ -207,6 +211,10 @@ export default function StoryboardStage({
           onOpenEditModal={(storyboardId, panelIndex) => setEditingPanel({ storyboardId, panelIndex })}
           onOpenAIDataModal={(storyboardId, panelIndex) => setAIDataPanel({ storyboardId, panelIndex })}
           getPanelCandidates={getPanelCandidates}
+          onDownloadPanelImage={downloadPanelImage}
+          onReplacePanelImage={replacePanelImage}
+          onRestorePanelImage={restorePanelImage}
+          getPanelImageStatus={getPanelImageStatus}
           onSelectPanelCandidateIndex={selectPanelCandidateIndex}
           onConfirmPanelCandidate={selectPanelCandidate}
           onCancelPanelCandidate={cancelPanelCandidate}

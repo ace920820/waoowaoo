@@ -13,6 +13,19 @@ import {
     requestTaskResponseWithError,
 } from './mutation-shared'
 
+interface StoryboardPanelImageMutationResult {
+    success: boolean
+    panel?: {
+        id: string
+        storyboardId?: string
+        panelIndex?: number
+        imageUrl: string | null
+        media?: import('@/types/project').MediaRef | null
+        previousImageUrl?: string | null
+        previousImageMedia?: import('@/types/project').MediaRef | null
+    }
+}
+
 export function useRegenerateProjectPanelImage(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
@@ -125,6 +138,43 @@ export function useUpdateProjectPanel(projectId: string) {
                 },
                 '保存失败',
             ),
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+export function useUploadProjectStoryboardPanelImage(projectId: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ panelId, file }: { panelId: string; file: File }) => {
+            const formData = new FormData()
+            formData.append('panelId', panelId)
+            formData.append('file', file)
+
+            return await requestJsonWithError<StoryboardPanelImageMutationResult>(`/api/novel-promotion/${projectId}/panel-image`, {
+                method: 'POST',
+                body: formData,
+            }, '上传替换失败')
+        },
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+export function useRestoreProjectStoryboardPanelImage(projectId: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ panelId }: { panelId: string }) => {
+            return await requestJsonWithError<StoryboardPanelImageMutationResult>(`/api/novel-promotion/${projectId}/panel-image`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ panelId }),
+            }, '恢复上一张失败')
+        },
         onSettled: () => {
             invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
         },

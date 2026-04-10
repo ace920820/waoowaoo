@@ -12,6 +12,8 @@ import {
   useRegenerateProjectPanelImage,
   useModifyProjectStoryboardImage,
   useDownloadProjectImages,
+  useRestoreProjectStoryboardPanelImage,
+  useUploadProjectStoryboardPanelImage,
 } from '@/lib/query/hooks'
 import {
   getStoryboardPanels,
@@ -21,6 +23,7 @@ import {
 import { usePanelImageRegeneration } from './usePanelImageRegeneration'
 import { usePanelImageModification } from './usePanelImageModification'
 import { usePanelImageDownload } from './usePanelImageDownload'
+import { usePanelImageManagement } from './usePanelImageManagement'
 
 export interface SelectedAsset {
   id: string
@@ -50,6 +53,8 @@ export function useStoryboardImageGeneration({
   const regeneratePanelMutation = useRegenerateProjectPanelImage(projectId)
   const modifyPanelMutation = useModifyProjectStoryboardImage(projectId)
   const downloadImagesMutation = useDownloadProjectImages(projectId)
+  const uploadPanelImageMutation = useUploadProjectStoryboardPanelImage(projectId)
+  const restorePanelImageMutation = useRestoreProjectStoryboardPanelImage(projectId)
   const clearStoryboardErrorMutation = useClearProjectStoryboardError(projectId)
 
   const submittingStoryboardIds = new Set<string>(
@@ -145,6 +150,22 @@ export function useStoryboardImageGeneration({
     setIsDownloadingImages,
   })
 
+  const {
+    downloadPanelImage,
+    replacePanelImage,
+    restorePanelImage,
+    getPanelImageStatus,
+  } = usePanelImageManagement({
+    localStoryboards,
+    setLocalStoryboards,
+    setModifyingPanels,
+    uploadPanelImageMutation,
+    restorePanelImageMutation,
+    onSilentRefresh,
+    refreshEpisode,
+    refreshStoryboards,
+  })
+
   const clearStoryboardError = useCallback(async (storyboardId: string) => {
     let snapshot: NovelPromotionStoryboard[] | null = null
     setLocalStoryboards((previousStoryboards) =>
@@ -196,6 +217,10 @@ export function useStoryboardImageGeneration({
     cancelPanelCandidate,
     getPanelCandidates,
     modifyPanelImage,
+    downloadPanelImage,
+    replacePanelImage,
+    restorePanelImage,
+    getPanelImageStatus,
     downloadAllImages,
     clearStoryboardError,
   }

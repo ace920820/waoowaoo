@@ -1,8 +1,18 @@
-import { NovelPromotionPanel, NovelPromotionStoryboard } from '@/types/project'
+import type { MediaRef, NovelPromotionPanel, NovelPromotionStoryboard } from '@/types/project'
 
 export interface StoryboardImageMutationResult {
   async?: boolean
   imageUrl?: string
+}
+
+export type PanelImageStatus = 'manual' | 'restored' | null
+
+interface PanelImageUpdate {
+  id: string
+  imageUrl: string | null
+  media?: MediaRef | null
+  previousImageUrl?: string | null
+  previousImageMedia?: MediaRef | null
 }
 
 export function isAbortError(error: unknown): boolean {
@@ -27,6 +37,29 @@ export function updatePanelImageUrlInStoryboards(
       index === panelIndex ? { ...panel, imageUrl } : panel,
     )
     return { ...storyboard, panels: updatedPanels }
+  })
+}
+
+export function updatePanelImageFieldsInStoryboards(
+  storyboards: NovelPromotionStoryboard[],
+  update: PanelImageUpdate,
+): NovelPromotionStoryboard[] {
+  return storyboards.map((storyboard) => {
+    const panels = getStoryboardPanels(storyboard)
+    let changed = false
+    const updatedPanels = panels.map((panel) => {
+      if (panel.id !== update.id) return panel
+      changed = true
+      return {
+        ...panel,
+        imageUrl: update.imageUrl,
+        media: update.media ?? panel.media,
+        previousImageUrl: update.previousImageUrl ?? null,
+        previousImageMedia: update.previousImageMedia ?? null,
+        candidateImages: null,
+      }
+    })
+    return changed ? { ...storyboard, panels: updatedPanels } : storyboard
   })
 }
 

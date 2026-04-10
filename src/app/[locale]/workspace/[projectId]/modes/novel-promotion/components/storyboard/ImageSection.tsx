@@ -9,6 +9,7 @@ import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import ImageSectionCandidateMode from './ImageSectionCandidateMode'
 import ImageSectionActionButtons from './ImageSectionActionButtons'
 import { AppIcon } from '@/components/ui/icons'
+import type { PanelImageStatus } from './hooks/image-generation-runtime'
 
 interface PanelCandidateData {
   candidates: string[]
@@ -27,6 +28,7 @@ interface ImageSectionProps {
   failedError: string | null
   candidateData: PanelCandidateData | null
   previousImageUrl?: string | null
+  imageStatus?: PanelImageStatus
   onRegeneratePanelImage: (panelId: string, count?: number, force?: boolean) => void
   onOpenEditModal: () => void
   onOpenAIDataModal: () => void
@@ -34,7 +36,9 @@ interface ImageSectionProps {
   onConfirmCandidate: (panelId: string, imageUrl: string) => Promise<void>
   onCancelCandidate: (panelId: string) => void
   onClearError: () => void
-  onUndo?: (panelId: string) => void
+  onDownloadImage?: () => void
+  onReplaceImage?: (file: File) => Promise<void>
+  onRestoreImage?: () => Promise<void>
   onPreviewImage?: (url: string) => void
 }
 
@@ -50,6 +54,7 @@ export default function ImageSection({
   failedError,
   candidateData,
   previousImageUrl,
+  imageStatus,
   onRegeneratePanelImage,
   onOpenEditModal,
   onOpenAIDataModal,
@@ -57,7 +62,9 @@ export default function ImageSection({
   onConfirmCandidate,
   onCancelCandidate,
   onClearError,
-  onUndo,
+  onDownloadImage,
+  onReplaceImage,
+  onRestoreImage,
   onPreviewImage,
 }: ImageSectionProps) {
   const t = useTranslations('storyboard')
@@ -177,6 +184,14 @@ export default function ImageSection({
         <span className="glass-chip glass-chip-neutral px-2 py-0.5 text-xs font-medium">{globalPanelNumber}</span>
       </div>
 
+      {imageStatus && (
+        <div className="absolute top-9 left-2">
+          <span className={`glass-chip px-2 py-0.5 text-[10px] ${imageStatus === 'manual' ? 'glass-chip-success' : 'glass-chip-warning'}`}>
+            {imageStatus === 'manual' ? t('image.manuallyReplaced') : t('image.restoredPrevious')}
+          </span>
+        </div>
+      )}
+
       <div className="absolute top-2 right-2">
         <span className="glass-chip glass-chip-info px-2 py-0.5 text-xs">{shotType}</span>
       </div>
@@ -186,12 +201,15 @@ export default function ImageSection({
           panelId={panelId}
           imageUrl={imageUrl}
           previousImageUrl={previousImageUrl}
+          canDownload={!!imageUrl}
           isSubmittingPanelImageTask={isSubmittingPanelImageTask}
           isModifying={isModifying}
           onRegeneratePanelImage={onRegeneratePanelImage}
           onOpenEditModal={onOpenEditModal}
           onOpenAIDataModal={onOpenAIDataModal}
-          onUndo={onUndo}
+          onDownloadImage={onDownloadImage}
+          onReplaceImage={onReplaceImage}
+          onRestoreImage={onRestoreImage}
           triggerPulse={triggerPulse}
         />
       )}

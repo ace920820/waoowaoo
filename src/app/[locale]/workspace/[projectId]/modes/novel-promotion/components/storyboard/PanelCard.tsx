@@ -7,6 +7,7 @@ import PanelActionButtons from './PanelActionButtons'
 import { StoryboardPanel } from './hooks/useStoryboardState'
 import { GlassSurface } from '@/components/ui/primitives'
 import { AppIcon } from '@/components/ui/icons'
+import type { PanelImageStatus } from './hooks/image-generation-runtime'
 
 interface PanelCandidateData {
   candidates: string[]
@@ -29,6 +30,7 @@ interface PanelCardProps {
   failedError: string | null
   candidateData: PanelCandidateData | null
   previousImageUrl?: string | null  // 支持撤回
+  imageStatus?: PanelImageStatus
   onUpdate: (updates: Partial<PanelEditData>) => void
   onDelete: () => void
   onOpenCharacterPicker: () => void
@@ -43,7 +45,9 @@ interface PanelCardProps {
   onConfirmCandidate: (panelId: string, imageUrl: string) => Promise<void>
   onCancelCandidate: (panelId: string) => void
   onClearError: () => void
-  onUndo?: (panelId: string) => void  // 撤回到上一版本
+  onDownloadImage?: () => void
+  onReplaceImage?: (file: File) => Promise<void>
+  onRestoreImage?: () => Promise<void>
   onPreviewImage?: (url: string) => void  // 放大预览图片
   onInsertAfter?: () => void  // 在此镜头后插入
   onVariant?: () => void  // 生成镜头变体
@@ -66,6 +70,7 @@ export default function PanelCard({
   failedError,
   candidateData,
   previousImageUrl,
+  imageStatus,
   onUpdate,
   onDelete,
   onOpenCharacterPicker,
@@ -80,7 +85,9 @@ export default function PanelCard({
   onConfirmCandidate,
   onCancelCandidate,
   onClearError,
-  onUndo,
+  onDownloadImage,
+  onReplaceImage,
+  onRestoreImage,
   onPreviewImage,
   onInsertAfter,
   onVariant,
@@ -119,6 +126,7 @@ export default function PanelCard({
           failedError={failedError}
           candidateData={candidateData}
           previousImageUrl={previousImageUrl}
+          imageStatus={imageStatus}
           onRegeneratePanelImage={onRegeneratePanelImage}
           onOpenEditModal={onOpenEditModal}
           onOpenAIDataModal={onOpenAIDataModal}
@@ -126,7 +134,9 @@ export default function PanelCard({
           onConfirmCandidate={onConfirmCandidate}
           onCancelCandidate={onCancelCandidate}
           onClearError={onClearError}
-          onUndo={onUndo}
+          onDownloadImage={onDownloadImage}
+          onReplaceImage={onReplaceImage}
+          onRestoreImage={onRestoreImage}
           onPreviewImage={onPreviewImage}
         />
         {/* 插入分镜/镜头变体按钮 - 在图片区域右侧垂直居中 */}
