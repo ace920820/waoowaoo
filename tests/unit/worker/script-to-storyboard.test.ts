@@ -440,6 +440,91 @@ describe('worker script-to-storyboard behavior', () => {
     }))
   })
 
+  it('script-to-storyboard falls back to novelText when screenplay coverage is partial', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: 'A complete fallback chapter text.',
+      clips: [
+        {
+          id: 'clip-1',
+          content: 'clip content',
+          characters: JSON.stringify(['Narrator']),
+          location: 'Office',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Narrator', lines: '只有一个 clip 有结构化台词' },
+                ],
+              },
+            ],
+          }),
+        },
+        {
+          id: 'clip-2',
+          content: 'clip content 2',
+          characters: JSON.stringify(['Narrator']),
+          location: 'Office',
+          screenplay: null,
+        },
+      ],
+    })
+
+    const result = await handleScriptToStoryboardTask(buildJob({ episodeId: 'episode-1' }))
+
+    expect(result).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      voiceLineCount: 1,
+    }))
+  })
+
+  it('script-to-storyboard retries and then fails when screenplay-mode AI output is incomplete', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: null,
+      clips: [
+        {
+          id: 'clip-1',
+          content: 'clip content',
+          characters: JSON.stringify(['Narrator', 'Guide']),
+          location: 'Office',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Narrator', lines: '第一句' },
+                  { type: 'dialogue', character: 'Guide', lines: '第二句' },
+                ],
+              },
+            ],
+          }),
+        },
+      ],
+    })
+    parseVoiceLinesJsonMock.mockReturnValue([
+      {
+        lineIndex: 1,
+        speaker: 'Narrator',
+        content: '第一句',
+        emotionStrength: 0.4,
+        matchedPanel: {
+          storyboardId: 'storyboard-1',
+          panelIndex: 1,
+        },
+      },
+    ])
+
+    await expect(handleScriptToStoryboardTask(buildJob({ episodeId: 'episode-1' }))).rejects.toThrow(
+      'voice analysis returned 1 lines for 2 screenplay items',
+    )
+    expect(parseVoiceLinesJsonMock).toHaveBeenCalledTimes(2)
+    expect(txState.createdRows).toEqual([])
+  })
+
   it('phase 级重试: 仅执行原子 phase，不走整图重跑', async () => {
     parseStoryboardRetryTargetMock.mockReturnValue({
       stepKey: 'clip_clip-1_phase3_detail',

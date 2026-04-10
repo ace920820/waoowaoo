@@ -51,6 +51,13 @@ export type VoiceAnalysisDialogueSource = {
   dialogueItems: ScreenplayDialogueItem[]
 }
 
+type ScreenplayCoverageStats = {
+  totalClips: number
+  clipsWithScreenplay: number
+  clipsWithUsableDialogue: number
+  malformedScreenplayClips: number
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -137,12 +144,101 @@ export function extractScreenplayDialogueItems(clips: ClipDialogueSource[]): Scr
   return items
 }
 
+function collectScreenplayDialogue(clips: ClipDialogueSource[]): {
+  dialogueItems: ScreenplayDialogueItem[]
+  stats: ScreenplayCoverageStats
+} {
+  const dialogueItems: ScreenplayDialogueItem[] = []
+  const stats: ScreenplayCoverageStats = {
+    totalClips: clips.length,
+    clipsWithScreenplay: 0,
+    clipsWithUsableDialogue: 0,
+    malformedScreenplayClips: 0,
+  }
+
+  for (const clip of clips) {
+    const rawScreenplay = typeof clip.screenplay === 'string' ? clip.screenplay.trim() : ''
+    if (!rawScreenplay) {
+      continue
+    }
+
+    stats.clipsWithScreenplay += 1
+    const screenplay = parseScreenplayPayload(rawScreenplay)
+    if (!screenplay || !Array.isArray(screenplay.scenes)) {
+      stats.malformedScreenplayClips += 1
+      continue
+    }
+
+    const clipStartCount = dialogueItems.length
+    const scenes = screenplay.scenes as ScreenplayScene[]
+
+    for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
+      const scene = scenes[sceneIndex]
+      const contentItems = Array.isArray(scene.content) ? (scene.content as ScreenplayContentItem[]) : []
+      const sceneNumber = readNumber(scene.scene_number)
+
+      for (let contentIndex = 0; contentIndex < contentItems.length; contentIndex += 1) {
+        const contentItem = contentItems[contentIndex]
+        const type = readString(contentItem.type)
+
+        if (type === 'dialogue') {
+          const speaker = readString(contentItem.character)
+          const content = readString(contentItem.lines)
+          if (!speaker || !content) continue
+          dialogueItems.push({
+            clipId: clip.id,
+            lineIndex: dialogueItems.length + 1,
+            sceneNumber,
+            sceneIndex,
+            contentIndex,
+            type: 'dialogue',
+            speaker,
+            content,
+            parenthetical: readString(contentItem.parenthetical) || null,
+          })
+          continue
+        }
+
+        if (type === 'voiceover') {
+          const content = readString(contentItem.text)
+          if (!content) continue
+          dialogueItems.push({
+            clipId: clip.id,
+            lineIndex: dialogueItems.length + 1,
+            sceneNumber,
+            sceneIndex,
+            contentIndex,
+            type: 'voiceover',
+            speaker: normalizeVoiceoverSpeaker(contentItem),
+            content,
+            parenthetical: null,
+          })
+        }
+      }
+    }
+
+    if (dialogueItems.length > clipStartCount) {
+      stats.clipsWithUsableDialogue += 1
+    }
+  }
+
+  return { dialogueItems, stats }
+}
+
+function shouldUseScreenplayDialogue(stats: ScreenplayCoverageStats): boolean {
+  if (stats.totalClips === 0) return false
+  if (stats.clipsWithScreenplay !== stats.totalClips) return false
+  if (stats.malformedScreenplayClips > 0) return false
+  if (stats.clipsWithUsableDialogue !== stats.totalClips) return false
+  return true
+}
+
 export function buildVoiceAnalysisDialogueSource(params: {
   novelText: string | null | undefined
   clips: ClipDialogueSource[]
 }): VoiceAnalysisDialogueSource {
-  const dialogueItems = extractScreenplayDialogueItems(params.clips)
-  if (dialogueItems.length > 0) {
+  const { dialogueItems, stats } = collectScreenplayDialogue(params.clips)
+  if (dialogueItems.length > 0 && shouldUseScreenplayDialogue(stats)) {
     const structuredInput = dialogueItems
       .map((item) => {
         const scenePart = item.sceneNumber !== null ? ` scene=${item.sceneNumber}` : ''
@@ -171,6 +267,40 @@ export function buildVoiceAnalysisDialogueSource(params: {
     source: 'empty',
     input: '',
     dialogueItems: [],
+  }
+}
+
+export function validateVoiceAnalysisForScreenplay(params: {
+  voiceLines: VoiceAnalysisLine[]
+  dialogueItems: ScreenplayDialogueItem[]
+}) {
+  const expectedCount = params.dialogueItems.length
+  if (expectedCount === 0) return
+  if (params.voiceLines.length !== expectedCount) {
+    throw new Error(`voice analysis returned ${params.voiceLines.length} lines for ${expectedCount} screenplay items`)
+  }
+
+  const seenIndexes = new Set<number>()
+  for (let index = 0; index < params.voiceLines.length; index += 1) {
+    const voiceLine = params.voiceLines[index]
+    if (typeof voiceLine.lineIndex !== 'number' || !Number.isFinite(voiceLine.lineIndex)) {
+      throw new Error(`voice line ${index + 1} is missing valid lineIndex`)
+    }
+
+    const lineIndex = Math.floor(voiceLine.lineIndex)
+    if (lineIndex <= 0 || lineIndex > expectedCount) {
+      throw new Error(`voice line ${index + 1} has out-of-range lineIndex ${lineIndex}`)
+    }
+    if (seenIndexes.has(lineIndex)) {
+      throw new Error(`voice analysis returned duplicate screenplay lineIndex ${lineIndex}`)
+    }
+    seenIndexes.add(lineIndex)
+  }
+
+  for (let lineIndex = 1; lineIndex <= expectedCount; lineIndex += 1) {
+    if (!seenIndexes.has(lineIndex)) {
+      throw new Error(`voice analysis missing screenplay lineIndex ${lineIndex}`)
+    }
   }
 }
 

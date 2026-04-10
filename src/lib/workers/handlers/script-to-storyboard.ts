@@ -33,6 +33,7 @@ import { resolveAnalysisModel } from './resolve-analysis-model'
 import {
   buildVoiceAnalysisDialogueSource,
   mergeVoiceAnalysisWithScreenplay,
+  validateVoiceAnalysisForScreenplay,
 } from '@/lib/novel-promotion/screenplay-dialogue'
 import { createArtifact } from '@/lib/run-runtime/service'
 import { assertWorkflowRunActive, withWorkflowRunLease } from '@/lib/run-runtime/workflow-lease'
@@ -503,8 +504,15 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
               callbacks,
               async () => await runStep(meta, voicePrompt, 'voice_analyze', 2600),
             )
+            const parsedVoiceLines = parseVoiceLinesJson(voiceOutput.text)
+            if (dialogueSource.source === 'screenplay') {
+              validateVoiceAnalysisForScreenplay({
+                voiceLines: parsedVoiceLines,
+                dialogueItems: dialogueSource.dialogueItems,
+              })
+            }
             voiceLineRows = mergeVoiceAnalysisWithScreenplay(
-              parseVoiceLinesJson(voiceOutput.text),
+              parsedVoiceLines,
               dialogueSource.dialogueItems,
             ) as JsonRecord[]
             break
