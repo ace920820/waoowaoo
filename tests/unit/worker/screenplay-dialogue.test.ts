@@ -56,6 +56,64 @@ describe('screenplay dialogue helpers', () => {
     expect(source.input).not.toContain('这是小说原文里的不同台词')
   })
 
+  it('falls back to novel text when screenplay coverage is partial', () => {
+    const source = buildVoiceAnalysisDialogueSource({
+      novelText: '这里的小说正文应该兜底',
+      clips: [
+        {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Hero', lines: '只有一部分片段有合格剧本' },
+                ],
+              },
+            ],
+          }),
+        },
+        {
+          id: 'clip-2',
+          screenplay: null,
+        },
+      ],
+    })
+
+    expect(source.source).toBe('novelText')
+    expect(source.input).toBe('这里的小说正文应该兜底')
+    expect(source.dialogueItems).toEqual([])
+  })
+
+  it('falls back to novel text when any screenplay payload is malformed', () => {
+    const source = buildVoiceAnalysisDialogueSource({
+      novelText: '小说正文作为安全兜底',
+      clips: [
+        {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Hero', lines: '这句不能单独决定数据源' },
+                ],
+              },
+            ],
+          }),
+        },
+        {
+          id: 'clip-2',
+          screenplay: '{bad json',
+        },
+      ],
+    })
+
+    expect(source.source).toBe('novelText')
+    expect(source.input).toBe('小说正文作为安全兜底')
+    expect(source.dialogueItems).toEqual([])
+  })
+
   it('reconciles AI rows back to structured screenplay dialogue', () => {
     const merged = mergeVoiceAnalysisWithScreenplay(
       [

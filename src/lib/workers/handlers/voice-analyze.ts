@@ -15,6 +15,7 @@ import {
 import {
   buildVoiceAnalysisDialogueSource,
   mergeVoiceAnalysisWithScreenplay,
+  validateVoiceAnalysisForScreenplay,
 } from '@/lib/novel-promotion/screenplay-dialogue'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
@@ -176,6 +177,12 @@ export async function handleVoiceAnalyzeTask(job: Job<TaskJobData>) {
         }
 
         const parsedLines = parseVoiceLinesJson(responseText)
+        if (dialogueSource.source === 'screenplay') {
+          validateVoiceAnalysisForScreenplay({
+            voiceLines: parsedLines,
+            dialogueItems: dialogueSource.dialogueItems,
+          })
+        }
         const resolvedLines = mergeVoiceAnalysisWithScreenplay(
           parsedLines,
           dialogueSource.dialogueItems,

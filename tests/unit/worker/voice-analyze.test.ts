@@ -282,4 +282,93 @@ describe('worker voice-analyze behavior', () => {
       emotionStrength: 0.3,
     }))
   })
+
+  it('falls back to novelText when screenplay payload is only partially available', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: '这是完整小说正文',
+      clips: [
+        {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Hero', lines: '只有这一段是结构化的' },
+                ],
+              },
+            ],
+          }),
+        },
+        {
+          id: 'clip-2',
+          screenplay: null,
+        },
+      ],
+      storyboards: [
+        {
+          id: 'storyboard-1',
+          clip: { id: 'clip-1' },
+          panels: [{ id: 'panel-1', panelIndex: 0 }],
+        },
+      ],
+    })
+
+    const result = await handleVoiceAnalyzeTask(buildJob({ episodeId: 'episode-1' }))
+
+    expect(result).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      count: 2,
+    }))
+  })
+
+  it('fails loudly when screenplay-mode AI output is incomplete', async () => {
+    prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelPromotionProjectId: 'np-project-1',
+      novelText: null,
+      clips: [
+        {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'dialogue', character: 'Hero', lines: '第一句' },
+                  { type: 'dialogue', character: 'Guide', lines: '第二句' },
+                ],
+              },
+            ],
+          }),
+        },
+      ],
+      storyboards: [
+        {
+          id: 'storyboard-1',
+          clip: { id: 'clip-1' },
+          panels: [{ id: 'panel-1', panelIndex: 0 }],
+        },
+      ],
+    })
+    helperMock.parseVoiceLinesJson.mockReturnValue([
+      {
+        lineIndex: 1,
+        speaker: 'Hero',
+        content: '第一句',
+        emotionStrength: 0.6,
+        matchedPanel: {
+          storyboardId: 'storyboard-1',
+          panelIndex: 0,
+        },
+      },
+    ])
+
+    await expect(handleVoiceAnalyzeTask(buildJob({ episodeId: 'episode-1' }))).rejects.toThrow(
+      'voice analysis returned 1 lines for 2 screenplay items',
+    )
+    expect(txState.createdRows).toEqual([])
+  })
 })
