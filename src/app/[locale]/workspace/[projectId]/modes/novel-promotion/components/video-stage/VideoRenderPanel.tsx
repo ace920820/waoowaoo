@@ -126,7 +126,7 @@ export default function VideoRenderPanel({
           const promptField: PromptField = isLinked ? 'firstLastFramePrompt' : 'videoPrompt'
           const defaultFlPrompt = getDefaultFlPrompt(panel.textPanel?.video_prompt, nextPanel?.textPanel?.video_prompt)
           const externalPrompt = isLinked
-            ? (panel.firstLastFramePrompt || defaultFlPrompt)
+            ? (panel.firstLastFramePrompt ?? defaultFlPrompt)
             : panel.textPanel?.video_prompt
           const localPrompt = getLocalPrompt(panelKey, externalPrompt, promptField)
           const isSavingPrompt = savingPrompts.has(`${promptField}:${panelKey}`)
@@ -170,7 +170,7 @@ export default function VideoRenderPanel({
                 flGenerationOptions={flGenerationOptions}
                 flCapabilityFields={flCapabilityFields}
                 flMissingCapabilityFields={flMissingCapabilityFields}
-                flCustomPrompt={flCustomPrompts.get(panelKey) || panel.firstLastFramePrompt || ''}
+                flCustomPrompt={flCustomPrompts.get(panelKey) ?? panel.firstLastFramePrompt ?? ''}
                 defaultFlPrompt={defaultFlPrompt}
                 localPrompt={localPrompt}
                 isSavingPrompt={isSavingPrompt}

@@ -4,15 +4,17 @@ interface ResolveVisibleBaseVideoUrlParams {
   videoUrl?: string | null
   videoGenerationMode?: 'normal' | 'firstlastframe' | null
   isLinked: boolean
+  isLastFrame: boolean
 }
 
 export function resolveVisibleBaseVideoUrl({
   videoUrl,
   videoGenerationMode,
   isLinked,
+  isLastFrame,
 }: ResolveVisibleBaseVideoUrlParams): string | undefined {
   if (!videoUrl) return undefined
-  if (!isLinked) return videoUrl
+  if (!isLinked || isLastFrame) return videoUrl
   return videoGenerationMode === 'firstlastframe' ? videoUrl : undefined
 }
 

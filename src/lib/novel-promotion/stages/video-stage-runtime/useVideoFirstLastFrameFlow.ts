@@ -81,7 +81,7 @@ export function useVideoFirstLastFrameFlow({
         const panelKey = `${panel.storyboardId}-${panel.panelIndex}`
         existingPanelKeys.add(panelKey)
         if (!next.has(panelKey)) {
-          next.set(panelKey, panel.firstLastFramePrompt || '')
+          next.set(panelKey, panel.firstLastFramePrompt ?? '')
         }
       }
 

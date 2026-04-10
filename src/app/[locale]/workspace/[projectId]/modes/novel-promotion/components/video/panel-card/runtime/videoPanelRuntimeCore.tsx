@@ -57,6 +57,7 @@ export function useVideoPanelActions({
     videoUrl: panel.videoUrl,
     videoGenerationMode: panel.videoGenerationMode,
     isLinked,
+    isLastFrame,
   })
   const hasVisibleBaseVideo = !!visibleBaseVideoUrl
 
