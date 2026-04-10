@@ -321,7 +321,7 @@ describe('worker video processor behavior', () => {
     })
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.objectContaining({
-        prompt: expect.stringContaining('Hero: 第一句台词'),
+        prompt: expect.stringContaining('speaker="Hero" content="第一句台词"'),
       }),
     })
   })

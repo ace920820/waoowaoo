@@ -130,7 +130,7 @@ P1.1 当前有效分支提交：
 
 ---
 
-## 四、当前最新进度（P2 第二实施切片已完成）
+## 四、当前最新进度（P2 第二实施切片 review follow-up 已完成）
 
 ### 已完成结果
 根据最新一轮 Codex 开发结果，P2 第二实施切片已经落下：
@@ -164,7 +164,25 @@ P1.1 当前有效分支提交：
   - `voiceover`：明确要求按旁白/画外音执行，避免误做成口型对白
 - 视频请求对自由文本 `videoPrompt` 的依赖降低，因为同时消费了 panel 的结构化视觉字段（shotType / cameraMove / description / duration / srtSegment）
 
-### P2.2：本轮新增落实点
+### P2.2 review follow-up：本轮新增落实点
+本轮是对 **P2 第二实施切片代码 review** 的收口修复，重点不是扩 scope，而是把已有 speech-driven video wiring 再压实一层：
+
+1. **修复多 clip 场景下 voice line → screenplay 的 `lineIndex` 对齐问题**
+   - `derivePanelSpeechPlan` 现在支持在 panel 所属 clip 之外，额外消费 episode 级 clip 集合作为全局 line lookup
+   - panel 文本 fallback 仍限定在当前 clip 内，避免跨 clip 误绑同文案台词
+   - 因此 clip2+ 的 panel 在命中 episode-global `voiceLines.lineIndex` 时，仍能拿回正确 screenplay item/type
+   - 这次专门补了两 clip regression，确保后续 clip 的 `voiceover` 不会被默认降级成 `dialogue`
+
+2. **继续硬化 `[Speech Direction]` 自由文本执行块**
+   - 不再把 `speaker / content / parenthetical` 原样插进指令区
+   - 现在改成 quote + escape 的单行键值表达，显式保留内容但去掉换行污染结构的能力
+   - 结构化 JSON speech block 继续作为机器可消费真相源，人类可读块则更稳健
+
+3. **回归覆盖补强到 review 提出的两类问题**
+   - 多 clip / 后续 clip / `voiceover` lineIndex 命中
+   - newline-heavy / delimiter-like 文本对 `[Speech Direction]` 的污染防护
+
+### P2.2：此前已完成的切片核心能力
 本轮在 **P2-切片1 + P2.1** 的基础上，继续完成了 P2-切片2 的核心接线：
 
 1. **`stage=videos` 的 prompt/request 现在显式按 `speechMode` 分支**
@@ -202,7 +220,9 @@ P1.1 当前有效分支提交：
   - 覆盖重复短对白歧义匹配拒绝
   - 覆盖窄幅且唯一 fuzzy 匹配
   - 覆盖 JSON 序列化下的换行 / 分隔符注入安全
+  - 覆盖 `[Speech Direction]` 指令块对换行 / 分隔符样式输入的 quote+escape 硬化
   - 覆盖 dialogue / voiceover 的显式执行指令
+  - 覆盖两 clip 场景下后续 clip `voiceover` lineIndex 仍能命中正确 screenplay item
   - 覆盖 panel visual context + speech contract 共同构成视频 prompt
 - `tests/unit/worker/video-worker.test.ts`
   - 覆盖 `generateAudio=false` 时 prompt 与 runtime 选项保持一致

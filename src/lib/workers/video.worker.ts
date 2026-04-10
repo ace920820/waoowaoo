@@ -57,6 +57,17 @@ async function fetchPanelByStoryboardIndex(storyboardId: string, panelIndex: num
     include: {
       storyboard: {
         select: {
+          episode: {
+            select: {
+              clips: {
+                select: {
+                  id: true,
+                  screenplay: true,
+                },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          },
           clip: {
             select: {
               id: true,
@@ -90,6 +101,17 @@ async function getPanelForVideoTask(job: Job<TaskJobData>) {
       include: {
         storyboard: {
           select: {
+            episode: {
+              select: {
+                clips: {
+                  select: {
+                    id: true,
+                    screenplay: true,
+                  },
+                  orderBy: { createdAt: 'asc' },
+                },
+              },
+            },
             clip: {
               select: {
                 id: true,
@@ -159,6 +181,7 @@ async function generateVideoForPanel(
       srtSegment: panel.srtSegment,
     },
     clip: panel.storyboard?.clip || null,
+    clips: panel.storyboard?.episode?.clips || [],
     voiceLines: panel.matchedVoiceLines,
   })
   const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'

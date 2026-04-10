@@ -33,6 +33,13 @@ type PanelSpeechPlanPanel = {
 
 type PanelSpeechPlanClip = ClipDialogueSource
 
+type PanelSpeechPlanParams = {
+  panel: PanelSpeechPlanPanel
+  clip?: PanelSpeechPlanClip | null
+  clips?: PanelSpeechPlanClip[] | null
+  voiceLines?: PanelSpeechPlanVoiceLine[] | null
+}
+
 type PanelSpeechPlanVoiceLine = Pick<VoiceAnalysisLine, 'lineIndex' | 'speaker' | 'content'> & {
   matchedPanelId?: string | null
   matchedStoryboardId?: string | null
@@ -65,6 +72,31 @@ function normalizeText(value: unknown): string {
 
 function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
+}
+
+function resolveScreenplayItems(params: Pick<PanelSpeechPlanParams, 'clip' | 'clips'>): {
+  allItems: ScreenplayDialogueItem[]
+  clipItems: ScreenplayDialogueItem[]
+} {
+  const episodeClips = Array.isArray(params.clips)
+    ? params.clips.filter((clip): clip is PanelSpeechPlanClip => !!clip && typeof clip.id === 'string')
+    : []
+  const clipSource = episodeClips.length > 0
+    ? episodeClips
+    : params.clip
+      ? [params.clip]
+      : []
+  const allItems = clipSource.length > 0
+    ? extractScreenplayDialogueItems(clipSource)
+    : []
+  const clipItems = params.clip
+    ? allItems.filter((item) => item.clipId === params.clip?.id)
+    : allItems
+
+  return {
+    allItems,
+    clipItems,
+  }
 }
 
 function buildSpeechPlan(lines: PanelSpeechLine[], source: PanelSpeechPlan['source']): PanelSpeechPlan {
@@ -173,14 +205,8 @@ function pickSinglePanelSpeechMatch(
   return [{ item: narrowFuzzyMatches[0], quality: 'narrow_fuzzy' }]
 }
 
-export function derivePanelSpeechPlan(params: {
-  panel: PanelSpeechPlanPanel
-  clip?: PanelSpeechPlanClip | null
-  voiceLines?: PanelSpeechPlanVoiceLine[] | null
-}): PanelSpeechPlan {
-  const screenplayItems = params.clip
-    ? extractScreenplayDialogueItems([params.clip])
-    : []
+export function derivePanelSpeechPlan(params: PanelSpeechPlanParams): PanelSpeechPlan {
+  const { allItems: screenplayItems, clipItems: clipScreenplayItems } = resolveScreenplayItems(params)
 
   const screenplayItemByLineIndex = new Map<number, ScreenplayDialogueItem>()
   for (const item of screenplayItems) {
@@ -217,7 +243,7 @@ export function derivePanelSpeechPlan(params: {
     return buildSpeechPlan(matchedVoiceLines, 'screenplay_voice_lines')
   }
 
-  const screenplayMatches = pickSinglePanelSpeechMatch(params.panel, screenplayItems)
+  const screenplayMatches = pickSinglePanelSpeechMatch(params.panel, clipScreenplayItems)
   if (screenplayMatches.length > 0) {
     return buildSpeechPlan(screenplayMatches.map((match) => toSpeechLineFromScreenplay(match.item)), 'screenplay_panel_match')
   }
@@ -233,6 +259,9 @@ export function attachSpeechPlanToStoryboards<
   voiceLines?: PanelSpeechPlanVoiceLine[] | null
 }): Array<Omit<TStoryboard, 'panels'> & { panels: Array<TPanel & { speechPlan: PanelSpeechPlan }> }> {
   const voiceLines = params.voiceLines || []
+  const clips = params.storyboards
+    .map((storyboard) => storyboard.clip)
+    .filter((clip): clip is PanelSpeechPlanClip => !!clip && typeof clip.id === 'string')
 
   return params.storyboards.map((storyboard) => ({
     ...storyboard,
@@ -241,10 +270,16 @@ export function attachSpeechPlanToStoryboards<
       speechPlan: derivePanelSpeechPlan({
         panel,
         clip: storyboard.clip || null,
+        clips,
         voiceLines,
       }),
     })),
   }))
+}
+
+function stringifySpeechDirectionValue(value: string | null | undefined): string {
+  if (typeof value !== 'string') return '""'
+  return JSON.stringify(value.replace(/\r\n?/g, '\n'))
 }
 
 function buildSpeechInstruction(params: {
@@ -295,8 +330,15 @@ function buildSpeechModeExecutionBlock(params: {
   }
 
   const numberedLines = params.speechPlan.lines.map((line, index) => {
-    const parenthetical = line.parenthetical ? ` (${line.parenthetical})` : ''
-    return `${index + 1}. ${line.speaker}${parenthetical}: ${line.content}`
+    const segments = [`speaker=${stringifySpeechDirectionValue(line.speaker)}`]
+
+    if (line.parenthetical) {
+      segments.push(`parenthetical=${stringifySpeechDirectionValue(line.parenthetical)}`)
+    }
+
+    segments.push(`content=${stringifySpeechDirectionValue(line.content)}`)
+
+    return `${index + 1}. ${segments.join(' ')}`
   })
 
   if (params.speechPlan.mode === 'voiceover') {
