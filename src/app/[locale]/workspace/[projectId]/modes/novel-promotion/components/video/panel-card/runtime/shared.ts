@@ -1,5 +1,21 @@
 export const EMPTY_RUNNING_VOICE_LINE_IDS: Set<string> = new Set()
 
+interface ResolveVisibleBaseVideoUrlParams {
+  videoUrl?: string | null
+  videoGenerationMode?: 'normal' | 'firstlastframe' | null
+  isLinked: boolean
+}
+
+export function resolveVisibleBaseVideoUrl({
+  videoUrl,
+  videoGenerationMode,
+  isLinked,
+}: ResolveVisibleBaseVideoUrlParams): string | undefined {
+  if (!videoUrl) return undefined
+  if (!isLinked) return videoUrl
+  return videoGenerationMode === 'firstlastframe' ? videoUrl : undefined
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'object' && error !== null) {

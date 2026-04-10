@@ -20,6 +20,31 @@ function buildPromptStateKey(panelKey: string, field: PromptField): string {
   return `${field}:${panelKey}`
 }
 
+interface ResolveLocalPromptValueParams {
+  panelPrompts: Map<string, string>
+  dirtyPrompts: Set<string>
+  panelKey: string
+  externalPrompt?: string
+  field?: PromptField
+}
+
+export function resolveLocalPromptValue({
+  panelPrompts,
+  dirtyPrompts,
+  panelKey,
+  externalPrompt,
+  field = 'videoPrompt',
+}: ResolveLocalPromptValueParams): string {
+  const stateKey = buildPromptStateKey(panelKey, field)
+  if (panelPrompts.has(stateKey)) {
+    const localPrompt = panelPrompts.get(stateKey) || ''
+    if (localPrompt || dirtyPrompts.has(stateKey) || !externalPrompt) {
+      return localPrompt
+    }
+  }
+  return externalPrompt || ''
+}
+
 export function useVideoPromptState({
   allPanels,
   onUpdateVideoPrompt,
@@ -102,12 +127,14 @@ export function useVideoPromptState({
     externalPrompt?: string,
     field: PromptField = 'videoPrompt',
   ): string => {
-    const stateKey = buildPromptStateKey(panelKey, field)
-    if (panelPrompts.has(stateKey)) {
-      return panelPrompts.get(stateKey) || ''
-    }
-    return externalPrompt || ''
-  }, [panelPrompts])
+    return resolveLocalPromptValue({
+      panelPrompts,
+      dirtyPrompts,
+      panelKey,
+      externalPrompt,
+      field,
+    })
+  }, [dirtyPrompts, panelPrompts])
 
   const updateLocalPrompt = useCallback((
     panelKey: string,

@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import type { VideoPanelCardShellProps } from '../types'
-import { EMPTY_RUNNING_VOICE_LINE_IDS } from './shared'
+import { EMPTY_RUNNING_VOICE_LINE_IDS, resolveVisibleBaseVideoUrl } from './shared'
 import { usePanelTaskStatus } from './hooks/usePanelTaskStatus'
 import { usePanelVideoModel } from './hooks/usePanelVideoModel'
 import { usePanelPlayer } from './hooks/usePanelPlayer'
@@ -53,12 +53,11 @@ export function useVideoPanelActions({
   const t = useTranslations('video')
   const tCommon = useTranslations('common')
   const panelKey = `${panel.storyboardId}-${panel.panelIndex}`
-  const isFirstLastFrameOutput = panel.videoGenerationMode === 'firstlastframe' && !!panel.videoUrl
-  const visibleBaseVideoUrl = (() => {
-    if (isLinked) return isFirstLastFrameOutput ? panel.videoUrl : undefined
-    if (isLastFrame) return undefined
-    return panel.videoUrl
-  })()
+  const visibleBaseVideoUrl = resolveVisibleBaseVideoUrl({
+    videoUrl: panel.videoUrl,
+    videoGenerationMode: panel.videoGenerationMode,
+    isLinked,
+  })
   const hasVisibleBaseVideo = !!visibleBaseVideoUrl
 
   const taskStatus = usePanelTaskStatus({
