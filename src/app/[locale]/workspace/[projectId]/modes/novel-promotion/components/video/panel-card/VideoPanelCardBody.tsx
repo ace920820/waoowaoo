@@ -49,7 +49,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
   const isFirstLastFrameGenerated = panel.videoGenerationMode === 'firstlastframe' && !!panel.videoUrl
   const showsIncomingLinkBadge = layout.isLastFrame && !!layout.prevPanel
   const showsOutgoingLinkBadge = layout.isLinked && !!layout.nextPanel
-  const showsPromptEditor = !layout.isLastFrame || layout.isLinked
+  const showsPromptEditor = true
   const showsFirstLastFrameActions = layout.isLinked && !!layout.nextPanel
   const hasTailFrameCandidate = layout.hasNext && !!layout.nextPanel
   const cssAspectRatio = layout.videoRatio.replace(':', '/')

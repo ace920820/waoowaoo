@@ -193,6 +193,24 @@ describe('VideoPanelCardBody', () => {
     expect(markup).toContain('生成首尾帧视频')
   })
 
+  it('keeps prompt editing and normal generation UI for an incoming tail-frame-only panel', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          layout: {
+            ...createRuntime().layout,
+            isLinked: false,
+            isLastFrame: true,
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('作为镜头 2 的尾帧')
+    expect(markup).toContain('视频提示词')
+    expect(markup).toContain('生成视频')
+  })
+
   it('renders available tail-frame source when next panel exists but is not linked', () => {
     const markup = renderToStaticMarkup(
       React.createElement(VideoPanelCardBody, {

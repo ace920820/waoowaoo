@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import TaskStatusOverlay from '@/components/task/TaskStatusOverlay'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 
@@ -132,7 +132,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
       ) : null}
 
       {/* 重新生成按钮 */}
-      {!layout.isLinked && !layout.isLastFrame && (hasVisibleBaseVideo || taskStatus.isVideoTaskRunning) && (
+      {!layout.isLinked && (hasVisibleBaseVideo || taskStatus.isVideoTaskRunning) && (
         <button
           onClick={() =>
             actions.onGenerateVideo(
