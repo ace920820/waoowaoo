@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 12:35 Asia/Shanghai
+> 更新时间：2026-04-11 17:57 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -184,6 +184,51 @@ P1.1 当前有效分支提交：
 - 当前边界：
   - 这次补丁优先解决“对白文本改了但 lineIndex 结构未重排”的真实回归问题。
   - 若用户对 screenplay 做了更激进的结构改动（例如对白条数整体变化），当前后续链路仍建议重新跑 voice analyze / storyboard 以拿到新的稳定映射。
+
+### Art Style 扩展与兼容修复（本次）
+本次补做了当前风格系统的正式扩容，目标是让新增风格直接复用现有 `ART_STYLES -> isArtStyleValue -> getArtStylePrompt -> worker prompt 注入` 链路，不引入新 schema，不扩成复杂风格引擎。
+
+本次新增/升级的风格 value：
+- `shaw-brothers`
+- `hk-wuxia-90s`
+- `anime-80s-handdrawn`
+- `wuxia-2000s-cg`
+- `chinese-xianxia`
+- `japanese-cel`
+- `cinematic-anime`
+- `cyberpunk-anime`
+- `dark-fantasy`
+- `chibi-comedy`
+- `pixar-3d`
+- 升级既有：`chinese-comic`
+- 升级既有：`realistic`
+
+兼容策略：
+- 保持旧 value 不变，`american-comic / japanese-anime / chinese-comic / realistic` 继续可用。
+- `pixar-3d` 作为新增独立候选接入，不挤占 `realistic` 或其它既有偏 3D / 写实语义入口。
+- 不做破坏性 rename，不改后端 schema，不新增 tags 体系。
+- `american-comic` 不删除，只修正 label 与 prompt 语义：
+  - 继续保留旧 value 作为兼容入口
+  - 不再错误指向“日式动漫风格”
+  - 现在明确表达为“美式漫画 / 西式动画分镜感”
+
+消费面确认结果：
+- 当前多个 UI 选择器直接 `map(ART_STYLES)` 输出 option，因此新增 style 会自动进入配置面板与创建表单。
+- API 与服务侧继续通过 `isArtStyleValue(...)` 做合法性校验。
+- 图片/场景/分镜 worker 继续通过 `getArtStylePrompt(...)` 注入中英文风格 prompt，无需改模板 schema。
+
+本次最小验证结果：
+- `tests/unit/lib/art-style.constants.test.ts`
+  - 校验所有要求的 style value 已进入 `ART_STYLES`
+  - 校验新老 style 均可被 `isArtStyleValue(...)` 识别
+  - 校验 `getArtStylePrompt(...)` 对新老 style 都能返回中英文 prompt
+  - 校验 `american-comic` 已脱离旧的日漫误导语义
+- `tests/unit/worker/character-image-task-handler.test.ts`
+  - 校验新风格 `cinematic-anime` 可覆盖项目默认 style 并进入角色图 prompt
+- `tests/unit/worker/location-image-task-handler.test.ts`
+  - 校验新风格 `dark-fantasy` 可进入场景图 prompt
+- `tests/unit/worker/panel-image-task-handler.test.ts`
+  - 校验新风格 `shaw-brothers` 可经由分镜 prompt 变量注入链路传递到模板构建
 
 ### 本轮结论
 本轮不再继续扩底层 speech 生成能力，而是把 **P2 已有 speech contract** 收口为 `stage=videos` panel 卡片中的一层轻量只读可视化，让用户和团队能直接确认：

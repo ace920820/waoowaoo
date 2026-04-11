@@ -11,7 +11,7 @@ const prismaMock = vi.hoisted(() => ({
 
 const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => undefined),
-  getProjectModels: vi.fn(async () => ({ storyboardModel: 'storyboard-model-1', artStyle: 'realistic' })),
+  getProjectModels: vi.fn(async () => ({ storyboardModel: 'storyboard-model-1', artStyle: 'shaw-brothers' })),
   resolveImageSourceFromGeneration: vi.fn(),
   uploadImageSourceToCos: vi.fn(),
 }))
@@ -77,6 +77,7 @@ vi.mock('@/lib/prompt-i18n', () => ({
 }))
 
 import { handlePanelImageTask } from '@/lib/workers/handlers/panel-image-task-handler'
+import { getArtStylePrompt } from '@/lib/constants'
 
 function buildJob(payload: Record<string, unknown>, targetId = 'panel-1'): Job<TaskJobData> {
   return {
@@ -160,6 +161,11 @@ describe('worker panel-image-task-handler behavior', () => {
     expect(promptMock.buildPrompt).toHaveBeenCalledWith(expect.objectContaining({
       variables: expect.objectContaining({
         storyboard_text_json_input: expect.stringContaining('"available_slots"'),
+      }),
+    }))
+    expect(promptMock.buildPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      variables: expect.objectContaining({
+        style: getArtStylePrompt('shaw-brothers', 'zh'),
       }),
     }))
 
