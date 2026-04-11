@@ -182,10 +182,10 @@ export const ART_STYLES: Array<{
   },
   {
     value: 'anime-80s-handdrawn',
-    label: '80年代手绘动画',
-    preview: '80',
-    promptZh: '80年代手绘动画风格，手工赛璐璐上色，复古柔和颗粒感，朴素背景绘制，经典电视动画与剧场版气质。',
-    promptEn: '1980s hand-drawn animation style, hand-painted cel coloring, soft retro grain, painted backgrounds, classic TV-anime and theatrical mood.'
+    label: '90s日本手绘',
+    preview: '90',
+    promptZh: '90年代日本传统手绘赛璐璐动画风格（参考城市猎人、吸血鬼猎人D、黄金小子），手工描线可见压力变化（非数码均匀线条），色彩以哑光平涂为主（胶片冲印后的轻微褪色感），阴影为硬边平涂色块（无渐变），人物脸型具有时代特征（高鼻梁、有棱角的下颌、修长身形），背景手绘写实感强，整体带有赛璐璐片叠层的轻微色彩错位感，画面充满粗粝的手工温度，有别于任何现代数码动画。',
+    promptEn: 'Japanese 1990s traditional hand-drawn cel animation style (referencing City Hunter, Vampire Hunter D, Golden Boy), hand-inked lines with visible brush pressure variation (not digitally uniform), matte flat color fills with slight faded film-print desaturation, hard-edge flat shadow blocks without gradients, era-specific character design (sharp high nose bridge, angular jawlines, elongated proportions), hand-painted realistic backgrounds, subtle color misalignment from cel layer stacking, raw handcrafted warmth throughout — distinctly separate from any modern digital animation.'
   },
   {
     value: 'wuxia-2000s-cg',
@@ -226,15 +226,15 @@ export const ART_STYLES: Array<{
     value: 'cinematic-anime',
     label: '电影感动画',
     preview: '映',
-    promptZh: '电影感动画风格，镜头叙事强，光影层次丰富，景深与构图讲究，角色保持二次元表现，整体有高规格动画电影气质。',
-    promptEn: 'Cinematic anime style, strong visual storytelling, rich lighting layers, deliberate depth and composition, stylized 2D characters with high-end animated film presence.'
+    promptZh: '新海诚/京都动画电影级2D风格，写实背景极度精细（玻璃反光、光晕散射、体积光），人物与背景光影高度融合，色调以蓝金/暖橙/青紫为主，大气透视感极强，镜头感强烈（景深虚化、逆光剪影），情绪氛围渲染细腻，唯美治愈系画风。',
+    promptEn: 'Makoto Shinkai / KyoAni cinematic 2D anime style, hyper-detailed realistic backgrounds (glass reflections, lens flares, volumetric light), seamless integration of character and environment lighting, color palette of blue-gold / warm orange / teal-purple, strong atmospheric perspective, cinematic depth-of-field blur and silhouette backlighting, emotionally rich and visually stunning.'
   },
   {
     value: 'cyberpunk-anime',
     label: '赛博朋克动画',
     preview: '赛',
-    promptZh: '赛博朋克动画风格，霓虹都市夜景，高密度电子视觉元素，冷暖对比光，未来街景与角色造型强烈，画面锐利。',
-    promptEn: 'Cyberpunk anime style, neon city nights, dense electronic visual motifs, contrasting cool and warm lights, striking futuristic streets and character styling, sharp image finish.'
+    promptZh: '赛博朋克动漫风格，霓虹灯光反射在湿润街道和机械义体上，高对比度冷暖光影（霓红粉紫 vs 暗蓝阴影），未来都市场景密集细节（全息广告、悬浮车、摩天大楼），人物可有机械义眼/义肢元素，线条硬朗科技感强，画面张力十足，超清2D动漫+赛博美学。',
+    promptEn: 'Cyberpunk anime style, neon light reflections on wet streets and cybernetic limbs, high-contrast warm-cool lighting (neon pink-purple vs deep blue shadows), densely detailed futuristic cityscape (holographic ads, flying vehicles, skyscrapers), characters may feature cybernetic eyes / prosthetic limbs, sharp tech-forward line art, intense visual tension, ultra-HD 2D anime meets cyber aesthetics.'
   },
   {
     value: 'dark-fantasy',
