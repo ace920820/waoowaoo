@@ -61,9 +61,9 @@
         "removeLocation": "Are you sure you want to remove this location from current clip?"
     },
     "generate": {
-        "missingAssets": "{count} assets missing images",
-        "missingAssetsTip": "Please generate images for all characters and locations in",
-        "missingAssetsTipLink": "first",
+        "missingAssets": "{count} referenced characters/locations are still missing images",
+        "missingAssetsTip": "You can still generate storyboard text now, but before generating panel images please finish the referenced character and location images in",
+        "missingAssetsTipLink": "",
         "generating": "Generating...",
         "startGenerate": "Confirm and Start Drawing →"
     }

@@ -15,12 +15,16 @@ import {
   AnyObj,
   clampCount,
   collectPanelReferenceImages,
-  findCharacterByName,
-  parsePanelCharacterReferences,
   pickFirstString,
   resolveNovelData,
 } from './image-task-handler-shared'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import {
+  findCharacterByName,
+  formatPanelImageReadinessError,
+  getPanelImageGenerationReadiness,
+  parsePanelCharacterReferences,
+} from '@/lib/novel-promotion/storyboard-readiness'
 import {
   parseLocationAvailableSlots,
 } from '@/lib/location-available-slots'
@@ -169,6 +173,15 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   if (!panel) throw new Error('Panel not found')
 
   const projectData = await resolveNovelData(job.data.projectId)
+  const readiness = getPanelImageGenerationReadiness({
+    panel,
+    characters: projectData.characters || [],
+    locations: projectData.locations || [],
+  })
+  if (!readiness.isReady) {
+    throw new Error(formatPanelImageReadinessError(readiness))
+  }
+
   const modelConfig = await getProjectModels(job.data.projectId, job.data.userId)
   const modelKey = modelConfig.storyboardModel
   if (!modelKey) throw new Error('Storyboard model not configured')

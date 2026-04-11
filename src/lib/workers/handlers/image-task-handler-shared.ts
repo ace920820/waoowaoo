@@ -3,6 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
 import {
+  findCharacterByName,
+  getSelectedCharacterReferenceImage,
+  getSelectedLocationReferenceImage,
+  parsePanelCharacterReferences,
+} from '@/lib/novel-promotion/storyboard-readiness'
+import {
   resolveImageSourceFromGeneration,
   toSignedUrlIfCos,
   uploadImageSourceToCos,
@@ -49,12 +55,6 @@ interface PanelLike {
   sketchImageUrl?: string | null
   characters?: string | null
   location?: string | null
-}
-
-export interface PanelCharacterReference {
-  name: string
-  appearance?: string
-  slot?: string
 }
 
 interface NovelDataDb {
@@ -173,55 +173,6 @@ export async function resolveNovelData(projectId: string) {
   return data
 }
 
-export function parsePanelCharacterReferences(value: string | null | undefined): PanelCharacterReference[] {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((item: unknown) => {
-        if (typeof item === 'string') return { name: item }
-        if (!item || typeof item !== 'object') return null
-        const candidate = item as { name?: unknown; appearance?: unknown; slot?: unknown }
-        if (typeof candidate.name === 'string') {
-          return {
-            name: candidate.name,
-            appearance: typeof candidate.appearance === 'string' ? candidate.appearance : undefined,
-            slot: typeof candidate.slot === 'string' ? candidate.slot : undefined,
-          }
-        }
-        return null
-      })
-      .filter(Boolean) as PanelCharacterReference[]
-  } catch {
-    return []
-  }
-}
-
-/**
- * 按角色名查找角色（支持别名匹配）
- * 优先级：1. 精确全名匹配  2. 按 '/' 拆分后别名精确匹配
- * 例：引用名 "顾娘子" 可匹配角色 "顾娘子/顾盼之"
- */
-export function findCharacterByName<T extends { name: string }>(characters: T[], referenceName: string): T | undefined {
-  const refLower = referenceName.toLowerCase().trim()
-  if (!refLower) return undefined
-
-  // 优先级 1：精确全名匹配
-  const exact = characters.find((c) => c.name.toLowerCase().trim() === refLower)
-  if (exact) return exact
-
-  // 优先级 2：别名匹配 — 按 '/' 拆分后任一别名精确匹配
-  const refAliases = refLower.split('/').map((s) => s.trim()).filter(Boolean)
-  for (const character of characters) {
-    const charAliases = character.name.toLowerCase().split('/').map((s) => s.trim()).filter(Boolean)
-    const hasOverlap = refAliases.some((refAlias) => charAliases.includes(refAlias))
-    if (hasOverlap) return character
-  }
-
-  return undefined
-}
-
 export async function collectPanelReferenceImages(projectData: NovelProjectData, panel: PanelLike) {
   const refs: string[] = []
 
@@ -242,10 +193,7 @@ export async function collectPanelReferenceImages(projectData: NovelProjectData,
 
     if (!appearance) continue
 
-    const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
-    const selectedIndex = appearance.selectedIndex
-    const selectedUrl = selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
-    const key = selectedUrl || imageUrls[0] || appearance.imageUrl
+    const key = getSelectedCharacterReferenceImage(appearance)
     const signed = toSignedUrlIfCos(key, 3600)
     if (signed) refs.push(signed)
   }
@@ -253,9 +201,7 @@ export async function collectPanelReferenceImages(projectData: NovelProjectData,
   if (panel.location) {
     const location = (projectData.locations || []).find((loc) => loc.name.toLowerCase() === panel.location!.toLowerCase())
     if (location) {
-      const images = location.images || []
-      const selected = images.find((img) => img.isSelected) || images[0]
-      const signed = toSignedUrlIfCos(selected?.imageUrl, 3600)
+      const signed = toSignedUrlIfCos(getSelectedLocationReferenceImage(location), 3600)
       if (signed) refs.push(signed)
     }
   }

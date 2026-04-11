@@ -15,13 +15,16 @@ import ScriptViewScriptPanel from './ScriptViewScriptPanel'
 import ScriptViewAssetsPanel from './ScriptViewAssetsPanel'
 import { reuseStringArrayIfEqual, reuseStringSetIfEqual } from './selection-sync'
 import {
-  getPrimaryAppearance,
   getSelectedAppearances,
   processCharacterInClip,
   processLocationInClip,
   processPropInClip,
 } from './asset-state-utils'
 import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
+import {
+  getStoryboardAssetCoverageForClips,
+  getStoryboardTextGenerationReadiness,
+} from '@/lib/novel-promotion/storyboard-readiness'
 
 interface Clip {
   id: string
@@ -368,7 +371,7 @@ export default function ScriptView({
     }
   }
 
-  const { allCharNames: globalCharNames, allLocNames: globalLocNames, allPropNames: globalPropNames } = getAllClipsAssets()
+  const { allCharNames: globalCharNames, allLocNames: globalLocNames } = getAllClipsAssets()
 
   const globalCharIds = characters
     .filter((c) => {
@@ -380,35 +383,14 @@ export default function ScriptView({
   const globalLocationIds = locations
     .filter((l) => Array.from(globalLocNames).some((clipLocName) => fuzzyMatchLocation(clipLocName, l.name)))
     .map((l) => l.id)
-  const globalPropIds = props
-    .filter((prop) => Array.from(globalPropNames).some((clipPropName) => clipPropName.toLowerCase() === prop.name.toLowerCase()))
-    .map((prop) => prop.id)
-
-  const globalActiveChars = characters.filter((c) => globalCharIds.includes(c.id))
-  const globalActiveLocations = locations.filter((l) => globalLocationIds.includes(l.id))
-  const globalActiveProps = props.filter((prop) => globalPropIds.includes(prop.id))
-
-  const charsWithoutImage = globalActiveChars.filter((char) => {
-    const appearance = getPrimaryAppearance(char)
-    const imageUrl = appearance?.imageUrl || appearance?.imageUrls?.[0]
-    return !imageUrl
+  const assetCoverage = getStoryboardAssetCoverageForClips({
+    clips,
+    characters,
+    locations,
   })
-
-  const locationsWithoutImage = globalActiveLocations.filter((loc) => {
-    const image = (loc.selectedImageId
-      ? loc.images?.find((img) => img.id === loc.selectedImageId)
-      : undefined) || loc.images?.find((img) => img.isSelected) || loc.images?.find((img) => img.imageUrl)
-    return !image?.imageUrl
-  })
-  const propsWithoutImage = globalActiveProps.filter((prop) => {
-    const image = (prop.selectedImageId
-      ? prop.images?.find((img) => img.id === prop.selectedImageId)
-      : undefined) || prop.images?.find((img) => img.isSelected) || prop.images?.find((img) => img.imageUrl)
-    return !image?.imageUrl
-  })
-
-  const allAssetsHaveImages = charsWithoutImage.length === 0 && locationsWithoutImage.length === 0 && propsWithoutImage.length === 0
-  const missingAssetsCount = charsWithoutImage.length + locationsWithoutImage.length + propsWithoutImage.length
+  const storyboardTextReadiness = getStoryboardTextGenerationReadiness({ clips })
+  const allAssetsHaveImages = assetCoverage.missingAssetCount === 0
+  const missingAssetsCount = assetCoverage.missingAssetCount
 
   return (
     <div className="w-full grid grid-cols-12 gap-6 min-h-[400px] lg:h-[calc(100vh-180px)] animate-fadeIn">
@@ -443,10 +425,10 @@ export default function ScriptView({
         allAssetsHaveImages={allAssetsHaveImages}
         globalCharIds={globalCharIds}
         globalLocationIds={globalLocationIds}
-        globalPropIds={globalPropIds}
         missingAssetsCount={missingAssetsCount}
         onGenerateStoryboard={onGenerateStoryboard}
         isSubmittingStoryboardBuild={isSubmittingStoryboardBuild}
+        canGenerateStoryboardText={storyboardTextReadiness.isReady}
         getSelectedAppearances={(char) => getSelectedAppearances(char, selectedAppearanceKeys)}
         tScript={(key, values) => tScript(key, toTranslationValues(values))}
         tAssets={(key, values) => tAssets(key, toTranslationValues(values))}

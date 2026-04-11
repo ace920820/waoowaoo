@@ -39,10 +39,10 @@ interface ScriptViewAssetsPanelProps {
   allAssetsHaveImages: boolean
   globalCharIds: string[]
   globalLocationIds: string[]
-  globalPropIds: string[]
   missingAssetsCount: number
   onGenerateStoryboard?: () => void
   isSubmittingStoryboardBuild: boolean
+  canGenerateStoryboardText: boolean
   getSelectedAppearances: (char: Character) => CharacterAppearance[]
   tScript: (key: string, values?: Record<string, unknown>) => string
   tAssets: (key: string, values?: Record<string, unknown>) => string
@@ -136,10 +136,10 @@ export default function ScriptViewAssetsPanel({
   allAssetsHaveImages,
   globalCharIds,
   globalLocationIds,
-  globalPropIds,
   missingAssetsCount,
   onGenerateStoryboard,
   isSubmittingStoryboardBuild,
+  canGenerateStoryboardText,
   getSelectedAppearances,
   tScript,
   tAssets,
@@ -862,7 +862,7 @@ export default function ScriptViewAssetsPanel({
       </div>
 
       <div className="mt-4 mb-4">
-        {!allAssetsHaveImages && globalCharIds.length + globalLocationIds.length + globalPropIds.length > 0 && (
+        {!allAssetsHaveImages && globalCharIds.length + globalLocationIds.length > 0 && (
           <div className="mb-3 p-4 bg-[var(--glass-bg-surface)] border border-[var(--glass-stroke-base)] rounded-2xl shadow-sm">
             <p className="text-sm font-medium text-[var(--glass-text-primary)]">{tScript('generate.missingAssets', { count: missingAssetsCount })}</p>
             <p className="text-xs text-[var(--glass-text-tertiary)] mt-0.5">
@@ -876,7 +876,7 @@ export default function ScriptViewAssetsPanel({
         )}
         <button
           onClick={onGenerateStoryboard}
-          disabled={isSubmittingStoryboardBuild || clips.length === 0 || !allAssetsHaveImages}
+          disabled={isSubmittingStoryboardBuild || !canGenerateStoryboardText}
           className="glass-btn-base glass-btn-primary w-full py-4 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {isSubmittingStoryboardBuild ? tScript('generate.generating') : tScript('generate.startGenerate')}

@@ -20,13 +20,28 @@ const sharedMock = vi.hoisted(() => ({
   collectPanelReferenceImages: vi.fn(async () => ['https://signed.example/ref-1.png']),
   resolveNovelData: vi.fn(async () => ({
     videoRatio: '16:9',
-    characters: [],
+    characters: [
+      {
+        name: 'Hero',
+        appearances: [
+          {
+            changeReason: 'default',
+            imageUrl: 'cos/hero-default.png',
+            imageUrls: JSON.stringify(['cos/hero-default.png']),
+            selectedIndex: 0,
+          },
+        ],
+      },
+    ],
     locations: [
       {
         name: 'Old Town',
+        selectedImageId: 'location-image-1',
         images: [
           {
+            id: 'location-image-1',
             isSelected: true,
+            imageUrl: 'cos/old-town.png',
             description: '雨夜街道',
             availableSlots: JSON.stringify([
               '街道左侧靠墙的留白位置',
@@ -219,5 +234,44 @@ describe('worker panel-image-task-handler behavior', () => {
         candidateImages: JSON.stringify(['cos/panel-regenerated.png']),
       },
     })
+  })
+
+  it('rejects generation when referenced character/location images are missing', async () => {
+    sharedMock.resolveNovelData.mockResolvedValueOnce({
+      videoRatio: '16:9',
+      characters: [
+        {
+          name: 'Hero',
+          appearances: [
+            {
+              changeReason: 'default',
+              imageUrl: null,
+              imageUrls: JSON.stringify([]),
+              selectedIndex: 0,
+            },
+          ],
+        },
+      ],
+      locations: [
+        {
+          name: 'Old Town',
+          selectedImageId: 'location-image-1',
+          images: [
+            {
+              id: 'location-image-1',
+              isSelected: true,
+              imageUrl: null,
+              description: '雨夜街道',
+              availableSlots: JSON.stringify(['街道左侧靠墙的留白位置']),
+            },
+          ],
+        },
+      ],
+    } as never)
+
+    const job = buildJob({ candidateCount: 1 })
+    await expect(handlePanelImageTask(job)).rejects.toThrow('缺少必要参考资产')
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(prismaMock.novelPromotionPanel.update).not.toHaveBeenCalled()
   })
 })

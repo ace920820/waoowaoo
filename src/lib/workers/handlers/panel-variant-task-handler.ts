@@ -17,12 +17,14 @@ import {
 } from '@/lib/location-available-slots'
 import {
   AnyObj,
-  findCharacterByName,
   parseImageUrls,
-  parsePanelCharacterReferences,
   pickFirstString,
   resolveNovelData,
 } from './image-task-handler-shared'
+import {
+  findCharacterByName,
+  parsePanelCharacterReferences,
+} from '@/lib/novel-promotion/storyboard-readiness'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 
 // ── 构建变体提示词 ──────────────────────────────────────

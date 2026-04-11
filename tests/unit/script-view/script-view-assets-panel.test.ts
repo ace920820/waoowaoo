@@ -90,10 +90,10 @@ function renderPanel(propsCount: number) {
       allAssetsHaveImages: true,
       globalCharIds: [],
       globalLocationIds: [],
-      globalPropIds: [],
       missingAssetsCount: 0,
       onGenerateStoryboard: () => undefined,
       isSubmittingStoryboardBuild: false,
+      canGenerateStoryboardText: true,
       getSelectedAppearances: () => [],
       tScript: (key: string, values?: Record<string, unknown>) => {
         if (key === 'inSceneAssets') return '出场资产'

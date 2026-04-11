@@ -142,6 +142,22 @@ P1.1 当前有效分支提交：
 
 ## 四、当前最新进度（P3 第一阶段：speech contract 可见性与可验证性收口）
 
+### 分镜前置条件拆分修复（本次）
+本次对 `script → storyboard text → panel image` 之间的前置条件做了最小拆分，只处理 gate 落点，不重构整体 workflow。
+
+- 根因确认：
+  - 脚本页 `ScriptViewRuntime / ScriptViewAssetsPanel` 之前把“引用角色/场景是否已有素材图”直接绑定到了“生成分镜”按钮 disabled。
+  - `script-to-storyboard-stream` 和 `regenerate-storyboard-text` 服务端本身没有做素材图硬校验，导致 UI 比后端更早拦截了分镜剧本文本生成。
+  - 真正依赖参考图的是 `regenerate-panel-image` / `image_panel` 链路；此前这里没有按当前 panel 实际引用的角色/场景做显式拒绝。
+
+- 本次改动：
+  - 抽出纯 helper：`src/lib/novel-promotion/storyboard-readiness.ts`
+  - 分镜剧本文本生成 readiness 不再依赖角色/场景素材图；脚本页按钮恢复为仅受 `clips.length` 等文本阶段必要条件控制。
+  - 脚本页保留轻提示：素材未齐时仍可继续生成分镜文本，但生成分镜图前需补齐当前引用角色/场景参考图。
+  - `regenerate-panel-image` 路由新增 panel 级预检，直接返回清晰错误信息和缺失引用详情。
+  - `panel-image-task-handler` 同步复用同一套 helper，防止绕过 API 直接进 worker 时误放开。
+  - 图片阶段的 gate 只校验当前 panel 实际引用到的角色/场景；若 panel 未引用角色/场景，则允许继续生成。
+
 ### P3 第一阶段小修收口补丁（本次）
 本次是 **P3 第一阶段的小修收口**，只处理两个 UI 可见层风险点，不扩成 execution snapshot 或新的状态模型工程。
 

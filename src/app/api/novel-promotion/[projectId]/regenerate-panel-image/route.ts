@@ -10,6 +10,11 @@ import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { getProjectModelConfig } from '@/lib/config-service'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
 import { resolveModelSelection } from '@/lib/api-config'
+import { prisma } from '@/lib/prisma'
+import {
+  formatPanelImageReadinessError,
+  getPanelImageGenerationReadiness,
+} from '@/lib/novel-promotion/storyboard-readiness'
 
 const DEFAULT_CANDIDATE_COUNT = 1
 
@@ -31,6 +36,69 @@ export const POST = apiHandler(async (
 
   if (!panelId) {
     throw new ApiError('INVALID_PARAMS')
+  }
+
+  const [panel, projectData] = await Promise.all([
+    prisma.novelPromotionPanel.findUnique({
+      where: { id: panelId },
+      select: {
+        id: true,
+        characters: true,
+        location: true,
+      },
+    }),
+    prisma.novelPromotionProject.findUnique({
+      where: { projectId },
+      select: {
+        characters: {
+          select: {
+            id: true,
+            name: true,
+            appearances: {
+              orderBy: { appearanceIndex: 'asc' },
+              select: {
+                changeReason: true,
+                imageUrl: true,
+                imageUrls: true,
+                selectedIndex: true,
+              },
+            },
+          },
+        },
+        locations: {
+          select: {
+            id: true,
+            name: true,
+            selectedImageId: true,
+            images: {
+              orderBy: { imageIndex: 'asc' },
+              select: {
+                id: true,
+                isSelected: true,
+                imageUrl: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ])
+
+  if (!panel || !projectData) {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
+  const readiness = getPanelImageGenerationReadiness({
+    panel,
+    characters: projectData.characters,
+    locations: projectData.locations,
+  })
+  if (!readiness.isReady) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PANEL_REFERENCE_ASSETS_MISSING',
+      message: formatPanelImageReadinessError(readiness),
+      missingReferences: readiness.missingReferences,
+    })
   }
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
