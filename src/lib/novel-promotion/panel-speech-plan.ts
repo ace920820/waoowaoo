@@ -379,6 +379,7 @@ function resolveSpeechContractGuardrails(params: {
   if (params.speechPlan.mode === 'silent') {
     return [
       'intentional_silent',
+      'no_mouth_sync',
       'no_verbal_audio',
       'non_verbal_only',
     ]

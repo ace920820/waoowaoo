@@ -58,7 +58,7 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     if (key === 'panelCard.selectModel') return '选择模型'
     if (key === 'panelCard.generateVideo') return '生成视频'
     if (key === 'panelCard.unknownShotType') return '未知镜头'
-    if (key === 'panelCard.speechContract.title') return 'Speech 约束'
+    if (key === 'panelCard.speechContract.title') return 'Speech 约束预览'
     if (key === 'panelCard.speechContract.mode.silent') return '静音'
     if (key === 'panelCard.speechContract.mode.dialogue') return '对白'
     if (key === 'panelCard.speechContract.mode.voiceover') return '旁白'
@@ -70,12 +70,12 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     if (key === 'panelCard.speechContract.match.none') return '未命中'
     if (key === 'panelCard.speechContract.audio.enabled') return '本次生成含音频'
     if (key === 'panelCard.speechContract.audio.disabled') return '本次生成禁用音频'
-    if (key === 'panelCard.speechContract.summary.matched') return '命中剧本对白约束，视频会按这组 speech line 执行。'
-    if (key === 'panelCard.speechContract.summary.matchedAudioDisabled') return '已命中剧本对白约束，但当前视频生成关闭音频，本次按静音约束执行。'
-    if (key === 'panelCard.speechContract.summary.fallback') return '未命中显式对白映射，当前使用面板文本回落匹配。'
-    if (key === 'panelCard.speechContract.summary.fallbackAudioDisabled') return '当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。'
-    if (key === 'panelCard.speechContract.summary.none') return '当前未命中 speech contract，按静音处理。'
-    if (key === 'panelCard.speechContract.summary.noneAudioDisabled') return '当前未命中 speech contract，且本次生成关闭音频，按静音约束执行。'
+    if (key === 'panelCard.speechContract.summary.matched') return '这是当前生成配置下的 speech 约束预览；下次生成会按这组剧本台词约束执行。'
+    if (key === 'panelCard.speechContract.summary.matchedAudioDisabled') return '这是当前生成配置下的 speech 约束预览；虽然命中了剧本台词，但这次关闭音频，所以下次生成会按静音约束执行。'
+    if (key === 'panelCard.speechContract.summary.fallback') return '这是当前生成配置下的 speech 约束预览；当前没有命中显式对白映射，下次生成会按面板文本回落匹配的结果约束。'
+    if (key === 'panelCard.speechContract.summary.fallbackAudioDisabled') return '这是当前生成配置下的 speech 约束预览；当前只命中面板文本回落匹配，但这次关闭音频，所以下次生成会按静音约束执行。'
+    if (key === 'panelCard.speechContract.summary.none') return '这是当前生成配置下的 speech 约束预览；当前未命中 speech contract，所以下次生成会按静音处理。'
+    if (key === 'panelCard.speechContract.summary.noneAudioDisabled') return '这是当前生成配置下的 speech 约束预览；当前未命中 speech contract，且这次关闭音频，所以下次生成会按静音约束执行。'
     if (key === 'panelCard.speechContract.guardrail.non_verbal_only') return '只允许环境声、动作声等非语言音频。'
     if (key === 'panelCard.speechContract.guardrail.no_verbal_audio') return '不要生成对白、旁白、歌词或其他口语化音频。'
     if (key === 'panelCard.speechContract.guardrail.no_mouth_sync') return '避免明显口型和像在说话的嘴部动作。'
@@ -298,10 +298,10 @@ describe('VideoPanelCardBody', () => {
       }),
     )
 
-    expect(markup).toContain('Speech 约束')
+    expect(markup).toContain('Speech 约束预览')
     expect(markup).toContain('对白')
     expect(markup).toContain('剧本对白映射')
-    expect(markup).toContain('命中剧本对白约束，视频会按这组 speech line 执行。')
+    expect(markup).toContain('这是当前生成配置下的 speech 约束预览；下次生成会按这组剧本台词约束执行。')
     expect(markup).toContain('Hero (压低声音)')
     expect(markup).toContain('把门关上。')
     expect(markup).toContain('只使用命中的结构化台词，不要改写。')
@@ -344,8 +344,31 @@ describe('VideoPanelCardBody', () => {
     expect(markup).toContain('面板文本回落匹配')
     expect(markup).toContain('回落命中')
     expect(markup).toContain('本次生成禁用音频')
-    expect(markup).toContain('当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。')
+    expect(markup).toContain('这是当前生成配置下的 speech 约束预览；当前只命中面板文本回落匹配，但这次关闭音频，所以下次生成会按静音约束执行。')
     expect(markup).toContain('Narrator')
     expect(markup).toContain('不要生成对白、旁白、歌词或其他口语化音频。')
+  })
+
+  it('keeps no-mouth-sync visible for silent panels', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          panel: {
+            ...createRuntime().panel,
+            speechPlan: {
+              mode: 'silent',
+              source: 'none',
+              generatedAudioRequired: true,
+              primaryText: null,
+              speakers: [],
+              lines: [],
+            },
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('静音')
+    expect(markup).toContain('避免明显口型和像在说话的嘴部动作。')
   })
 })

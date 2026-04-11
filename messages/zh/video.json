@@ -53,7 +53,7 @@
     "batchModeEnabled": "已开启批量模式",
     "batchModeDisabled": "批量模式已关闭",
     "speechContract": {
-      "title": "Speech 约束",
+      "title": "Speech 约束预览",
       "match": {
         "matched": "已命中",
         "fallback": "回落命中",
@@ -74,12 +74,12 @@
         "none": "未命中 speech contract"
       },
       "summary": {
-        "matched": "命中剧本对白约束，视频会按这组 speech line 执行。",
-        "matchedAudioDisabled": "已命中剧本对白约束，但当前视频生成关闭音频，本次按静音约束执行。",
-        "fallback": "未命中显式对白映射，当前使用面板文本回落匹配。",
-        "fallbackAudioDisabled": "当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。",
-        "none": "当前未命中 speech contract，按静音处理。",
-        "noneAudioDisabled": "当前未命中 speech contract，且本次生成关闭音频，按静音约束执行。"
+        "matched": "这是当前生成配置下的 speech 约束预览；下次生成会按这组剧本台词约束执行。",
+        "matchedAudioDisabled": "这是当前生成配置下的 speech 约束预览；虽然命中了剧本台词，但这次关闭音频，所以下次生成会按静音约束执行。",
+        "fallback": "这是当前生成配置下的 speech 约束预览；当前没有命中显式对白映射，下次生成会按面板文本回落匹配的结果约束。",
+        "fallbackAudioDisabled": "这是当前生成配置下的 speech 约束预览；当前只命中面板文本回落匹配，但这次关闭音频，所以下次生成会按静音约束执行。",
+        "none": "这是当前生成配置下的 speech 约束预览；当前未命中 speech contract，所以下次生成会按静音处理。",
+        "noneAudioDisabled": "这是当前生成配置下的 speech 约束预览；当前未命中 speech contract，且这次关闭音频，所以下次生成会按静音约束执行。"
       },
       "guardrail": {
         "non_verbal_only": "只允许环境声、动作声等非语言音频。",

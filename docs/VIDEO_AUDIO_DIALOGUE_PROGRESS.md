@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 11:08 Asia/Shanghai
+> 更新时间：2026-04-11 11:45 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -141,6 +141,22 @@ P1.1 当前有效分支提交：
 ---
 
 ## 四、当前最新进度（P3 第一阶段：speech contract 可见性与可验证性收口）
+
+### P3 第一阶段小修收口补丁（本次）
+本次是 **P3 第一阶段的小修收口**，只处理两个 UI 可见层风险点，不扩成 execution snapshot 或新的状态模型工程。
+
+本次收口：
+- 把 `stage=videos` 卡片里的 speech contract 语义改成“当前生成配置下的约束预览 / 下一次生成将遵守的约束”，避免用户自然读成“已执行回执”。
+- 把 silent 相关最关键的“不要做嘴型、不要出现像在说话的嘴部动作”约束明确放回 UI 可见层，并通过测试卡住。
+
+本次刻意未做：
+- 未引入 execution snapshot 持久化
+- 未重做 speech contract 的状态真相源体系
+- 未扩成 P3 第二 / 第三阶段
+
+原因：
+- 当前卡片绑定的仍是 `speechPlan + generateAudio` 推导结果，本质上是当前配置下的执行预览，不是已执行视频回执。
+- 这轮风险点可以通过轻量语义修正和 guardrail 展示优先级解决，没有必要把范围扩成新的持久化工程。
 
 ### 本轮结论
 本轮不再继续扩底层 speech 生成能力，而是把 **P2 已有 speech contract** 收口为 `stage=videos` panel 卡片中的一层轻量只读可视化，让用户和团队能直接确认：

@@ -53,7 +53,7 @@
     "batchModeEnabled": "Batch mode enabled",
     "batchModeDisabled": "Batch mode disabled",
     "speechContract": {
-      "title": "Speech Contract",
+      "title": "Speech Contract Preview",
       "match": {
         "matched": "Matched",
         "fallback": "Fallback",
@@ -74,12 +74,12 @@
         "none": "No speech contract match"
       },
       "summary": {
-        "matched": "This panel matched screenplay speech lines, and generation follows those speech constraints.",
-        "matchedAudioDisabled": "This panel matched screenplay speech lines, but audio is disabled for this generation, so it executes under silent constraints.",
-        "fallback": "No explicit speech-line mapping matched, so this panel is using panel-text fallback matching.",
-        "fallbackAudioDisabled": "Only panel-text fallback matching hit for this panel, but audio is disabled, so it executes under silent constraints.",
-        "none": "This panel did not match any speech contract and will be treated as silent.",
-        "noneAudioDisabled": "This panel did not match any speech contract, and audio is disabled, so it executes under silent constraints."
+        "matched": "This is a preview of the speech constraints for the current generation settings; the next generation will follow these screenplay lines.",
+        "matchedAudioDisabled": "This is a preview of the speech constraints for the current generation settings; the panel matched screenplay lines, but audio is disabled, so the next generation will follow silent constraints.",
+        "fallback": "This is a preview of the speech constraints for the current generation settings; no explicit speech-line mapping matched, so the next generation will use the panel-text fallback match.",
+        "fallbackAudioDisabled": "This is a preview of the speech constraints for the current generation settings; only panel-text fallback matching hit, but audio is disabled, so the next generation will follow silent constraints.",
+        "none": "This is a preview of the speech constraints for the current generation settings; no speech contract matched, so the next generation will be treated as silent.",
+        "noneAudioDisabled": "This is a preview of the speech constraints for the current generation settings; no speech contract matched and audio is disabled, so the next generation will follow silent constraints."
       },
       "guardrail": {
         "non_verbal_only": "Keep generated audio non-verbal only, such as ambience or movement.",

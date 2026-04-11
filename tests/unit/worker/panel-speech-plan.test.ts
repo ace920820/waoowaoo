@@ -591,7 +591,7 @@ describe('panel speech plan helpers', () => {
       plannedMode: 'silent',
       matchKind: 'none',
       source: 'none',
-      guardrails: ['intentional_silent', 'no_verbal_audio', 'non_verbal_only'],
+      guardrails: ['intentional_silent', 'no_mouth_sync', 'no_verbal_audio', 'non_verbal_only'],
     })
   })
 

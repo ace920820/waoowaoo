@@ -138,6 +138,19 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
     return t('panelCard.speechContract.summary.none')
   })()
 
+  const visibleSpeechGuardrails = speechContract
+    ? (() => {
+      const prioritizedGuardrails = speechContract.guardrails.includes('no_mouth_sync')
+        ? [
+          'no_mouth_sync',
+          ...speechContract.guardrails.filter((guardrail) => guardrail !== 'no_mouth_sync'),
+        ]
+        : speechContract.guardrails
+
+      return prioritizedGuardrails.slice(0, 3)
+    })()
+    : []
+
   return (
     <div className="p-4 space-y-2">
       <div className="flex items-center justify-between text-xs">
@@ -192,7 +205,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
           )}
 
           <div className="mt-3 space-y-1">
-            {speechContract.guardrails.slice(0, 3).map((guardrail) => (
+            {visibleSpeechGuardrails.map((guardrail) => (
               <div key={guardrail} className="text-[11px] text-[var(--glass-text-tertiary)]">
                 {`• ${t(`panelCard.speechContract.guardrail.${guardrail}` as never)}`}
               </div>
