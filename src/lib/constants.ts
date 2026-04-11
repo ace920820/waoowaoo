@@ -148,6 +148,7 @@ export type ArtStyleValue =
   | 'cyberpunk-anime'
   | 'dark-fantasy'
   | 'chibi-comedy'
+  | 'pixar-3d'
   | 'realistic'
 
 export const ART_STYLES: Array<{

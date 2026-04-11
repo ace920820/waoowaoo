@@ -219,16 +219,19 @@ P1.1 当前有效分支提交：
 
 本次最小验证结果：
 - `tests/unit/lib/art-style.constants.test.ts`
-  - 校验所有要求的 style value 已进入 `ART_STYLES`
+  - 校验所有要求的 style value（含 `pixar-3d`）已进入 `ART_STYLES`
   - 校验新老 style 均可被 `isArtStyleValue(...)` 识别
   - 校验 `getArtStylePrompt(...)` 对新老 style 都能返回中英文 prompt
   - 校验 `american-comic` 已脱离旧的日漫误导语义
+  - 校验 `pixar-3d` 作为独立新增候选存在，不覆盖 `realistic`
 - `tests/unit/worker/character-image-task-handler.test.ts`
   - 校验新风格 `cinematic-anime` 可覆盖项目默认 style 并进入角色图 prompt
 - `tests/unit/worker/location-image-task-handler.test.ts`
   - 校验新风格 `dark-fantasy` 可进入场景图 prompt
 - `tests/unit/worker/panel-image-task-handler.test.ts`
   - 校验新风格 `shaw-brothers` 可经由分镜 prompt 变量注入链路传递到模板构建
+- 运行时验证说明
+  - 由于本机 `vitest` 在当前沙箱触发系统级错误（含 `SecItemCopyMatching failed -50` / pipe listen `EPERM`），本次补充采用 `node --experimental-strip-types` 的最小脚本式断言，验证常量、校验函数、prompt 获取，以及 worker / 模板中的风格注入链路文本契约仍然成立。
 
 ### 本轮结论
 本轮不再继续扩底层 speech 生成能力，而是把 **P2 已有 speech contract** 收口为 `stage=videos` panel 卡片中的一层轻量只读可视化，让用户和团队能直接确认：
