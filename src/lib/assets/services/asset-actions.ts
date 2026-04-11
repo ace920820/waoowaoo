@@ -959,6 +959,13 @@ async function updateGlobalAsset(input: AssetUpdateInput) {
     if (input.body.name !== undefined) updateData.name = normalizeString(input.body.name)
     if (input.body.summary !== undefined) updateData.summary = normalizeString(input.body.summary) || null
     if (input.body.folderId !== undefined) updateData.folderId = normalizeString(input.body.folderId) || null
+    if (input.body.artStyle !== undefined) {
+      const artStyle = normalizeString(input.body.artStyle)
+      if (!isArtStyleValue(artStyle)) {
+        throw new ApiError('INVALID_PARAMS', { code: 'INVALID_ART_STYLE', message: 'artStyle must be a supported value' })
+      }
+      updateData.artStyle = artStyle
+    }
     const location = await prisma.globalLocation.update({
       where: { id: input.assetId },
       data: updateData,
@@ -980,6 +987,13 @@ async function updateGlobalAsset(input: AssetUpdateInput) {
     if (input.body.name !== undefined) updateData.name = normalizeString(input.body.name)
     if (input.body.summary !== undefined) updateData.summary = normalizeString(input.body.summary) || null
     if (input.body.folderId !== undefined) updateData.folderId = normalizeString(input.body.folderId) || null
+    if (input.body.artStyle !== undefined) {
+      const artStyle = normalizeString(input.body.artStyle)
+      if (!isArtStyleValue(artStyle)) {
+        throw new ApiError('INVALID_PARAMS', { code: 'INVALID_ART_STYLE', message: 'artStyle must be a supported value' })
+      }
+      updateData.artStyle = artStyle
+    }
     const prop = await prisma.globalLocation.update({
       where: { id: input.assetId },
       data: updateData,

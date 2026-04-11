@@ -49,6 +49,7 @@ export type AssetVariantSummary = {
   index: number
   label: string
   description: string | null
+  artStyle?: string | null
   selectionState: {
     selectedRenderIndex: number | null
   }
@@ -91,6 +92,7 @@ export type LocationAssetSummary = BaseAssetSummary & {
   family: 'visual'
   variants: AssetVariantSummary[]
   summary: string | null
+  artStyle?: string | null
   selectedVariantId: string | null
 }
 
@@ -99,6 +101,7 @@ export type PropAssetSummary = BaseAssetSummary & {
   family: 'visual'
   variants: AssetVariantSummary[]
   summary: string | null
+  artStyle?: string | null
   selectedVariantId: string | null
 }
 

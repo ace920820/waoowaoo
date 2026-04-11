@@ -340,6 +340,79 @@ describe('api specific - unified assets routes', () => {
     expect(body).toEqual({ success: true })
   })
 
+  it('PATCH /api/assets/[assetId]/variants/[variantId] forwards global character appearance artStyle updates', async () => {
+    const mod = await import('@/app/api/assets/[assetId]/variants/[variantId]/route')
+    const req = buildMockRequest({
+      path: '/api/assets/character-1/variants/appearance-1',
+      method: 'PATCH',
+      body: {
+        scope: 'global',
+        kind: 'character',
+        description: '短发，风衣',
+        artStyle: 'realistic',
+      },
+    })
+
+    const res = await mod.PATCH(req, {
+      params: Promise.resolve({ assetId: 'character-1', variantId: 'appearance-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(updateAssetVariantMock).toHaveBeenCalledWith({
+      kind: 'character',
+      assetId: 'character-1',
+      variantId: 'appearance-1',
+      body: {
+        scope: 'global',
+        kind: 'character',
+        description: '短发，风衣',
+        artStyle: 'realistic',
+      },
+      access: {
+        scope: 'global',
+        userId: 'user-1',
+      },
+    })
+    expect(body).toEqual({ success: true })
+  })
+
+  it('PATCH /api/assets/[assetId] forwards global location artStyle updates', async () => {
+    const mod = await import('@/app/api/assets/[assetId]/route')
+    const req = buildMockRequest({
+      path: '/api/assets/location-1',
+      method: 'PATCH',
+      body: {
+        scope: 'global',
+        kind: 'location',
+        summary: '黄昏下的钟楼',
+        artStyle: 'japanese-anime',
+      },
+    })
+
+    const res = await mod.PATCH(req, {
+      params: Promise.resolve({ assetId: 'location-1' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(updateAssetMock).toHaveBeenCalledWith({
+      kind: 'location',
+      assetId: 'location-1',
+      body: {
+        scope: 'global',
+        kind: 'location',
+        summary: '黄昏下的钟楼',
+        artStyle: 'japanese-anime',
+      },
+      access: {
+        scope: 'global',
+        userId: 'user-1',
+      },
+    })
+    expect(body).toEqual({ success: true })
+  })
+
   it('POST /api/assets/[assetId]/select-render confirms a project prop through the unified route', async () => {
     const mod = await import('@/app/api/assets/[assetId]/select-render/route')
     const req = buildMockRequest({

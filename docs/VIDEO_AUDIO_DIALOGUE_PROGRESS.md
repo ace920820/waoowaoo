@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 17:57 Asia/Shanghai
+> 更新时间：2026-04-11 20:58 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -157,6 +157,65 @@ P1.1 当前有效分支提交：
 原因：
 - 当前卡片绑定的仍是 `speechPlan + generateAudio` 推导结果，本质上是当前配置下的执行预览，不是已执行视频回执。
 - 这轮风险点可以通过轻量语义修正和 guardrail 展示优先级解决，没有必要把范围扩成新的持久化工程。
+
+### Asset Hub 已保存素材 artStyle 持久化 / 展示 / 再生成链路修复（本次）
+本次额外修复了一条真实的 asset-hub 风格链路 bug，范围只覆盖全局 `character / location` 的 artStyle 查看、修改、保存、生成、再生成，不做无关 UI 重构。
+
+- 复现确认：
+  - 在创建角色时直接“添加并生成图片”，生成接口显式带了 `artStyle`，所以风格正常生效。
+  - 如果只“添加到资产库”，后续从 asset-hub 再点 generate / regenerate，UI 打开的记录拿不到已保存的 `artStyle`，编辑弹窗也无法修改该字段。
+  - 根因不是数据库完全没存，而是 **统一资产读取层把已持久化的 `artStyle` 丢成了 `null`**，导致 asset-hub 页面回填和再生成参数都可能退化。
+
+- 本次根因核验结论：
+  - `globalCharacterAppearance.artStyle` 和 `globalLocation.artStyle` 的持久化写入链路原本就存在。
+  - `submitAssetGenerateTask(...)->resolveStoredGlobalArtStyle(...)` 的“从已保存记录回读 artStyle 再生成”能力原本也存在。
+  - 真正断点在统一资产层：
+    - `src/lib/assets/contracts.ts`
+    - `src/lib/assets/mappers.ts`
+    - `src/lib/query/hooks/useGlobalAssets.ts`
+    这一层没有把 global character appearance / global location 的 `artStyle` 带回 UI，导致 asset-hub 页面拿到的是 `null`。
+  - 同时，asset-hub 的 `CharacterEditModal / LocationEditModal` 之前没有 `artStyle` 编辑入口，也没有保存逻辑，因此“查看/修改/保存后生成”链路不闭环。
+
+- 本次修复内容：
+  - 给 unified asset contract 和 mapper 补齐 global character appearance / global location / global prop 的 `artStyle` 透传。
+  - 修复 `useGlobalAssets` 对 unified asset 的二次映射，避免再次把 `artStyle` 覆盖成 `null`。
+  - 给 asset-hub 的 `CharacterEditModal / LocationEditModal` 增加最小风格选择 UI，仅在 asset-hub 模式显示。
+  - 扩展 unified update mutation：
+    - 角色外观保存时可同时更新 `artStyle`
+    - 场景保存时可同时更新 `artStyle`
+  - 扩展全局 asset update 服务：
+    - `global location / prop` 统一更新接口支持 `artStyle`
+  - 修复“保存并生成”时的竞态：
+    - 生成不再依赖已关闭 modal 的旧 state
+    - 改为从弹窗把最新 `appearanceIndex / artStyle` 回传给 generate 调用
+  - 顺手补齐 legacy `PATCH /api/asset-hub/locations/[locationId]` 对 `artStyle` 的校验与持久化，避免旧入口继续丢字段。
+
+- 验证结论：
+  - A. asset-hub 已保存 character/location 现在能拿到并显示当前 `artStyle`，不再被统一资产层清空。
+  - B. asset-hub 编辑角色/场景时可以修改 `artStyle` 并保存。
+  - C. 保存后再 generate / regenerate，调用链优先使用最新保存值；如果前端未显式传值，服务端仍会从持久化记录回读。
+  - D. “仅添加到资产库”后再从 asset-hub 生成图片，会使用数据库里持久化的 `artStyle`，不再退化为 `undefined/null`。
+  - E. 如果后续仍觉得风格效果弱，应优先判定为 prompt/模型效果问题，而不是本次已修复的 `artStyle` 链路丢失问题。
+
+- 本次补充测试：
+  - `tests/unit/assets/mappers.test.ts`
+    - 新增 global character appearance / global location 的 `artStyle` 映射断言
+  - `tests/integration/api/specific/assets-route.test.ts`
+    - 新增 unified route 对 global character appearance / global location 的 `artStyle` 更新转发断言
+  - `tests/integration/api/specific/asset-hub-location-route-art-style.test.ts`
+    - 新增 legacy asset-hub location PATCH 对 `artStyle` 持久化断言
+  - `tests/integration/api/specific/asset-hub-generate-image-art-style.test.ts`
+    - 继续覆盖“未显式传 artStyle 时从已保存记录回读并带入生成 payload”的关键断点
+
+- 本地校验说明：
+  - `eslint` 已针对本次改动文件通过。
+  - `npm run typecheck` 当前因仓库既有测试文件里的 `fetch` mock 类型问题失败，报错集中在：
+    - `tests/unit/helpers/api-fetch.test.ts`
+    - `tests/unit/helpers/run-request-executor.run-events.test.ts`
+    - `tests/unit/helpers/update-check.test.ts`
+    - `tests/unit/user-api/provider-test-compatible.test.ts`
+    这些都不是本次 artStyle 修复引入的问题。
+  - `vitest` 在当前环境启动时触发系统级错误 `SecItemCopyMatching failed -50`，属于本机运行时限制，未能在本地直接完成自动执行；本次仍已补齐对应测试文件，供后续在正常 CI / 本机环境下执行。
 
 ### P3 第一阶段补丁：screenplay 编辑后对白下游同步修复（本次）
 本次额外补了一条真实数据链路 bug：

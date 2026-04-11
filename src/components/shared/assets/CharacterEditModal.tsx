@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { shouldShowError } from '@/lib/error-utils'
+import { ART_STYLES } from '@/lib/constants'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import {
@@ -24,13 +25,18 @@ export interface CharacterEditModalProps {
     description: string
     appearanceIndex?: number
     changeReason?: string
+    artStyle?: string | null
     projectId?: string
     appearanceId?: string
     descriptionIndex?: number
     isTaskRunning?: boolean
     introduction?: string | null
     onClose: () => void
-    onSave: (characterId: string, appearanceId: string) => void
+    onSave: (
+        characterId: string,
+        appearanceId: string,
+        options?: { artStyle?: string | null; appearanceIndex?: number },
+    ) => void
     onUpdate?: (newDescription: string) => void
     onIntroductionUpdate?: (newIntroduction: string) => void
     onNameUpdate?: (newName: string) => void
@@ -44,6 +50,7 @@ export function CharacterEditModal({
     description,
     appearanceIndex,
     changeReason,
+    artStyle,
     projectId,
     appearanceId,
     descriptionIndex,
@@ -65,6 +72,7 @@ export function CharacterEditModal({
     const [editingName, setEditingName] = useState(characterName)
     const [editingDescription, setEditingDescription] = useState(description)
     const [editingIntroduction, setEditingIntroduction] = useState(introduction || '')
+    const [editingArtStyle, setEditingArtStyle] = useState(artStyle || 'american-comic')
     const [aiModifyInstruction, setAiModifyInstruction] = useState('')
     const [isAiModifying, setIsAiModifying] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -124,6 +132,7 @@ export function CharacterEditModal({
                 characterId,
                 appearanceIndex: appearanceIndex ?? 0,
                 description: editingDescription,
+                artStyle: editingArtStyle,
             })
             return
         }
@@ -240,7 +249,10 @@ export function CharacterEditModal({
 
                 onUpdate?.(savedDescription)
                 onRefresh?.()
-                onSave(characterId, savedAppearanceKey)
+                onSave(characterId, savedAppearanceKey, {
+                    artStyle: editingArtStyle,
+                    appearanceIndex: appearanceIndex ?? 0,
+                })
             } catch (error: unknown) {
                 if (shouldShowError(error)) {
                     alert(getErrorMessage(error, t('errors.saveFailed')))
@@ -315,6 +327,29 @@ export function CharacterEditModal({
                             <span className="ml-1 inline-flex items-center rounded-full px-2 py-0.5 bg-[var(--glass-tone-neutral-bg)] text-[var(--glass-tone-neutral-fg)]">
                                 {changeReason}
                             </span>
+                        </div>
+                    )}
+
+                    {mode === 'asset-hub' && (
+                        <div className="space-y-2">
+                            <label className="glass-field-label block">
+                                {t('modal.artStyle')}
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {ART_STYLES.map((style) => (
+                                    <button
+                                        key={style.value}
+                                        type="button"
+                                        onClick={() => setEditingArtStyle(style.value)}
+                                        className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all text-left ${editingArtStyle === style.value
+                                            ? 'glass-btn-primary border-[var(--glass-accent-primary)]'
+                                            : 'glass-btn-secondary'
+                                            }`}
+                                    >
+                                        {style.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
 

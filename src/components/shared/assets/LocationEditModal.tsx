@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { shouldShowError } from '@/lib/error-utils'
+import { ART_STYLES } from '@/lib/constants'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import {
@@ -24,11 +25,12 @@ export interface LocationEditModalProps {
     description: string
     summary?: string
     imageIndex?: number
+    artStyle?: string | null
     projectId?: string
     descriptionIndex?: number
     isTaskRunning?: boolean
     onClose: () => void
-    onSave: (locationId: string) => void
+    onSave: (locationId: string, options?: { artStyle?: string | null }) => void
     onUpdate?: (newDescription: string) => void
     onNameUpdate?: (newName: string) => void
     onRefresh?: () => void
@@ -41,6 +43,7 @@ export function LocationEditModal({
     description,
     summary,
     imageIndex,
+    artStyle,
     projectId,
     descriptionIndex,
     isTaskRunning = false,
@@ -58,6 +61,7 @@ export function LocationEditModal({
 
     const [editingName, setEditingName] = useState(locationName)
     const [editingDescription, setEditingDescription] = useState(description || summary || '')
+    const [editingArtStyle, setEditingArtStyle] = useState(artStyle || 'american-comic')
     const [availableSlots, setAvailableSlots] = useState<LocationAvailableSlot[]>([])
     const [aiModifyInstruction, setAiModifyInstruction] = useState('')
     const [isAiModifying, setIsAiModifying] = useState(false)
@@ -116,6 +120,7 @@ export function LocationEditModal({
             await updateAssetHubSummary.mutateAsync({
                 locationId,
                 summary: editingDescription,
+                artStyle: editingArtStyle,
                 availableSlots,
             })
             return
@@ -216,7 +221,7 @@ export function LocationEditModal({
                 await persistDescription()
                 onUpdate?.(savedDescription)
                 onRefresh?.()
-                onSave(locationId)
+                onSave(locationId, { artStyle: editingArtStyle })
             } catch (error: unknown) {
                 if (shouldShowError(error)) {
                     alert(getErrorMessage(error, t('errors.saveFailed')))
@@ -266,6 +271,29 @@ export function LocationEditModal({
                             )}
                         </div>
                     </div>
+
+                    {mode === 'asset-hub' && (
+                        <div className="space-y-2">
+                            <label className="glass-field-label block">
+                                {t('modal.artStyle')}
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {ART_STYLES.map((style) => (
+                                    <button
+                                        key={style.value}
+                                        type="button"
+                                        onClick={() => setEditingArtStyle(style.value)}
+                                        className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all text-left ${editingArtStyle === style.value
+                                            ? 'glass-btn-primary border-[var(--glass-accent-primary)]'
+                                            : 'glass-btn-secondary'
+                                            }`}
+                                    >
+                                        {style.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <AiModifyDescriptionField
                         label={t('location.description')}
