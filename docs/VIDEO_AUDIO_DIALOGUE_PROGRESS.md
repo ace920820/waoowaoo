@@ -264,6 +264,10 @@ P1.1 当前有效分支提交：
 3. `docs/` 目录当前被 `.gitignore` 忽略：
    - 文档可用于项目内记录
    - 但默认不会自动纳入 git 跟踪
+4. **本地开发环境约定（2026-04-11 补记）**：`waoowaoo` 当前应按 **源码 `npm run dev` + 本地 dev MySQL** 使用，不应默认改接 Docker MySQL。
+   - 当前开发数据库连接目标：`127.0.0.1:13306/waoowaoo`
+   - 本地 dev MySQL 数据目录：`~/.local/share/waoowaoo-dev/mysql/data`
+   - 当需要恢复“昨天正在使用的项目进度/数据”时，应优先拉起并连接这套本地 dev MySQL，而不是新起镜像库
 
 ---
 
