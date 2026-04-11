@@ -380,6 +380,11 @@ describe('panel speech plan helpers', () => {
     const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(payload.generateAudio).toBe(false)
     expect(payload.instruction).toContain('Audio generation is disabled')
+    expect(payload.guardrails).toEqual([
+      'generated audio disabled for this request',
+      'no spoken dialogue, narration, lyrics, or other verbal audio',
+      'no mouth-sync or speech-shaped facial performance that implies unheard words',
+    ])
   })
 
   it('emits explicit voiceover execution guidance', () => {
@@ -405,8 +410,67 @@ describe('panel speech plan helpers', () => {
 
     expect(prompt).toContain('Mode: voiceover')
     expect(prompt).toContain('off-screen narration or voiceover')
+    expect(prompt).toContain('Do not stage these lines as on-screen mouth speech or visible lip-sync')
     expect(prompt).toContain('speaker="Narrator"')
     expect(prompt).toContain('content="城市从不真正入睡。"')
+
+    const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
+    expect(payload.guardrails).toEqual([
+      'listed lines are voiceover or off-screen narration only',
+      'do not present listed words as on-screen mouth speech',
+      'visible characters should read as listening, acting, or silent reaction',
+    ])
+  })
+
+  it('emits stronger silent and dialogue guardrails for regression-sensitive modes', () => {
+    const silentPrompt = buildPanelSpeechPlanPrompt({
+      basePrompt: 'Quiet hallway, locked-off medium shot.',
+      speechPlan: {
+        mode: 'silent',
+        source: 'none',
+        generatedAudioRequired: true,
+        primaryText: null,
+        speakers: [],
+        lines: [],
+      },
+    })
+    const silentPayload = JSON.parse(silentPrompt.split('[Structured Speech Plan JSON]\n')[1])
+    expect(silentPrompt).toContain('avoid lip-sync-like mouth performance or speech-shaped mouth cycles')
+    expect(silentPayload.guardrails).toEqual([
+      'intentional non-speaking panel',
+      'no spoken dialogue, narration, ad-libs, or implied verbal beats',
+      'avoid lip-sync and speech-shaped mouth movement',
+      'generated audio must stay non-verbal only',
+    ])
+
+    const dialoguePrompt = buildPanelSpeechPlanPrompt({
+      basePrompt: 'Tense over-the-shoulder shot.',
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_voice_lines',
+        generatedAudioRequired: true,
+        primaryText: '把门关上。',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 7,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '把门关上。',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+    const dialoguePayload = JSON.parse(dialoguePrompt.split('[Structured Speech Plan JSON]\n')[1])
+    expect(dialoguePrompt).toContain('Do not add extra spoken lines, narration, paraphrases, or substitute wording')
+    expect(dialoguePrompt).toContain('prefer restrained or silent mouth performance over incorrect speech')
+    expect(dialoguePayload.guardrails).toEqual([
+      'use only the listed structured lines as spoken words',
+      'keep spoken wording verbatim; do not paraphrase, summarize, or add new lines',
+      'if a speaker is visible, mouth movement should align to the listed words only',
+      'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',
+    ])
   })
 
   it('builds video prompts from panel visual context plus speech contract', () => {

@@ -298,6 +298,16 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('Treat this panel as intentionally non-speaking.'),
       }),
     })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('"guardrails": ['),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('avoid lip-sync-like mouth performance or speech-shaped mouth cycles.'),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 为 dialogue panel 注入显式口播执行指令', async () => {
@@ -322,6 +332,11 @@ describe('worker video processor behavior', () => {
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.objectContaining({
         prompt: expect.stringContaining('speaker="Hero" content="第一句台词"'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('prefer restrained or silent mouth performance over incorrect speech.'),
       }),
     })
   })
@@ -363,6 +378,11 @@ describe('worker video processor behavior', () => {
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.objectContaining({
         prompt: expect.stringContaining('Treat the listed lines as off-screen narration or voiceover.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Do not stage these lines as on-screen mouth speech or visible lip-sync'),
       }),
     })
   })

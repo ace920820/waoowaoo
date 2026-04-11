@@ -301,6 +301,43 @@ function buildSpeechInstruction(params: {
   return 'Generate audio for the listed speech and keep any visible performance aligned to these lines.'
 }
 
+function buildSpeechGuardrails(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio: boolean
+}): string[] {
+  if (!params.generateAudio) {
+    return [
+      'generated audio disabled for this request',
+      'no spoken dialogue, narration, lyrics, or other verbal audio',
+      'no mouth-sync or speech-shaped facial performance that implies unheard words',
+    ]
+  }
+
+  if (params.speechPlan.mode === 'silent') {
+    return [
+      'intentional non-speaking panel',
+      'no spoken dialogue, narration, ad-libs, or implied verbal beats',
+      'avoid lip-sync and speech-shaped mouth movement',
+      'generated audio must stay non-verbal only',
+    ]
+  }
+
+  if (params.speechPlan.mode === 'voiceover') {
+    return [
+      'listed lines are voiceover or off-screen narration only',
+      'do not present listed words as on-screen mouth speech',
+      'visible characters should read as listening, acting, or silent reaction',
+    ]
+  }
+
+  return [
+    'use only the listed structured lines as spoken words',
+    'keep spoken wording verbatim; do not paraphrase, summarize, or add new lines',
+    'if a speaker is visible, mouth movement should align to the listed words only',
+    'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',
+  ]
+}
+
 function buildSpeechModeExecutionBlock(params: {
   speechPlan: PanelSpeechPlan
   generateAudio: boolean
@@ -324,7 +361,7 @@ function buildSpeechModeExecutionBlock(params: {
       ...header,
       '- Treat this panel as intentionally non-speaking.',
       '- Do not add spoken dialogue, narration, ad-libs, or implied speech beats.',
-      '- Keep character behavior and facial performance non-speaking; avoid lip-sync-like mouth performance.',
+      '- Keep character behavior and facial performance non-speaking; avoid lip-sync-like mouth performance or speech-shaped mouth cycles.',
       '- Audio should stay non-verbal: ambience, movement, impacts, room tone, or scene sound only.',
     ].join('\n')
   }
@@ -345,7 +382,7 @@ function buildSpeechModeExecutionBlock(params: {
     return [
       ...header,
       '- Treat the listed lines as off-screen narration or voiceover.',
-      '- Do not stage these lines as on-screen mouth speech unless the visual prompt explicitly requires it.',
+      '- Do not stage these lines as on-screen mouth speech or visible lip-sync unless the visual prompt explicitly requires it.',
       '- Keep character blocking and facial performance consistent with listening, acting, or silent reaction rather than speaking these words.',
       '- Voiceover lines:',
       ...numberedLines,
@@ -355,8 +392,9 @@ function buildSpeechModeExecutionBlock(params: {
   return [
     ...header,
     '- Treat the listed lines as intentional on-screen spoken dialogue for this panel.',
-    '- If the speaker is visible, align mouth movement and speaking performance to these exact lines.',
-    '- Do not add extra spoken lines, narration, or substitute wording beyond the structured speech plan.',
+    '- If the speaker is visible, align mouth movement and speaking performance to these exact lines only.',
+    '- Do not add extra spoken lines, narration, paraphrases, or substitute wording beyond the structured speech plan.',
+    '- If exact wording cannot be rendered reliably, prefer restrained or silent mouth performance over incorrect speech.',
     '- Spoken lines:',
     ...numberedLines,
   ].join('\n')
@@ -380,6 +418,7 @@ function buildStructuredSpeechPlanPayload(params: {
       parenthetical: line.parenthetical,
     })),
     instruction: buildSpeechInstruction(params),
+    guardrails: buildSpeechGuardrails(params),
   }
 }
 

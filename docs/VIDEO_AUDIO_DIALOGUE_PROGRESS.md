@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 02:03 Asia/Shanghai
+> 更新时间：2026-04-11 03:08 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -121,7 +121,7 @@ P1.1 当前有效分支提交：
 - 增加 silent / dialogue / voiceover 的生成护栏
 - 补更多回归测试，避免 provider 间行为漂移
 
-当前状态：**未开始**
+当前状态：**通用 guardrails / regression 已完成；provider-specific mapping 暂缓**
 
 ### P2 当前不做
 - 不做完整 P3 可观测 UI 层
@@ -130,10 +130,64 @@ P1.1 当前有效分支提交：
 
 ---
 
-## 四、当前最新进度（P2 第二实施切片 review follow-up 已完成）
+## 四、当前最新进度（P2-切片3 稳定收益优先收口已完成）
+
+### 本轮结论
+本轮严格按“稳定收益优先”收窄，没有为了名义上的 slice3 去硬塞 provider-specific mapping。
+
+原因：
+- 当前视频 provider 的 speech 能力并不统一，很多能力既没有稳定显式参数，也缺少足够可回归的合同面。
+- 如果按 provider 分叉 speech contract，很容易把现在单一真相源的 prompt/request contract 再次打散，增加“某 provider 生效、某 provider 漂移”的脆弱点。
+- 本轮更高收益的是继续强化通用 guardrails，让所有 provider 至少先消费同一份更硬的 speech contract，再通过回归测试卡住 silent / dialogue / voiceover 三类常见退化。
+
+### 本轮新增完成内容
+1. **强化通用 speech execution guardrails**
+   - 文件：`src/lib/novel-promotion/panel-speech-plan.ts`
+   - 对三种模式补强执行约束：
+     - `silent`：更明确禁止口播、旁白、lip-sync 倾向和 speech-shaped mouth cycles
+     - `dialogue`：明确要求只说结构化台词原文；如果做不到，优先收敛为克制/少嘴型，而不是说错词
+     - `voiceover`：更明确禁止把旁白做成画内对白或可见唇形同步
+
+2. **把 guardrails 写进结构化 speech JSON**
+   - 在 `[Structured Speech Plan JSON]` 中新增稳定的 `guardrails` 数组
+   - 目的不是扩业务 schema，而是把 prompt contract 里的关键约束变成更可回归的结构化字段
+   - 这样后续测试可以直接断言 contract，而不是只盯自然语言文案
+
+3. **补强 regression tests**
+   - `tests/unit/worker/panel-speech-plan.test.ts`
+     - 新增 silent / dialogue / voiceover 的 guardrails 断言
+     - 明确校验 `dialogue` 的 verbatim 限制与“宁可克制、不要错词”
+     - 明确校验 `voiceover` 的“不要变成画内口型对白”
+   - `tests/unit/worker/video-worker.test.ts`
+     - 补 worker prompt 注入断言，确保上述 guardrails 真正进入生成请求 prompt
+
+### 本轮验证结果
+已完成：
+- 使用 `node --import tsx` + `node:assert/strict` 运行手工断言脚本，验证通过：
+  - `silent`：命中 non-speaking 指令、抑制 lip-sync / speech-shaped mouth cycles、结构化 `guardrails` 存在
+  - `dialogue`：命中 verbatim 台词约束、禁止 paraphrase / substitute wording、要求错词时优先克制而不是乱说
+  - `voiceover`：命中 off-screen narration 指令、禁止 visible lip-sync、结构化 `guardrails` 正确写入
+- 直接运行聚焦单测：
+  - `./node_modules/.bin/vitest run tests/unit/worker/panel-speech-plan.test.ts tests/unit/worker/video-worker.test.ts`
+  - 结果：`2` 个 test files / `23` 个 tests 全部通过
+
+说明：
+- 仓库默认的 `pre-commit` 仍会触发全量 `lint + typecheck + test:all`
+- 其中已有的 `fetch.preconnect` 相关 typecheck 噪音会拦住提交流程，但这不是本轮改动引入的问题
+
+### provider-specific mapping 暂缓说明
+本轮**未新增 provider-specific speech mapping**。
+
+暂缓原因：
+- 缺少稳定、跨 provider 一致且可测试的 speech 参数面，贸然做 provider 分叉会让系统更脆。
+- 目前最稳定的公共合同仍然是：
+  - 统一 speech plan
+  - 统一 prompt contract
+  - 统一 `generateAudio` 控制面
+- 在没有更可靠 provider 能力证据前，继续强化通用 guardrails 的收益更确定，也更容易持续回归。
 
 ### 已完成结果
-根据最新一轮 Codex 开发结果，P2 第二实施切片已经落下：
+此前 P2 第二实施切片已经落下：
 
 - 新增 panel 级结构化 speech foundation：
   - `src/lib/novel-promotion/panel-speech-plan.ts`
@@ -235,7 +289,7 @@ P1.1 当前有效分支提交：
 ### 当前判断
 换句话说：
 
-> **P2-切片2 已完成；下一步进入 P2-切片3（provider 适配与生成护栏）。**
+> **P2-切片2 已完成；P2-切片3 本轮先完成了“通用 speech guardrails + regression”这部分稳定收口。provider-specific mapping 暂缓，待后续有足够稳定的 provider contract 再进入。**
 
 ---
 
@@ -245,11 +299,11 @@ P1.1 当前有效分支提交：
 
 ### P2-切片3
 重点是：
-1. 按 provider 能力把 speech contract 映射成更稳定的请求参数/模板
-2. 增加 silent / dialogue / voiceover 的 provider 级护栏
-3. 补 provider 差异回归，减少模型漂移带来的“乱说话 / 说错词”问题
+1. 继续观察本轮通用 guardrails 的实际生成收益
+2. 仅在确认某 provider 存在稳定、可验证的显式 speech 参数面时，再做 provider-specific mapping
+3. 如果后续进入 provider 分叉，必须先补对应回归合同，避免把统一 contract 再打散
 
-当前状态：**下一步**
+当前状态：**通用 guardrails 已完成；provider mapping 暂缓观察**
 
 ---
 
