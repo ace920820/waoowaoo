@@ -51,7 +51,49 @@
     "batchMode": "Batch Mode",
     "batchModeDesc": "Offline inference, 50% cheaper, completes within 24 hours",
     "batchModeEnabled": "Batch mode enabled",
-    "batchModeDisabled": "Batch mode disabled"
+    "batchModeDisabled": "Batch mode disabled",
+    "speechContract": {
+      "title": "Speech Contract",
+      "match": {
+        "matched": "Matched",
+        "fallback": "Fallback",
+        "none": "No Match"
+      },
+      "audio": {
+        "enabled": "Audio enabled",
+        "disabled": "Audio disabled"
+      },
+      "mode": {
+        "silent": "Silent",
+        "dialogue": "Dialogue",
+        "voiceover": "Voiceover"
+      },
+      "source": {
+        "screenplay_voice_lines": "Screenplay speech mapping",
+        "screenplay_panel_match": "Panel text fallback match",
+        "none": "No speech contract match"
+      },
+      "summary": {
+        "matched": "This panel matched screenplay speech lines, and generation follows those speech constraints.",
+        "matchedAudioDisabled": "This panel matched screenplay speech lines, but audio is disabled for this generation, so it executes under silent constraints.",
+        "fallback": "No explicit speech-line mapping matched, so this panel is using panel-text fallback matching.",
+        "fallbackAudioDisabled": "Only panel-text fallback matching hit for this panel, but audio is disabled, so it executes under silent constraints.",
+        "none": "This panel did not match any speech contract and will be treated as silent.",
+        "noneAudioDisabled": "This panel did not match any speech contract, and audio is disabled, so it executes under silent constraints."
+      },
+      "guardrail": {
+        "non_verbal_only": "Keep generated audio non-verbal only, such as ambience or movement.",
+        "no_verbal_audio": "Do not generate dialogue, narration, lyrics, or other verbal audio.",
+        "no_mouth_sync": "Avoid visible lip-sync or speech-shaped mouth movement.",
+        "intentional_silent": "Treat this panel as intentionally non-speaking.",
+        "voiceover_only": "Matched lines should play as voiceover or off-screen narration only.",
+        "no_onscreen_speech": "Do not stage the matched words as on-screen mouth speech.",
+        "reaction_over_speaking": "Visible characters should read as acting, listening, or reacting silently.",
+        "verbatim_only": "Use only the matched structured lines as spoken words.",
+        "no_extra_lines": "Do not add paraphrases, extra narration, or invented lines.",
+        "align_visible_speech": "If a speaker is visible, mouth movement should align only to these words."
+      }
+    }
   },
   "promptModal": {
     "title": "Edit Shot #{number} Video Prompt",

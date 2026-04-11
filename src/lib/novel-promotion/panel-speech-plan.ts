@@ -24,6 +24,32 @@ export type PanelSpeechPlan = {
   lines: PanelSpeechLine[]
 }
 
+export type PanelSpeechContractMatchKind = 'matched' | 'fallback' | 'none'
+
+export type PanelSpeechContractGuardrail =
+  | 'non_verbal_only'
+  | 'no_verbal_audio'
+  | 'no_mouth_sync'
+  | 'intentional_silent'
+  | 'voiceover_only'
+  | 'no_onscreen_speech'
+  | 'reaction_over_speaking'
+  | 'verbatim_only'
+  | 'no_extra_lines'
+  | 'align_visible_speech'
+
+export type PanelSpeechContractViewModel = {
+  audioEnabled: boolean
+  effectiveMode: PanelSpeechMode
+  plannedMode: PanelSpeechMode
+  source: PanelSpeechPlan['source']
+  matchKind: PanelSpeechContractMatchKind
+  lines: PanelSpeechLine[]
+  speakers: string[]
+  primaryText: string | null
+  guardrails: PanelSpeechContractGuardrail[]
+}
+
 type PanelSpeechPlanPanel = {
   id?: string | null
   storyboardId?: string | null
@@ -336,6 +362,70 @@ function buildSpeechGuardrails(params: {
     'if a speaker is visible, mouth movement should align to the listed words only',
     'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',
   ]
+}
+
+function resolveSpeechContractGuardrails(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio: boolean
+}): PanelSpeechContractGuardrail[] {
+  if (!params.generateAudio) {
+    return [
+      'no_verbal_audio',
+      'non_verbal_only',
+      'no_mouth_sync',
+    ]
+  }
+
+  if (params.speechPlan.mode === 'silent') {
+    return [
+      'intentional_silent',
+      'no_verbal_audio',
+      'non_verbal_only',
+    ]
+  }
+
+  if (params.speechPlan.mode === 'voiceover') {
+    return [
+      'voiceover_only',
+      'no_onscreen_speech',
+      'reaction_over_speaking',
+    ]
+  }
+
+  return [
+    'verbatim_only',
+    'no_extra_lines',
+    'align_visible_speech',
+  ]
+}
+
+export function buildPanelSpeechContractViewModel(params: {
+  speechPlan: PanelSpeechPlan
+  generateAudio?: boolean
+}): PanelSpeechContractViewModel {
+  const audioEnabled = typeof params.generateAudio === 'boolean'
+    ? params.generateAudio
+    : params.speechPlan.generatedAudioRequired
+  const matchKind: PanelSpeechContractMatchKind = params.speechPlan.source === 'screenplay_voice_lines'
+    ? 'matched'
+    : params.speechPlan.source === 'screenplay_panel_match'
+      ? 'fallback'
+      : 'none'
+
+  return {
+    audioEnabled,
+    effectiveMode: audioEnabled ? params.speechPlan.mode : 'silent',
+    plannedMode: params.speechPlan.mode,
+    source: params.speechPlan.source,
+    matchKind,
+    lines: params.speechPlan.lines,
+    speakers: params.speechPlan.speakers,
+    primaryText: params.speechPlan.primaryText,
+    guardrails: resolveSpeechContractGuardrails({
+      speechPlan: params.speechPlan,
+      generateAudio: audioEnabled,
+    }),
+  }
 }
 
 function buildSpeechModeExecutionBlock(params: {

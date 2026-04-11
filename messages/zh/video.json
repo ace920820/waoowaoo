@@ -51,7 +51,49 @@
     "batchMode": "批量模式",
     "batchModeDesc": "离线推理，价格便宜50%，24小时内完成",
     "batchModeEnabled": "已开启批量模式",
-    "batchModeDisabled": "批量模式已关闭"
+    "batchModeDisabled": "批量模式已关闭",
+    "speechContract": {
+      "title": "Speech 约束",
+      "match": {
+        "matched": "已命中",
+        "fallback": "回落命中",
+        "none": "未命中"
+      },
+      "audio": {
+        "enabled": "本次生成含音频",
+        "disabled": "本次生成禁用音频"
+      },
+      "mode": {
+        "silent": "静音",
+        "dialogue": "对白",
+        "voiceover": "旁白"
+      },
+      "source": {
+        "screenplay_voice_lines": "剧本对白映射",
+        "screenplay_panel_match": "面板文本回落匹配",
+        "none": "未命中 speech contract"
+      },
+      "summary": {
+        "matched": "命中剧本对白约束，视频会按这组 speech line 执行。",
+        "matchedAudioDisabled": "已命中剧本对白约束，但当前视频生成关闭音频，本次按静音约束执行。",
+        "fallback": "未命中显式对白映射，当前使用面板文本回落匹配。",
+        "fallbackAudioDisabled": "当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。",
+        "none": "当前未命中 speech contract，按静音处理。",
+        "noneAudioDisabled": "当前未命中 speech contract，且本次生成关闭音频，按静音约束执行。"
+      },
+      "guardrail": {
+        "non_verbal_only": "只允许环境声、动作声等非语言音频。",
+        "no_verbal_audio": "不要生成对白、旁白、歌词或其他口语化音频。",
+        "no_mouth_sync": "避免明显口型和像在说话的嘴部动作。",
+        "intentional_silent": "这个镜头被视为有意静音镜头。",
+        "voiceover_only": "命中的台词只按旁白/画外音处理。",
+        "no_onscreen_speech": "不要把这些词做成画内开口说话。",
+        "reaction_over_speaking": "人物更应表现为聆听、行动或无声反应。",
+        "verbatim_only": "只使用命中的结构化台词，不要改写。",
+        "no_extra_lines": "不要额外补词、旁白或即兴台词。",
+        "align_visible_speech": "如果人物出镜说话，口型只对齐这些词。"
+      }
+    }
   },
   "promptModal": {
     "title": "编辑镜头 #{number} 视频提示词",

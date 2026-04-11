@@ -58,6 +58,34 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     if (key === 'panelCard.selectModel') return '选择模型'
     if (key === 'panelCard.generateVideo') return '生成视频'
     if (key === 'panelCard.unknownShotType') return '未知镜头'
+    if (key === 'panelCard.speechContract.title') return 'Speech 约束'
+    if (key === 'panelCard.speechContract.mode.silent') return '静音'
+    if (key === 'panelCard.speechContract.mode.dialogue') return '对白'
+    if (key === 'panelCard.speechContract.mode.voiceover') return '旁白'
+    if (key === 'panelCard.speechContract.source.screenplay_voice_lines') return '剧本对白映射'
+    if (key === 'panelCard.speechContract.source.screenplay_panel_match') return '面板文本回落匹配'
+    if (key === 'panelCard.speechContract.source.none') return '未命中 speech contract'
+    if (key === 'panelCard.speechContract.match.matched') return '已命中'
+    if (key === 'panelCard.speechContract.match.fallback') return '回落命中'
+    if (key === 'panelCard.speechContract.match.none') return '未命中'
+    if (key === 'panelCard.speechContract.audio.enabled') return '本次生成含音频'
+    if (key === 'panelCard.speechContract.audio.disabled') return '本次生成禁用音频'
+    if (key === 'panelCard.speechContract.summary.matched') return '命中剧本对白约束，视频会按这组 speech line 执行。'
+    if (key === 'panelCard.speechContract.summary.matchedAudioDisabled') return '已命中剧本对白约束，但当前视频生成关闭音频，本次按静音约束执行。'
+    if (key === 'panelCard.speechContract.summary.fallback') return '未命中显式对白映射，当前使用面板文本回落匹配。'
+    if (key === 'panelCard.speechContract.summary.fallbackAudioDisabled') return '当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。'
+    if (key === 'panelCard.speechContract.summary.none') return '当前未命中 speech contract，按静音处理。'
+    if (key === 'panelCard.speechContract.summary.noneAudioDisabled') return '当前未命中 speech contract，且本次生成关闭音频，按静音约束执行。'
+    if (key === 'panelCard.speechContract.guardrail.non_verbal_only') return '只允许环境声、动作声等非语言音频。'
+    if (key === 'panelCard.speechContract.guardrail.no_verbal_audio') return '不要生成对白、旁白、歌词或其他口语化音频。'
+    if (key === 'panelCard.speechContract.guardrail.no_mouth_sync') return '避免明显口型和像在说话的嘴部动作。'
+    if (key === 'panelCard.speechContract.guardrail.intentional_silent') return '这个镜头被视为有意静音镜头。'
+    if (key === 'panelCard.speechContract.guardrail.voiceover_only') return '命中的台词只按旁白/画外音处理。'
+    if (key === 'panelCard.speechContract.guardrail.no_onscreen_speech') return '不要把这些词做成画内开口说话。'
+    if (key === 'panelCard.speechContract.guardrail.reaction_over_speaking') return '人物更应表现为聆听、行动或无声反应。'
+    if (key === 'panelCard.speechContract.guardrail.verbatim_only') return '只使用命中的结构化台词，不要改写。'
+    if (key === 'panelCard.speechContract.guardrail.no_extra_lines') return '不要额外补词、旁白或即兴台词。'
+    if (key === 'panelCard.speechContract.guardrail.align_visible_speech') return '如果人物出镜说话，口型只对齐这些词。'
     if (key === 'stage.hasSynced') return '已生成'
     if (key === 'promptModal.duration') return '秒'
     return key
@@ -78,6 +106,22 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
         shot_type: '平视中景',
         description: '谢俞站在宴席中央',
         duration: 3,
+      },
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_voice_lines',
+        generatedAudioRequired: true,
+        primaryText: '把门关上。',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 7,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '把门关上。',
+            parenthetical: '压低声音',
+          },
+        ],
       },
     },
     panelIndex: 2,
@@ -245,5 +289,63 @@ describe('VideoPanelCardBody', () => {
 
     expect(markup).toContain('没有下一镜头，因此当前镜头只能使用自己的当前图片生成。')
     expect(markup).toContain('没有下一镜头，无法提供尾帧来源')
+  })
+
+  it('renders a matched dialogue speech contract summary from real speech plan data', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime(),
+      }),
+    )
+
+    expect(markup).toContain('Speech 约束')
+    expect(markup).toContain('对白')
+    expect(markup).toContain('剧本对白映射')
+    expect(markup).toContain('命中剧本对白约束，视频会按这组 speech line 执行。')
+    expect(markup).toContain('Hero (压低声音)')
+    expect(markup).toContain('把门关上。')
+    expect(markup).toContain('只使用命中的结构化台词，不要改写。')
+  })
+
+  it('renders fallback speech contract as silent when generateAudio is disabled', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          panel: {
+            ...createRuntime().panel,
+            speechPlan: {
+              mode: 'voiceover',
+              source: 'screenplay_panel_match',
+              generatedAudioRequired: true,
+              primaryText: '城市从不真正入睡。',
+              speakers: ['Narrator'],
+              lines: [
+                {
+                  lineIndex: 3,
+                  type: 'voiceover',
+                  speaker: 'Narrator',
+                  content: '城市从不真正入睡。',
+                  parenthetical: null,
+                },
+              ],
+            },
+          },
+          videoModel: {
+            ...createRuntime().videoModel,
+            generationOptions: {
+              generateAudio: false,
+            },
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('静音')
+    expect(markup).toContain('面板文本回落匹配')
+    expect(markup).toContain('回落命中')
+    expect(markup).toContain('本次生成禁用音频')
+    expect(markup).toContain('当前只命中面板文本回落匹配，但本次生成关闭音频，按静音约束执行。')
+    expect(markup).toContain('Narrator')
+    expect(markup).toContain('不要生成对白、旁白、歌词或其他口语化音频。')
   })
 })

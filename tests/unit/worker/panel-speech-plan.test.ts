@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   attachSpeechPlanToStoryboards,
+  buildPanelSpeechContractViewModel,
   buildPanelSpeechPlanPrompt,
   buildPanelVideoGenerationPrompt,
   derivePanelSpeechPlan,
@@ -507,5 +508,121 @@ describe('panel speech plan helpers', () => {
     expect(prompt).toContain('Action/visual description: 主角停在门口，缓慢抬头。')
     expect(prompt).toContain('Target duration seconds: 4')
     expect(prompt).toContain('Mode: dialogue')
+  })
+
+  it('builds matched dialogue contract view-model for audio-enabled generation', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: true,
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_voice_lines',
+        generatedAudioRequired: true,
+        primaryText: '把门关上。',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 7,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '把门关上。',
+            parenthetical: '压低声音',
+          },
+        ],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: true,
+      effectiveMode: 'dialogue',
+      plannedMode: 'dialogue',
+      matchKind: 'matched',
+      source: 'screenplay_voice_lines',
+      guardrails: ['verbatim_only', 'no_extra_lines', 'align_visible_speech'],
+    })
+  })
+
+  it('builds fallback voiceover contract view-model when only panel-text matching succeeds', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: true,
+      speechPlan: {
+        mode: 'voiceover',
+        source: 'screenplay_panel_match',
+        generatedAudioRequired: true,
+        primaryText: '城市从不真正入睡。',
+        speakers: ['Narrator'],
+        lines: [
+          {
+            lineIndex: 3,
+            type: 'voiceover',
+            speaker: 'Narrator',
+            content: '城市从不真正入睡。',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: true,
+      effectiveMode: 'voiceover',
+      plannedMode: 'voiceover',
+      matchKind: 'fallback',
+      source: 'screenplay_panel_match',
+      guardrails: ['voiceover_only', 'no_onscreen_speech', 'reaction_over_speaking'],
+    })
+  })
+
+  it('builds silent no-match contract view-model for panels without speech hits', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: true,
+      speechPlan: {
+        mode: 'silent',
+        source: 'none',
+        generatedAudioRequired: true,
+        primaryText: null,
+        speakers: [],
+        lines: [],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: true,
+      effectiveMode: 'silent',
+      plannedMode: 'silent',
+      matchKind: 'none',
+      source: 'none',
+      guardrails: ['intentional_silent', 'no_verbal_audio', 'non_verbal_only'],
+    })
+  })
+
+  it('builds silent execution contract view-model when audio is explicitly disabled', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: false,
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_voice_lines',
+        generatedAudioRequired: true,
+        primaryText: '别出声。',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 2,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '别出声。',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: false,
+      effectiveMode: 'silent',
+      plannedMode: 'dialogue',
+      matchKind: 'matched',
+      source: 'screenplay_voice_lines',
+      guardrails: ['no_verbal_audio', 'non_verbal_only', 'no_mouth_sync'],
+    })
   })
 })

@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 03:08 Asia/Shanghai
+> 更新时间：2026-04-11 11:08 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -88,7 +88,17 @@ P1.1 当前有效分支提交：
 
 ## 三、当前阶段
 
-## 当前阶段：P2 已启动，第一实施切片已完成
+## 当前阶段：P2 基础链路已收口，已进入 P3 第一阶段（speech contract 可见性与可验证性收口）
+
+### P3 第一阶段总目标
+在不扩 editor / 不扩复杂配置的前提下，把 P2 已经建立好的 panel 级 speech contract 做成 `stage=videos` 页面里用户和团队都能直接看见、看懂、验得快的轻量展示层。
+
+核心要求：
+- 展示必须贴近真实执行 contract，而不是额外维护一套 UI 假数据
+- 用户一眼能看出当前 panel 是 `silent / dialogue / voiceover`
+- 用户能判断当前 panel 是“已命中 / 回落命中 / 未命中”
+- 用户能看到本次生成实际会遵守的关键 guardrails
+- 继续保持页面克制，不把卡片做成调试台
 
 ### P2 总目标
 建立 panel 级 speech plan 基础层，并把它逐步接入现有生成链路，让系统不再只靠自由文本 `videoPrompt` 去隐式表达“这个镜头会不会说话、说什么”。
@@ -130,9 +140,67 @@ P1.1 当前有效分支提交：
 
 ---
 
-## 四、当前最新进度（P2-切片3 稳定收益优先收口已完成）
+## 四、当前最新进度（P3 第一阶段：speech contract 可见性与可验证性收口）
 
 ### 本轮结论
+本轮不再继续扩底层 speech 生成能力，而是把 **P2 已有 speech contract** 收口为 `stage=videos` panel 卡片中的一层轻量只读可视化，让用户和团队能直接确认：
+- 当前 panel 实际按 `silent / dialogue / voiceover` 哪种模式执行
+- 它是命中剧本对白、命中面板文本回落，还是根本未命中
+- 本次生成是否启用了音频
+- 命中的 speaker / content / parenthetical 是什么
+- 当前生成会遵守哪几条关键 guardrails
+
+### 本轮新增完成内容（P3 第一阶段）
+1. **在 `stage=videos` 的 panel 卡片内落地 speech contract 展示层**
+   - 文件：`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/panel-card/VideoPanelCardBody.tsx`
+   - 选这里的原因：这是用户判断“这次视频到底按什么 speech contract 生成”的最近位置，也是最不需要解释上下文的位置。
+   - UI 形态保持为轻量信息段，而不是 editor / debug console。
+
+2. **新增与执行语义共用的 speech contract view-model**
+   - 文件：`src/lib/novel-promotion/panel-speech-plan.ts`
+   - 新增 `buildPanelSpeechContractViewModel(...)`
+   - 由真实 `speechPlan + generateAudio` 推导：
+     - `effectiveMode`
+     - `plannedMode`
+     - `matchKind`（`matched / fallback / none`）
+     - `guardrails`
+   - 这样 UI 展示和 worker prompt contract 仍然共用同一套语义基础，避免“页面显示一套、实际执行另一套”。
+
+3. **补全中英文文案，保证信息可读性**
+   - 文件：`messages/zh/video.json`、`messages/en/video.json`
+   - 新增：mode / source / match / audio / summary / guardrail 文案
+
+4. **补强验证用例**
+   - `tests/unit/worker/panel-speech-plan.test.ts`
+     - 覆盖 `dialogue / voiceover / silent / none`
+     - 覆盖 audio disabled 时 effective mode 收敛为 `silent`
+     - 覆盖 matched / fallback / none 三类命中状态与 guardrails 推导
+   - `tests/unit/novel-promotion/video-panel-card-body.test.ts`
+     - 覆盖 panel 卡片内真实渲染：对白命中展示、回落命中 + 禁音频时的静音执行展示
+
+### 本轮验证结果
+已完成：
+- `./node_modules/.bin/vitest run tests/unit/worker/panel-speech-plan.test.ts tests/unit/novel-promotion/video-panel-card-body.test.ts`
+- 结果：`2` 个 test files / `23` 个 tests 全部通过
+
+验证覆盖说明：
+- `dialogue`：UI 直接显示对白模式、speaker、content、parenthetical 与 verbatim guardrail
+- `voiceover`：view-model 测试覆盖 voiceover 命中与 voiceover-only guardrails
+- `silent`：覆盖无命中 silent 与 audio disabled 强制 silent 两类执行结果
+- `fallback / none`：分别覆盖 panel-text fallback 与完全未命中 speech contract
+
+### 这一步完成后的用户可见收益
+用户现在在 `stage=videos` 的 panel 卡片内可以直接看到：
+- 当前执行模式：`静音 / 对白 / 旁白`
+- 当前命中来源：`剧本对白映射 / 面板文本回落匹配 / 未命中 speech contract`
+- 当前命中状态：`已命中 / 回落命中 / 未命中`
+- 当前是否开启音频：`本次生成含音频 / 本次生成禁用音频`
+- 命中的 speaker / parenthetical / content（若存在 speech line）
+- 2~3 条关键 guardrails 的用户可读解释
+
+---
+
+### 历史补充：P2-切片3 稳定收益优先收口
 本轮严格按“稳定收益优先”收窄，没有为了名义上的 slice3 去硬塞 provider-specific mapping。
 
 原因：
@@ -297,13 +365,13 @@ P1.1 当前有效分支提交：
 
 下一步默认应进入：
 
-### P2-切片3
-重点是：
-1. 继续观察本轮通用 guardrails 的实际生成收益
-2. 仅在确认某 provider 存在稳定、可验证的显式 speech 参数面时，再做 provider-specific mapping
-3. 如果后续进入 provider 分叉，必须先补对应回归合同，避免把统一 contract 再打散
+### P3 第二阶段（待定方向，优先小步）
+重点建议：
+1. 观察这轮 `stage=videos` speech contract 可见性层对实际生成判断效率的提升
+2. 如果用户仍需要更强可验证性，可补最小颗粒度的上游透传（例如 storyboard/detail 的只读摘要），但不要直接扩成 editor
+3. 若后续发现某些 provider 确有稳定 speech 参数面，再进入 provider-specific mapping；仍需先补合同测试
 
-当前状态：**通用 guardrails 已完成；provider mapping 暂缓观察**
+当前状态：**P3 第一阶段已完成；下一步应继续做小步可验证增强，而不是扩大型配置面板。**
 
 ---
 
@@ -332,5 +400,6 @@ P1.1 当前有效分支提交：
 - `stage=storyboard` 分镜图替换已完成
 - `stage=videos` 首尾帧与多轮回归已完成
 - P1 + P1.1（对白真相源统一与风险收口）已完成
-- 当前已完成 **P2 第二实施切片**：让 storyboard/detail 的 speech contract 真正进入 `stage=videos` 生成请求
-- 下一步进入 **P2 第三实施切片**：provider 适配与生成护栏
+- P2（speech plan 接线、worker prompt contract、guardrails）已完成主要收口
+- 当前已完成 **P3 第一阶段**：在 `stage=videos` panel 卡片内落地只读 speech contract 可见性层
+- 下一步进入 **P3 第二阶段的小步增强**：继续提升可验证性，但不扩成 editor / 大配置面板
