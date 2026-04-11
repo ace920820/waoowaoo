@@ -510,6 +510,35 @@ describe('panel speech plan helpers', () => {
     expect(prompt).toContain('Mode: dialogue')
   })
 
+  it('omits stale panel text reference when execution is anchored to screenplay-linked voice lines', () => {
+    const prompt = buildPanelVideoGenerationPrompt({
+      basePrompt: 'Keep the hero in frame.',
+      panel: {
+        shotType: '近景',
+        srtSegment: '旧对白',
+      },
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'screenplay_voice_lines',
+        generatedAudioRequired: true,
+        primaryText: '新对白',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 1,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '新对白',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(prompt).not.toContain('Panel text reference: 旧对白')
+    expect(prompt).toContain('content="新对白"')
+  })
+
   it('builds matched dialogue contract view-model for audio-enabled generation', () => {
     const viewModel = buildPanelSpeechContractViewModel({
       generateAudio: true,

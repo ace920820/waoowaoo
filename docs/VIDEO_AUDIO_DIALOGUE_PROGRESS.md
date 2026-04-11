@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 11:45 Asia/Shanghai
+> 更新时间：2026-04-11 12:35 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -157,6 +157,33 @@ P1.1 当前有效分支提交：
 原因：
 - 当前卡片绑定的仍是 `speechPlan + generateAudio` 推导结果，本质上是当前配置下的执行预览，不是已执行视频回执。
 - 这轮风险点可以通过轻量语义修正和 guardrail 展示优先级解决，没有必要把范围扩成新的持久化工程。
+
+### P3 第一阶段补丁：screenplay 编辑后对白下游同步修复（本次）
+本次额外补了一条真实数据链路 bug：
+
+- 现象：
+  - 用户在 `stage=script` 修改 `clip.screenplay` 里的对白文本后，
+  - `stage=videos` 卡片里的 `Speech 约束预览` 可能先显示新对白，
+  - 但 storyboard panel 的 `对应原文` 仍保留旧文本，
+  - 真正提交到视频 worker 的 prompt 里仍可能混入旧 `panel.srtSegment` 参考，
+  - 已有 voice line 音频也仍是旧台词，导致“预览像生效了，真实执行却还是旧内容”。
+
+- 本次修复：
+  - `PATCH /api/novel-promotion/[projectId]/clips/[clipId]` 在更新 `screenplay` 后，新增对白下游 reconcile：
+    - 按 episode 级 `lineIndex` 重新对齐该 clip 对应的 `voiceLines`
+    - 若 speaker / content 变化，持久化更新 `voiceLine.speaker / content`
+    - 同时清空旧 `audioUrl / audioMediaId / audioDuration`，避免旧语音继续被误认为有效
+    - 对已绑定 panel 的镜头，把 `panel.srtSegment` 同步成最新对白文本
+  - `stage=videos` 真正构造视频 prompt 时，若 speech 来源已是 `screenplay_voice_lines`，不再额外注入可能陈旧的 `Panel text reference`
+  - clip 更新完成后，前端额外失效：
+    - `storyboards`
+    - `voice-lines`
+    - `matched voice-lines`
+    让 storyboard / video / voice 页面尽快拉到同步后的真实数据
+
+- 当前边界：
+  - 这次补丁优先解决“对白文本改了但 lineIndex 结构未重排”的真实回归问题。
+  - 若用户对 screenplay 做了更激进的结构改动（例如对白条数整体变化），当前后续链路仍建议重新跑 voice analyze / storyboard 以拿到新的稳定映射。
 
 ### 本轮结论
 本轮不再继续扩底层 speech 生成能力，而是把 **P2 已有 speech contract** 收口为 `stage=videos` panel 卡片中的一层轻量只读可视化，让用户和团队能直接确认：

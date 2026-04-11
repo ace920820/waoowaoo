@@ -537,6 +537,7 @@ export function buildPanelSpeechPlanPrompt(params: {
 
 function buildPanelVisualContextBlock(params: {
   panel?: VideoPromptPanelContext | null
+  speechPlan?: PanelSpeechPlan | null
 }): string | null {
   const panel = params.panel
   if (!panel) return null
@@ -554,7 +555,8 @@ function buildPanelVisualContextBlock(params: {
   if (typeof panel.duration === 'number' && Number.isFinite(panel.duration) && panel.duration > 0) {
     lines.push(`Target duration seconds: ${panel.duration}`)
   }
-  if (typeof panel.srtSegment === 'string' && panel.srtSegment.trim()) {
+  const shouldIncludePanelTextReference = params.speechPlan?.source !== 'screenplay_voice_lines'
+  if (shouldIncludePanelTextReference && typeof panel.srtSegment === 'string' && panel.srtSegment.trim()) {
     lines.push(`Panel text reference: ${panel.srtSegment.trim()}`)
   }
 
@@ -568,7 +570,10 @@ export function buildPanelVideoGenerationPrompt(params: {
   speechPlan: PanelSpeechPlan
   generateAudio?: boolean
 }): string {
-  const visualContextBlock = buildPanelVisualContextBlock({ panel: params.panel })
+  const visualContextBlock = buildPanelVisualContextBlock({
+    panel: params.panel,
+    speechPlan: params.speechPlan,
+  })
   const basePrompt = visualContextBlock
     ? `${params.basePrompt.trim()}\n\n${visualContextBlock}`
     : params.basePrompt

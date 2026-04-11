@@ -236,7 +236,14 @@ export function useUpdateProjectClip(projectId: string) {
     },
     onSettled: (_data, _error, variables) => {
       const queryTemplates: Array<readonly unknown[]> = [queryKeys.projectData(projectId)]
-      if (variables.episodeId) queryTemplates.push(queryKeys.episodeData(projectId, variables.episodeId))
+      if (variables.episodeId) {
+        queryTemplates.push(
+          queryKeys.episodeData(projectId, variables.episodeId),
+          queryKeys.storyboards.all(variables.episodeId),
+          queryKeys.voiceLines.all(variables.episodeId),
+          queryKeys.voiceLines.matched(projectId, variables.episodeId),
+        )
+      }
       invalidateQueryTemplates(queryClient, queryTemplates)
     },
   })
