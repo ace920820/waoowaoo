@@ -6,6 +6,7 @@ import {
 } from '../task-target-overlay'
 import { queryKeys } from '../keys'
 import type { GlobalLocation } from '../hooks/useGlobalAssets'
+import { collapseLocationSelection } from '@/lib/assets/image-selection-state'
 import {
   requestJsonWithError,
   requestVoidWithError,
@@ -35,17 +36,19 @@ function applyLocationSelection(
   locations: GlobalLocation[] | undefined,
   locationId: string,
   imageIndex: number | null,
+  confirm = false,
 ): GlobalLocation[] | undefined {
   if (!locations) return locations
   return locations.map((location) => {
     if (location.id !== locationId) return location
-    return {
+    const nextLocation = {
       ...location,
       images: (location.images || []).map((image) => ({
         ...image,
         isSelected: imageIndex !== null && image.imageIndex === imageIndex,
       })),
     }
+    return confirm ? collapseLocationSelection(nextLocation) : nextLocation
   })
 }
 
@@ -200,7 +203,7 @@ export function useSelectLocationImage() {
           queryKey: queryKeys.globalAssets.locations(),
           exact: false,
         },
-        (previous) => applyLocationSelection(previous, variables.locationId, variables.imageIndex),
+        (previous) => applyLocationSelection(previous, variables.locationId, variables.imageIndex, variables.confirm),
       )
 
       return {

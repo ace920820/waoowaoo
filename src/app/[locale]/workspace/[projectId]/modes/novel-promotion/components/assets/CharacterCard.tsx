@@ -23,6 +23,7 @@ import { useImageGenerationCount } from '@/lib/image-generation/use-image-genera
 import { AppIcon } from '@/components/ui/icons'
 import { AI_EDIT_BUTTON_CLASS, AI_EDIT_ICON_CLASS } from '@/components/ui/ai-edit-style'
 import AISparklesIcon from '@/components/ui/icons/AISparklesIcon'
+import { resolveCharacterSelectedImageUrl } from '@/lib/assets/image-selection-state'
 
 interface CharacterCardProps {
   character: Character
@@ -147,9 +148,7 @@ export default function CharacterCard({
 
   // 🔥 统一图片URL优先级：imageUrl > imageUrls[selectedIndex] > imageUrls[0]
   // 这样确保编辑后的新图片能正确显示
-  const currentImageUrl = appearance.imageUrl ||
-    (selectedIndex !== null ? rawImageUrls[selectedIndex] : null) ||
-    imageUrlsWithIndex[0]?.url
+  const currentImageUrl = resolveCharacterSelectedImageUrl(appearance)
 
   // 调试日志
   if (!currentImageUrl) {

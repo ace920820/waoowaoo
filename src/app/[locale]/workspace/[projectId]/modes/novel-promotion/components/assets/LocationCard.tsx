@@ -23,6 +23,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { AI_EDIT_BUTTON_CLASS, AI_EDIT_ICON_CLASS } from '@/components/ui/ai-edit-style'
 import AISparklesIcon from '@/components/ui/icons/AISparklesIcon'
 import { canGenerateLocationBackedAsset } from './location-backed-asset'
+import { resolveSelectedLocationImage } from '@/lib/assets/image-selection-state'
 
 interface LocationCardProps {
   location: Location
@@ -111,9 +112,10 @@ export default function LocationCard({
   const generatedImageCount = countGeneratedImageSlots(orderedImages)
 
   // 获取选中的图片
-  const selectedImage = location.selectedImageId
-    ? orderedImages.find((img) => img.id === location.selectedImageId)
-    : orderedImages.find((img) => img.isSelected)
+  const selectedImage = resolveSelectedLocationImage({
+    selectedImageId: location.selectedImageId,
+    images: orderedImages,
+  })
   const selectedIndex = selectedImage?.imageIndex ?? null
 
   // 当前显示的图片及其 imageIndex

@@ -23,6 +23,7 @@ import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
 import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
 import { AppIcon } from '@/components/ui/icons'
+import { resolveCharacterSelectedImageUrl } from '@/lib/assets/image-selection-state'
 
 interface Appearance {
     id: string
@@ -94,7 +95,9 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     const generatedImageCount = imageUrls.filter(u => isValidUrl(u)).length
     const hasMultipleImages = generatedImageCount > 1
     const effectiveSelectedIndex: number | null = appearance?.selectedIndex ?? null
-    const currentImageUrl = appearance?.imageUrl || (effectiveSelectedIndex !== null ? imageUrls[effectiveSelectedIndex] : null) || imageUrls.find(u => u) || null
+    const currentImageUrl = appearance
+        ? resolveCharacterSelectedImageUrl(appearance)
+        : null
     const hasPreviousVersion = !!(appearance?.previousImageUrl || (appearance?.previousImageUrls && appearance.previousImageUrls.length > 0))
 
     const displayImageUrl = isValidUrl(currentImageUrl) ? currentImageUrl : null

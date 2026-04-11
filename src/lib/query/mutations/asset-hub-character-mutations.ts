@@ -6,6 +6,7 @@ import {
 } from '../task-target-overlay'
 import { queryKeys } from '../keys'
 import type { GlobalCharacter } from '../hooks/useGlobalAssets'
+import { collapseCharacterSelection } from '@/lib/assets/image-selection-state'
 import {
   requestJsonWithError,
   requestVoidWithError,
@@ -36,6 +37,7 @@ function applyCharacterSelection(
   characterId: string,
   appearanceIndex: number,
   imageIndex: number | null,
+  confirm = false,
 ): GlobalCharacter[] | undefined {
   if (!characters) return characters
   return characters.map((character) => {
@@ -44,15 +46,14 @@ function applyCharacterSelection(
       ...character,
       appearances: (character.appearances || []).map((appearance) => {
         if (appearance.appearanceIndex !== appearanceIndex) return appearance
-        const selectedUrl =
-          imageIndex !== null && imageIndex >= 0
-            ? (appearance.imageUrls[imageIndex] ?? null)
-            : null
-        return {
+        const nextAppearance = {
           ...appearance,
           selectedIndex: imageIndex,
-          imageUrl: selectedUrl ?? appearance.imageUrl ?? null,
+          imageUrl: imageIndex !== null && imageIndex >= 0
+            ? (appearance.imageUrls[imageIndex] ?? null) || appearance.imageUrl || null
+            : appearance.imageUrl || null,
         }
+        return confirm ? collapseCharacterSelection(nextAppearance) : nextAppearance
       }),
     }
   })
@@ -223,6 +224,7 @@ export function useSelectCharacterImage() {
           variables.characterId,
           variables.appearanceIndex,
           variables.imageIndex,
+          variables.confirm,
         ),
       )
 

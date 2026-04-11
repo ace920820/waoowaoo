@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalCharacter, GlobalLocation } from '@/lib/query/hooks/useGlobalAssets'
 import { queryKeys } from '@/lib/query/keys'
 import { MockQueryClient } from '../../helpers/mock-query-client'
+import { requestJsonWithError } from '@/lib/query/mutations/mutation-shared'
 
 let queryClient = new MockQueryClient()
 const useQueryClientMock = vi.fn(() => queryClient)
@@ -45,13 +46,17 @@ vi.mock('@/lib/query/mutations/asset-hub-mutations-shared', async () => {
 import {
   useSelectCharacterImage,
 } from '@/lib/query/mutations/asset-hub-character-mutations'
-import { useDeleteLocation as useDeleteAssetHubLocation } from '@/lib/query/mutations/asset-hub-location-mutations'
+import {
+  useDeleteLocation as useDeleteAssetHubLocation,
+  useSelectLocationImage as useSelectAssetHubLocationImage,
+} from '@/lib/query/mutations/asset-hub-location-mutations'
 
 interface SelectCharacterMutation {
   onMutate: (variables: {
     characterId: string
     appearanceIndex: number
     imageIndex: number | null
+    confirm?: boolean
   }) => Promise<unknown>
   onError: (error: unknown, variables: unknown, context: unknown) => void
 }
@@ -59,6 +64,19 @@ interface SelectCharacterMutation {
 interface DeleteLocationMutation {
   onMutate: (locationId: string) => Promise<unknown>
   onError: (error: unknown, locationId: string, context: unknown) => void
+}
+
+interface SelectLocationMutation {
+  mutationFn: (variables: {
+    locationId: string
+    imageIndex: number | null
+    confirm?: boolean
+  }) => Promise<unknown>
+  onMutate: (variables: {
+    locationId: string
+    imageIndex: number | null
+    confirm?: boolean
+  }) => Promise<unknown>
 }
 
 function buildGlobalCharacter(selectedIndex: number | null): GlobalCharacter {
@@ -91,15 +109,26 @@ function buildGlobalLocation(id: string): GlobalLocation {
     summary: null,
     folderId: 'folder-1',
     artStyle: 'realistic',
-    images: [{
-      id: `${id}-img-0`,
-      imageIndex: 0,
-      description: null,
-      imageUrl: null,
-      previousImageUrl: null,
-      isSelected: true,
-      imageTaskRunning: false,
-    }],
+    images: [
+      {
+        id: `${id}-img-0`,
+        imageIndex: 0,
+        description: null,
+        imageUrl: 'img-0',
+        previousImageUrl: null,
+        isSelected: true,
+        imageTaskRunning: false,
+      },
+      {
+        id: `${id}-img-1`,
+        imageIndex: 1,
+        description: null,
+        imageUrl: 'img-1',
+        previousImageUrl: null,
+        isSelected: false,
+        imageTaskRunning: false,
+      },
+    ],
   }
 }
 
@@ -108,6 +137,7 @@ describe('asset hub optimistic mutations', () => {
     queryClient = new MockQueryClient()
     useQueryClientMock.mockClear()
     useMutationMock.mockClear()
+    vi.mocked(requestJsonWithError).mockReset()
   })
 
   it('updates all character query caches optimistically and ignores stale rollback', async () => {
@@ -167,5 +197,65 @@ describe('asset hub optimistic mutations', () => {
     const rolledBackFolder = queryClient.getQueryData<GlobalLocation[]>(folderLocationsKey)
     expect(rolledBackAll?.map((item) => item.id)).toEqual(['loc-1', 'loc-2'])
     expect(rolledBackFolder?.map((item) => item.id)).toEqual(['loc-1'])
+  })
+
+  it('collapses asset hub character candidates immediately when confirming selection', async () => {
+    const allCharactersKey = queryKeys.globalAssets.characters()
+    queryClient.seedQuery(allCharactersKey, [buildGlobalCharacter(2)])
+
+    const mutation = useSelectCharacterImage() as unknown as SelectCharacterMutation
+    await mutation.onMutate({
+      characterId: 'character-1',
+      appearanceIndex: 0,
+      imageIndex: 2,
+      confirm: true,
+    })
+
+    const afterConfirm = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
+    expect(afterConfirm?.[0]?.appearances[0]?.selectedIndex).toBe(0)
+    expect(afterConfirm?.[0]?.appearances[0]?.imageUrl).toBe('img-2')
+    expect(afterConfirm?.[0]?.appearances[0]?.imageUrls).toEqual(['img-2'])
+  })
+
+  it('collapses asset hub location candidates immediately when confirming selection', async () => {
+    const allLocationsKey = queryKeys.globalAssets.locations()
+    queryClient.seedQuery(allLocationsKey, [buildGlobalLocation('loc-1')])
+
+    const mutation = useSelectAssetHubLocationImage() as unknown as SelectLocationMutation
+    await mutation.onMutate({
+      locationId: 'loc-1',
+      imageIndex: 1,
+      confirm: true,
+    })
+
+    const afterConfirm = queryClient.getQueryData<GlobalLocation[]>(allLocationsKey)
+    expect(afterConfirm?.[0]?.images).toHaveLength(1)
+    expect(afterConfirm?.[0]?.images[0]?.imageIndex).toBe(0)
+    expect(afterConfirm?.[0]?.images[0]?.imageUrl).toBe('img-1')
+    expect(afterConfirm?.[0]?.images[0]?.isSelected).toBe(true)
+  })
+
+  it('sends confirm flag for asset hub location selection requests', async () => {
+    vi.mocked(requestJsonWithError).mockResolvedValue({ success: true })
+    const mutation = useSelectAssetHubLocationImage() as unknown as SelectLocationMutation
+
+    await mutation.mutationFn({
+      locationId: 'loc-1',
+      imageIndex: 1,
+      confirm: true,
+    })
+
+    expect(requestJsonWithError).toHaveBeenCalledWith(
+      '/api/assets/loc-1/select-render',
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: 'global',
+          kind: 'location',
+          imageIndex: 1,
+          confirm: true,
+        }),
+      }),
+      'Failed to select image',
+    )
   })
 })

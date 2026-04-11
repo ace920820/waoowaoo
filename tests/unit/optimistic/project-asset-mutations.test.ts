@@ -3,6 +3,7 @@ import type { Character, Location, Project } from '@/types/project'
 import type { ProjectAssetsData } from '@/lib/query/hooks/useProjectAssets'
 import { queryKeys } from '@/lib/query/keys'
 import { MockQueryClient } from '../../helpers/mock-query-client'
+import { requestJsonWithError } from '@/lib/query/mutations/mutation-shared'
 
 let queryClient = new MockQueryClient()
 const useQueryClientMock = vi.fn(() => queryClient)
@@ -37,6 +38,9 @@ import {
   useDeleteProjectCharacter,
   useSelectProjectCharacterImage,
 } from '@/lib/query/mutations/character-base-mutations'
+import { useConfirmProjectCharacterSelection } from '@/lib/query/mutations/character-profile-mutations'
+import { useConfirmProjectLocationSelection } from '@/lib/query/mutations/location-management-mutations'
+import { useSelectProjectLocationImage } from '@/lib/query/mutations/location-image-mutations'
 
 interface SelectProjectCharacterMutation {
   onMutate: (variables: {
@@ -50,6 +54,32 @@ interface SelectProjectCharacterMutation {
 interface DeleteProjectCharacterMutation {
   onMutate: (characterId: string) => Promise<unknown>
   onError: (error: unknown, characterId: string, context: unknown) => void
+}
+
+interface SelectProjectLocationMutation {
+  mutationFn: (variables: {
+    locationId: string
+    imageIndex: number | null
+    confirm?: boolean
+  }) => Promise<unknown>
+  onMutate: (variables: {
+    locationId: string
+    imageIndex: number | null
+    confirm?: boolean
+  }) => Promise<unknown>
+}
+
+interface ConfirmProjectCharacterMutation {
+  onMutate: (variables: {
+    characterId: string
+    appearanceId: string
+  }) => Promise<{ previousAssets: ProjectAssetsData | undefined; previousProject: Project | undefined }>
+}
+
+interface ConfirmProjectLocationMutation {
+  onMutate: (variables: {
+    locationId: string
+  }) => Promise<{ previousAssets: ProjectAssetsData | undefined; previousProject: Project | undefined }>
 }
 
 function buildCharacter(selectedIndex: number | null): Character {
@@ -76,7 +106,17 @@ function buildCharacter(selectedIndex: number | null): Character {
 function buildAssets(selectedIndex: number | null): ProjectAssetsData {
   return {
     characters: [buildCharacter(selectedIndex)],
-    locations: [] as Location[],
+    locations: [{
+      id: 'location-1',
+      name: 'Cafe',
+      summary: null,
+      selectedImageId: selectedIndex === null ? null : `location-image-${selectedIndex}`,
+      images: [
+        { id: 'location-image-0', imageIndex: 0, imageUrl: 'loc-0', isSelected: selectedIndex === 0, previousImageUrl: null, description: null },
+        { id: 'location-image-1', imageIndex: 1, imageUrl: 'loc-1', isSelected: selectedIndex === 1, previousImageUrl: null, description: null },
+        { id: 'location-image-2', imageIndex: 2, imageUrl: 'loc-2', isSelected: selectedIndex === 2, previousImageUrl: null, description: null },
+      ],
+    }] as Location[],
     props: [],
   }
 }
@@ -85,7 +125,7 @@ function buildProject(selectedIndex: number | null): Project {
   return {
     novelPromotionData: {
       characters: [buildCharacter(selectedIndex)],
-      locations: [],
+      locations: buildAssets(selectedIndex).locations,
       props: [],
     },
   } as unknown as Project
@@ -96,6 +136,7 @@ describe('project asset optimistic mutations', () => {
     queryClient = new MockQueryClient()
     useQueryClientMock.mockClear()
     useMutationMock.mockClear()
+    vi.mocked(requestJsonWithError).mockReset()
   })
 
   it('optimistically selects project character image and ignores stale rollback', async () => {
@@ -155,5 +196,102 @@ describe('project asset optimistic mutations', () => {
     const rolledBackAssets = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
     expect(rolledBackAssets?.characters).toHaveLength(1)
     expect(rolledBackAssets?.characters[0]?.id).toBe('character-1')
+  })
+
+  it('sends confirm flag for project character selection requests', async () => {
+    vi.mocked(requestJsonWithError).mockResolvedValue({ success: true })
+    const mutation = useSelectProjectCharacterImage('project-1') as unknown as SelectProjectCharacterMutation & {
+      mutationFn: (variables: {
+        characterId: string
+        appearanceId: string
+        imageIndex: number | null
+        confirm?: boolean
+      }) => Promise<unknown>
+    }
+
+    await mutation.mutationFn({
+      characterId: 'character-1',
+      appearanceId: 'appearance-1',
+      imageIndex: 2,
+      confirm: true,
+    })
+
+    expect(requestJsonWithError).toHaveBeenCalledWith(
+      '/api/assets/character-1/select-render',
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: 'project',
+          kind: 'character',
+          projectId: 'project-1',
+          appearanceId: 'appearance-1',
+          imageIndex: 2,
+          confirm: true,
+        }),
+      }),
+      'Failed to select image',
+    )
+  })
+
+  it('sends confirm flag for project location selection requests', async () => {
+    vi.mocked(requestJsonWithError).mockResolvedValue({ success: true })
+    const mutation = useSelectProjectLocationImage('project-1') as unknown as SelectProjectLocationMutation
+
+    await mutation.mutationFn({
+      locationId: 'location-1',
+      imageIndex: 2,
+      confirm: true,
+    })
+
+    expect(requestJsonWithError).toHaveBeenCalledWith(
+      '/api/assets/location-1/select-render',
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: 'project',
+          kind: 'location',
+          projectId: 'project-1',
+          imageIndex: 2,
+          confirm: true,
+        }),
+      }),
+      'Failed to select image',
+    )
+  })
+
+  it('collapses project character candidates immediately when confirming selection', async () => {
+    const projectId = 'project-1'
+    const assetsKey = queryKeys.projectAssets.all(projectId)
+    const projectKey = queryKeys.projectData(projectId)
+    queryClient.seedQuery(assetsKey, buildAssets(2))
+    queryClient.seedQuery(projectKey, buildProject(2))
+
+    const mutation = useConfirmProjectCharacterSelection(projectId) as unknown as ConfirmProjectCharacterMutation
+    await mutation.onMutate({
+      characterId: 'character-1',
+      appearanceId: 'appearance-1',
+    })
+
+    const afterAssets = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
+    const afterProject = queryClient.getQueryData<Project>(projectKey)
+    expect(afterAssets?.characters[0]?.appearances[0]?.selectedIndex).toBe(0)
+    expect(afterAssets?.characters[0]?.appearances[0]?.imageUrls).toEqual(['img-2'])
+    expect(afterProject?.novelPromotionData?.characters?.[0]?.appearances?.[0]?.imageUrls).toEqual(['img-2'])
+  })
+
+  it('collapses project location candidates immediately when confirming selection', async () => {
+    const projectId = 'project-1'
+    const assetsKey = queryKeys.projectAssets.all(projectId)
+    const projectKey = queryKeys.projectData(projectId)
+    queryClient.seedQuery(assetsKey, buildAssets(2))
+    queryClient.seedQuery(projectKey, buildProject(2))
+
+    const mutation = useConfirmProjectLocationSelection(projectId) as unknown as ConfirmProjectLocationMutation
+    await mutation.onMutate({ locationId: 'location-1' })
+
+    const afterAssets = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
+    const afterProject = queryClient.getQueryData<Project>(projectKey)
+    expect(afterAssets?.locations[0]?.selectedImageId).toBe('location-image-2')
+    expect(afterAssets?.locations[0]?.images).toHaveLength(1)
+    expect(afterAssets?.locations[0]?.images[0]?.imageUrl).toBe('loc-2')
+    expect(afterProject?.novelPromotionData?.locations?.[0]?.images).toHaveLength(1)
   })
 })

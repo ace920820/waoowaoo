@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
 import type { Location, Project } from '@/types/project'
+import { collapseLocationSelection } from '@/lib/assets/image-selection-state'
 import { queryKeys } from '../keys'
 import type { ProjectAssetsData } from '../hooks/useProjectAssets'
 import {
@@ -25,6 +26,7 @@ function applyLocationSelectionToLocations(
     locations: Location[],
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): Location[] {
     return locations.map((location) => {
         if (location.id !== locationId) return location
@@ -32,7 +34,7 @@ function applyLocationSelectionToLocations(
             selectedIndex === null
                 ? null
                 : (location.images || []).find((image) => image.imageIndex === selectedIndex)?.id ?? null
-        return {
+        const nextLocation = {
             ...location,
             selectedImageId,
             images: (location.images || []).map((image) => ({
@@ -40,25 +42,28 @@ function applyLocationSelectionToLocations(
                 isSelected: selectedIndex !== null && image.imageIndex === selectedIndex,
             })),
         }
+        return confirm ? collapseLocationSelection(nextLocation) : nextLocation
     })
 }
 
-function applyLocationSelectionToAssets(
+export function applyLocationSelectionToAssets(
     previous: ProjectAssetsData | undefined,
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): ProjectAssetsData | undefined {
     if (!previous) return previous
     return {
         ...previous,
-        locations: applyLocationSelectionToLocations(previous.locations || [], locationId, selectedIndex),
+        locations: applyLocationSelectionToLocations(previous.locations || [], locationId, selectedIndex, confirm),
     }
 }
 
-function applyLocationSelectionToProject(
+export function applyLocationSelectionToProject(
     previous: Project | undefined,
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): Project | undefined {
     if (!previous?.novelPromotionData) return previous
     const currentLocations = previous.novelPromotionData.locations || []
@@ -66,7 +71,7 @@ function applyLocationSelectionToProject(
         ...previous,
         novelPromotionData: {
             ...previous.novelPromotionData,
-            locations: applyLocationSelectionToLocations(currentLocations, locationId, selectedIndex),
+            locations: applyLocationSelectionToLocations(currentLocations, locationId, selectedIndex, confirm),
         },
     }
 }
@@ -309,12 +314,10 @@ export function useRegenerateSingleLocationImage(projectId: string) {
 export function useSelectProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const latestRequestIdByTargetRef = useRef<Record<string, number>>({})
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
         mutationFn: async ({
-            locationId, imageIndex
+            locationId, imageIndex, confirm = false
         }: {
             locationId: string
             imageIndex: number | null
@@ -328,6 +331,7 @@ export function useSelectProjectLocationImage(projectId: string) {
                     kind: 'location',
                     projectId,
                     imageIndex,
+                    confirm,
                 })
             }, 'Failed to select image')
         },
@@ -346,10 +350,10 @@ export function useSelectProjectLocationImage(projectId: string) {
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
 
             queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
-                applyLocationSelectionToAssets(previous, variables.locationId, variables.imageIndex),
+                applyLocationSelectionToAssets(previous, variables.locationId, variables.imageIndex, variables.confirm),
             )
             queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
-                applyLocationSelectionToProject(previous, variables.locationId, variables.imageIndex),
+                applyLocationSelectionToProject(previous, variables.locationId, variables.imageIndex, variables.confirm),
             )
 
             return {
@@ -368,7 +372,10 @@ export function useSelectProjectLocationImage(projectId: string) {
         },
         onSettled: (_data, _error, variables) => {
             if (variables.confirm) {
-                void invalidateProjectAssets()
+                void invalidateQueryTemplates(queryClient, [
+                    queryKeys.projectAssets.all(projectId),
+                    queryKeys.projectData(projectId),
+                ])
             }
         },
     })

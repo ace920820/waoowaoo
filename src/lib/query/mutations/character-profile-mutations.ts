@@ -1,6 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { Project } from '@/types/project'
 import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
+import type { ProjectAssetsData } from '../hooks/useProjectAssets'
+import {
+  applyCharacterSelectionToAssets,
+  applyCharacterSelectionToProject,
+} from './character-base-mutations'
 import {
   invalidateQueryTemplates,
   requestJsonWithError,
@@ -197,7 +203,10 @@ export function useCreateProjectCharacterAppearance(projectId: string) {
 export function useConfirmProjectCharacterSelection(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateQueryTemplates(queryClient, [
+            queryKeys.projectAssets.all(projectId),
+            queryKeys.projectData(projectId),
+        ])
     return useMutation({
         mutationFn: async ({ characterId, appearanceId }: { characterId: string; appearanceId: string }) =>
             await requestJsonWithError(
@@ -209,6 +218,42 @@ export function useConfirmProjectCharacterSelection(projectId: string) {
                 },
                 '确认选择失败',
             ),
+        onMutate: async ({ characterId, appearanceId }) => {
+            const assetsQueryKey = queryKeys.projectAssets.all(projectId)
+            const projectQueryKey = queryKeys.projectData(projectId)
+
+            await queryClient.cancelQueries({ queryKey: assetsQueryKey })
+            await queryClient.cancelQueries({ queryKey: projectQueryKey })
+
+            const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
+            const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
+            const selectedIndexFromAssets = previousAssets?.characters
+                ?.find((character) => character.id === characterId)
+                ?.appearances?.find((appearance) => appearance.id === appearanceId)
+                ?.selectedIndex
+            const selectedIndexFromProject = previousProject?.novelPromotionData?.characters
+                ?.find((character) => character.id === characterId)
+                ?.appearances?.find((appearance) => appearance.id === appearanceId)
+                ?.selectedIndex
+            const selectedIndex = selectedIndexFromAssets ?? selectedIndexFromProject ?? null
+
+            queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
+                applyCharacterSelectionToAssets(previous, characterId, appearanceId, selectedIndex, true),
+            )
+            queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
+                applyCharacterSelectionToProject(previous, characterId, appearanceId, selectedIndex, true),
+            )
+
+            return {
+                previousAssets,
+                previousProject,
+            }
+        },
+        onError: (_error, _variables, context) => {
+            if (!context) return
+            queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
+            queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
+        },
         onSettled: invalidateProjectAssets,
     })
 }

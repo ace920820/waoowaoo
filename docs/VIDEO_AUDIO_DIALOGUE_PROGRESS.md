@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-11 20:58 Asia/Shanghai
+> 更新时间：2026-04-12 18:40 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -218,6 +218,42 @@ P1.1 当前有效分支提交：
     - 新增 global character appearance / global location 的 `artStyle` 映射断言
   - `tests/integration/api/specific/assets-route.test.ts`
     - 新增 unified route 对 global character appearance / global location 的 `artStyle` 更新转发断言
+
+### 候选图选择 / 确认选择 UI 状态链路修复（本次）
+本次修复聚焦“生成图像后的选择期间”广泛 UI 状态不同步问题，覆盖了 `asset-hub` 与 `project / novel-promotion assets` 两套链路，不通过刷新页面或整页重载兜底。
+
+- 根因确认：
+  - 候选图点击后，卡片显示态在多个入口仍优先读取旧的 `imageUrl` / 回退首图，而不是优先基于 `selectedIndex` 或 `selectedImageId` 推导当前展示图，导致乐观选中的候选图没有立刻反映到 UI。
+  - `confirm-selection` 后，前端只做了 `invalidate` 或等待刷新，没有把“候选集收敛成最终选中图”的结果即时写回准确 query cache，所以按钮文案、候选数量和主图展示会停留在旧状态。
+  - `project` 角色/场景选择 mutation 里 `confirm` 参数没有完整透传到 `/api/assets/*/select-render` 请求体，导致共用链路的确认语义不完整。
+
+- 本次修复：
+  - 新增共用状态工具：`src/lib/assets/image-selection-state.ts`
+    - 统一“当前应显示哪张图”的推导规则
+    - 统一“确认选择后 cache 应收敛成什么形态”的收敛规则
+  - `asset-hub`
+    - `CharacterCard / LocationCard` 改为优先按选中态推导显示图，不再被旧 `imageUrl` 覆盖
+    - `useSelectCharacterImage / useSelectLocationImage` 在 `confirm=true` 时即时把 cache 收敛为单张已确认图片
+  - `project / novel-promotion assets`
+    - `CharacterCard / LocationCard` 同步改为优先按选中态推导显示图
+    - `useSelectProjectCharacterImage / useSelectProjectLocationImage` 透传 `confirm`，并在确认场景下同步更新 `projectAssets + projectData`
+    - `useConfirmProjectCharacterSelection / useConfirmProjectLocationSelection` 新增乐观收敛，确认后立即把候选图列表折叠为最终生效图
+  - 对 `prop` 分支保持确认收敛兼容，避免只修 `location` 导致共用 hook 回归
+
+- 本次补充测试：
+  - `tests/unit/assets/image-selection-state.test.ts`
+    - 覆盖“点击候选图后显示态优先跟随选中态”
+    - 覆盖“确认后候选集立即收敛成单图”
+  - `tests/unit/optimistic/asset-hub-mutations.test.ts`
+    - 覆盖 asset-hub 角色/场景确认选择后的即时 cache 收敛
+    - 覆盖 location 选择请求 `confirm` 透传
+  - `tests/unit/optimistic/project-asset-mutations.test.ts`
+    - 覆盖 project 角色/场景选择请求 `confirm` 透传
+    - 覆盖 project 角色/场景确认后的即时 cache 收敛
+
+- 验证说明：
+  - 已完成代码级核对，修复点集中在显示态推导、乐观更新和精准 cache 写回。
+  - 本地 `vitest` 在当前环境执行时被系统级报错 `SecItemCopyMatching failed -50` 阻断，属于测试启动阶段的环境问题，不是本次新增断言失败；已保留相关测试文件供后续环境恢复后直接执行。
   - `tests/integration/api/specific/asset-hub-location-route-art-style.test.ts`
     - 新增 legacy asset-hub location PATCH 对 `artStyle` 持久化断言
   - `tests/integration/api/specific/asset-hub-generate-image-art-style.test.ts`
