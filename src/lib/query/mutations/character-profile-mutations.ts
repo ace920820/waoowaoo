@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import type { Project } from '@/types/project'
 import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
@@ -7,6 +8,12 @@ import {
   applyCharacterSelectionToAssets,
   applyCharacterSelectionToProject,
 } from './character-base-mutations'
+import {
+  applyCharacterSelectionToUnifiedProjectAssets,
+  captureProjectUnifiedAssetSnapshots,
+  invalidateProjectAssetCaches,
+  restoreProjectUnifiedAssetSnapshots,
+} from './project-assets-mutations-shared'
 import {
   invalidateQueryTemplates,
   requestJsonWithError,
@@ -203,10 +210,7 @@ export function useCreateProjectCharacterAppearance(projectId: string) {
 export function useConfirmProjectCharacterSelection(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [
-            queryKeys.projectAssets.all(projectId),
-            queryKeys.projectData(projectId),
-        ])
+        invalidateProjectAssetCaches(queryClient, projectId)
     return useMutation({
         mutationFn: async ({ characterId, appearanceId }: { characterId: string; appearanceId: string }) =>
             await requestJsonWithError(
@@ -219,14 +223,17 @@ export function useConfirmProjectCharacterSelection(projectId: string) {
                 '确认选择失败',
             ),
         onMutate: async ({ characterId, appearanceId }) => {
+            const unifiedAssetsQueryKey = queryKeys.assets.all('project', projectId)
             const assetsQueryKey = queryKeys.projectAssets.all(projectId)
             const projectQueryKey = queryKeys.projectData(projectId)
 
+            await queryClient.cancelQueries({ queryKey: unifiedAssetsQueryKey, exact: false })
             await queryClient.cancelQueries({ queryKey: assetsQueryKey })
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
 
             const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
+            const previousUnifiedAssets = captureProjectUnifiedAssetSnapshots(queryClient, projectId)
             const selectedIndexFromAssets = previousAssets?.characters
                 ?.find((character) => character.id === characterId)
                 ?.appearances?.find((appearance) => appearance.id === appearanceId)
@@ -235,8 +242,23 @@ export function useConfirmProjectCharacterSelection(projectId: string) {
                 ?.find((character) => character.id === characterId)
                 ?.appearances?.find((appearance) => appearance.id === appearanceId)
                 ?.selectedIndex
-            const selectedIndex = selectedIndexFromAssets ?? selectedIndexFromProject ?? null
+            const selectedIndexFromUnified = previousUnifiedAssets
+                .flatMap((snapshot) => snapshot.data ?? [])
+                .find((asset) => asset.kind === 'character' && asset.id === characterId)
+            const selectedIndex = selectedIndexFromAssets
+                ?? selectedIndexFromProject
+                ?? (selectedIndexFromUnified?.kind === 'character'
+                    ? selectedIndexFromUnified.variants.find((variant) => variant.id === appearanceId)?.selectionState.selectedRenderIndex ?? null
+                    : null)
+                ?? null
 
+            queryClient.setQueriesData<AssetSummary[] | undefined>(
+                {
+                    queryKey: unifiedAssetsQueryKey,
+                    exact: false,
+                },
+                (previous) => applyCharacterSelectionToUnifiedProjectAssets(previous, characterId, appearanceId, selectedIndex, true),
+            )
             queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
                 applyCharacterSelectionToAssets(previous, characterId, appearanceId, selectedIndex, true),
             )
@@ -247,10 +269,12 @@ export function useConfirmProjectCharacterSelection(projectId: string) {
             return {
                 previousAssets,
                 previousProject,
+                previousUnifiedAssets,
             }
         },
         onError: (_error, _variables, context) => {
             if (!context) return
+            restoreProjectUnifiedAssetSnapshots(queryClient, context.previousUnifiedAssets)
             queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
             queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
         },

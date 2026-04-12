@@ -228,14 +228,19 @@ export default function CharacterCard({
               <span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)] ml-0.5">{t('image.regenCountPrefix')}</span>
             </>
           )}
+          suffix={<span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)]">{t('image.regenCountSuffix')}</span>}
           value={generationCount}
           options={getImageGenerationCountOptions('character')}
           onValueChange={setGenerationCount}
-          onClick={() => onRegenerate(generatedImageCount)}
+          onClick={() => onRegenerate(generationCount)}
           disabled={isAppearanceTaskRunning || isAnyTaskRunning || uploadImage.isPending}
-          showCountControl={false}
-          ariaLabel={t('image.regenCountPrefix')}
+          splitInteractiveZones={true}
+          ariaLabel={t('image.regenCountAriaLabel')}
           className="inline-flex h-6 items-center justify-center rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+          actionClassName="inline-flex h-6 items-center justify-center rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+          countClassName="h-6 text-[10px] text-[var(--glass-tone-info-fg)]"
+          selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-[10px] font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
+          labelClassName="text-[10px] font-medium text-[var(--glass-tone-info-fg)]"
         />
         {onUndo && (appearance.previousImageUrl || appearance.previousImageUrls.length > 0) && (
           <button
@@ -483,6 +488,7 @@ export default function CharacterCard({
         generationCount={generationCount}
         onGenerationCountChange={setGenerationCount}
         onGenerate={onGenerate}
+        onRegenerate={onRegenerate}
         voiceSettings={compactVoiceSettings}
       />
     </div>

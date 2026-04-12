@@ -65,11 +65,13 @@ export function useSSE({ projectId, episodeId, enabled = true, onEvent }: UseSSE
       }
 
       if (targetType === 'CharacterAppearance' || targetType === 'NovelPromotionCharacter') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId) })
         queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.characters(projectId) })
         queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
         return
       }
       if (targetType === 'LocationImage' || targetType === 'NovelPromotionLocation') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId) })
         queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.locations(projectId) })
         queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
         return

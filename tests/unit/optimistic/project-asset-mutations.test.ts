@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import type { Character, Location, Project } from '@/types/project'
 import type { ProjectAssetsData } from '@/lib/query/hooks/useProjectAssets'
 import { queryKeys } from '@/lib/query/keys'
@@ -103,6 +104,60 @@ function buildCharacter(selectedIndex: number | null): Character {
   }
 }
 
+
+function buildUnifiedCharacterAsset(selectedIndex: number | null): AssetSummary {
+  return {
+    id: 'character-1',
+    scope: 'project',
+    kind: 'character',
+    family: 'visual',
+    name: 'Hero',
+    folderId: null,
+    capabilities: {
+      canGenerate: true,
+      canSelectRender: true,
+      canRevertRender: true,
+      canModifyRender: true,
+      canUploadRender: true,
+      canBindVoice: true,
+      canCopyFromGlobal: true,
+    },
+    taskRefs: [],
+    taskState: { isRunning: false, lastError: null },
+    variants: [{
+      id: 'appearance-1',
+      index: 0,
+      label: 'default',
+      description: null,
+      selectionState: { selectedRenderIndex: selectedIndex },
+      renders: ['img-0', 'img-1', 'img-2'].map((imageUrl, index) => ({
+        id: `appearance-1:${index}`,
+        index,
+        imageUrl,
+        media: null,
+        isSelected: selectedIndex === index,
+        previousImageUrl: null,
+        previousMedia: null,
+        taskRefs: [],
+        taskState: { isRunning: false, lastError: null },
+      })),
+      taskRefs: [],
+      taskState: { isRunning: false, lastError: null },
+    }],
+    introduction: null,
+    profileData: null,
+    profileConfirmed: null,
+    profileTaskRefs: [],
+    profileTaskState: { isRunning: false, lastError: null },
+    voice: {
+      voiceType: null,
+      voiceId: null,
+      customVoiceUrl: null,
+      media: null,
+    },
+  }
+}
+
 function buildAssets(selectedIndex: number | null): ProjectAssetsData {
   return {
     characters: [buildCharacter(selectedIndex)],
@@ -141,8 +196,10 @@ describe('project asset optimistic mutations', () => {
 
   it('optimistically selects project character image and ignores stale rollback', async () => {
     const projectId = 'project-1'
+    const unifiedAssetsKey = queryKeys.assets.list({ scope: 'project', projectId, kind: 'character' })
     const assetsKey = queryKeys.projectAssets.all(projectId)
     const projectKey = queryKeys.projectData(projectId)
+    queryClient.seedQuery(unifiedAssetsKey, [buildUnifiedCharacterAsset(0)])
     queryClient.seedQuery(assetsKey, buildAssets(0))
     queryClient.seedQuery(projectKey, buildProject(0))
 
@@ -160,11 +217,21 @@ describe('project asset optimistic mutations', () => {
 
     const firstContext = await mutation.onMutate(firstVariables)
     const afterFirst = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
+    const afterFirstUnified = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterFirst?.characters[0]?.appearances[0]?.selectedIndex).toBe(1)
+    expect(afterFirstUnified?.[0]?.kind).toBe('character')
+    if (afterFirstUnified?.[0]?.kind === 'character') {
+      expect(afterFirstUnified[0].variants[0]?.selectionState.selectedRenderIndex).toBe(1)
+      expect(afterFirstUnified[0].variants[0]?.renders[1]?.isSelected).toBe(true)
+    }
 
     const secondContext = await mutation.onMutate(secondVariables)
     const afterSecond = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
+    const afterSecondUnified = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterSecond?.characters[0]?.appearances[0]?.selectedIndex).toBe(2)
+    if (afterSecondUnified?.[0]?.kind === 'character') {
+      expect(afterSecondUnified[0].variants[0]?.selectionState.selectedRenderIndex).toBe(2)
+    }
 
     mutation.onError(new Error('first failed'), firstVariables, firstContext)
     const afterStaleError = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
@@ -172,13 +239,19 @@ describe('project asset optimistic mutations', () => {
 
     mutation.onError(new Error('second failed'), secondVariables, secondContext)
     const afterLatestRollback = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
+    const afterUnifiedRollback = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterLatestRollback?.characters[0]?.appearances[0]?.selectedIndex).toBe(1)
+    if (afterUnifiedRollback?.[0]?.kind === 'character') {
+      expect(afterUnifiedRollback[0].variants[0]?.selectionState.selectedRenderIndex).toBe(1)
+    }
   })
 
   it('optimistically deletes project character and restores on error', async () => {
     const projectId = 'project-1'
+    const unifiedAssetsKey = queryKeys.assets.list({ scope: 'project', projectId, kind: 'character' })
     const assetsKey = queryKeys.projectAssets.all(projectId)
     const projectKey = queryKeys.projectData(projectId)
+    queryClient.seedQuery(unifiedAssetsKey, [buildUnifiedCharacterAsset(0)])
     queryClient.seedQuery(assetsKey, buildAssets(0))
     queryClient.seedQuery(projectKey, buildProject(0))
 
@@ -259,8 +332,10 @@ describe('project asset optimistic mutations', () => {
 
   it('collapses project character candidates immediately when confirming selection', async () => {
     const projectId = 'project-1'
+    const unifiedAssetsKey = queryKeys.assets.list({ scope: 'project', projectId, kind: 'character' })
     const assetsKey = queryKeys.projectAssets.all(projectId)
     const projectKey = queryKeys.projectData(projectId)
+    queryClient.seedQuery(unifiedAssetsKey, [buildUnifiedCharacterAsset(2)])
     queryClient.seedQuery(assetsKey, buildAssets(2))
     queryClient.seedQuery(projectKey, buildProject(2))
 
@@ -272,9 +347,16 @@ describe('project asset optimistic mutations', () => {
 
     const afterAssets = queryClient.getQueryData<ProjectAssetsData>(assetsKey)
     const afterProject = queryClient.getQueryData<Project>(projectKey)
+    const afterUnified = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterAssets?.characters[0]?.appearances[0]?.selectedIndex).toBe(0)
     expect(afterAssets?.characters[0]?.appearances[0]?.imageUrls).toEqual(['img-2'])
     expect(afterProject?.novelPromotionData?.characters?.[0]?.appearances?.[0]?.imageUrls).toEqual(['img-2'])
+    expect(afterUnified?.[0]?.kind).toBe('character')
+    if (afterUnified?.[0]?.kind === 'character') {
+      expect(afterUnified[0].variants[0]?.selectionState.selectedRenderIndex).toBe(0)
+      expect(afterUnified[0].variants[0]?.renders).toHaveLength(1)
+      expect(afterUnified[0].variants[0]?.renders[0]?.imageUrl).toBe('img-2')
+    }
   })
 
   it('collapses project location candidates immediately when confirming selection', async () => {

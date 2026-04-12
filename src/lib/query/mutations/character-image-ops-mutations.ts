@@ -6,19 +6,16 @@ import {
     upsertTaskTargetOverlay,
 } from '../task-target-overlay'
 import {
-    invalidateQueryTemplates,
     requestJsonWithError,
     requestTaskResponseWithError,
 } from './mutation-shared'
+import { invalidateProjectAssetCaches } from './project-assets-mutations-shared'
 import { resolveTaskResponse } from '@/lib/task/client'
 
 export function useModifyProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssetAndProjectData = () =>
-        invalidateQueryTemplates(queryClient, [
-            queryKeys.projectAssets.all(projectId),
-            queryKeys.projectData(projectId),
-        ])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async (params: {
@@ -66,7 +63,7 @@ export function useModifyProjectCharacterImage(projectId: string) {
 export function useRegenerateCharacterGroup(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({
@@ -116,7 +113,7 @@ export function useRegenerateCharacterGroup(projectId: string) {
 export function useRegenerateSingleCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({
@@ -166,7 +163,7 @@ export function useRegenerateSingleCharacterImage(projectId: string) {
 export function useUpdateProjectAppearanceDescription(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({
@@ -237,7 +234,7 @@ export function useBatchGenerateCharacterImages(projectId: string) {
             }
         },
         onSettled: () => {
-            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+            invalidateProjectAssetCaches(queryClient, projectId)
         }
     })
 }

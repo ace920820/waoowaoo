@@ -29,6 +29,7 @@ type CharacterCardActionsProps =
     generationCount: number
     onGenerationCountChange: (value: number) => void
     onGenerate: (count?: number) => void
+    onRegenerate: (count?: number) => void
     voiceSettings: ReactNode
   }
 
@@ -76,20 +77,18 @@ export default function CharacterCardActions(props: CharacterCardActionsProps) {
           </div>
         </div>
       ) : (
-        !props.currentImageUrl && !props.isAppearanceTaskRunning && !props.isAnyTaskRunning && (
-          <ImageGenerationInlineCountButton
-            prefix={<span>{props.isPrimaryAppearance ? t('image.generateCountPrefix') : t('character.generateFromPrimary')}</span>}
-            suffix={<span>{t('image.generateCountSuffix')}</span>}
-            value={props.generationCount}
-            options={getImageGenerationCountOptions('character')}
-            onValueChange={props.onGenerationCountChange}
-            onClick={() => props.onGenerate(props.generationCount)}
-            disabled={!props.hasDescription}
-            ariaLabel={t('image.selectCount')}
-            className={`glass-btn-base flex w-full items-center justify-center gap-1 py-1 text-xs disabled:opacity-50 ${props.isPrimaryAppearance ? 'glass-btn-primary' : 'glass-btn-tone-info'}`}
-            selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-xs font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
-          />
-        )
+        <ImageGenerationInlineCountButton
+          prefix={<span>{props.currentImageUrl ? t('image.regenCountPrefix') : (props.isPrimaryAppearance ? t('image.generateCountPrefix') : t('character.generateFromPrimary'))}</span>}
+          suffix={<span>{props.currentImageUrl ? t('image.regenCountSuffix') : t('image.generateCountSuffix')}</span>}
+          value={props.generationCount}
+          options={getImageGenerationCountOptions('character')}
+          onValueChange={props.onGenerationCountChange}
+          onClick={() => props.currentImageUrl ? props.onRegenerate(props.generationCount) : props.onGenerate(props.generationCount)}
+          disabled={!props.hasDescription || props.isAppearanceTaskRunning || props.isAnyTaskRunning}
+          ariaLabel={props.currentImageUrl ? t('image.regenCountAriaLabel') : t('image.selectCount')}
+          className={`glass-btn-base flex w-full items-center justify-center gap-1 py-1 text-xs disabled:opacity-50 ${props.currentImageUrl ? 'glass-btn-tone-info' : (props.isPrimaryAppearance ? 'glass-btn-primary' : 'glass-btn-tone-info')}`}
+          selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-xs font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
+        />
       )}
 
       {props.isPrimaryAppearance && props.voiceSettings}
