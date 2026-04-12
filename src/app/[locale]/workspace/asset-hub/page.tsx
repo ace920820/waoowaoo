@@ -314,14 +314,18 @@ export default function AssetHubPage() {
     }
 
     // 角色编辑后触发生成
-    const handleCharacterEditGenerate = async () => {
-        if (!characterEditModal) return
+    const handleCharacterEditGenerate = async (
+        characterId: string,
+        _appearanceId: string,
+        options?: { artStyle?: string | null; appearanceIndex?: number },
+    ) => {
+        if (!characterId) return
 
         try {
             await characterActions.generate({
-                id: characterEditModal.characterId,
-                appearanceIndex: characterEditModal.appearanceIndex,
-                artStyle: characterEditModal.artStyle || undefined,
+                id: characterId,
+                appearanceIndex: options?.appearanceIndex ?? characterEditModal?.appearanceIndex ?? 0,
+                artStyle: options?.artStyle || characterEditModal?.artStyle || undefined,
                 count: characterGenerationCount,
             })
             queryClient.invalidateQueries({ queryKey: queryKeys.globalAssets.characters() })
@@ -331,13 +335,16 @@ export default function AssetHubPage() {
     }
 
     // 场景编辑后触发生成
-    const handleLocationEditGenerate = async () => {
-        if (!locationEditModal) return
+    const handleLocationEditGenerate = async (
+        locationId: string,
+        options?: { artStyle?: string | null },
+    ) => {
+        if (!locationId) return
 
         try {
             await locationActions.generate({
-                id: locationEditModal.locationId,
-                artStyle: locationEditModal.artStyle || undefined,
+                id: locationId,
+                artStyle: options?.artStyle || locationEditModal?.artStyle || undefined,
                 count: locationGenerationCount,
             })
             queryClient.invalidateQueries({ queryKey: queryKeys.globalAssets.locations() })
@@ -601,6 +608,7 @@ export default function AssetHubPage() {
                     appearanceId={characterEditModal.appearanceId}
                     appearanceIndex={characterEditModal.appearanceIndex}
                     changeReason={characterEditModal.changeReason}
+                    artStyle={characterEditModal.artStyle}
                     description={characterEditModal.description}
                     onClose={() => setCharacterEditModal(null)}
                     onSave={handleCharacterEditGenerate}
@@ -615,6 +623,7 @@ export default function AssetHubPage() {
                     locationName={locationEditModal.locationName}
                     summary={locationEditModal.summary}
                     imageIndex={locationEditModal.imageIndex}
+                    artStyle={locationEditModal.artStyle}
                     description={locationEditModal.description}
                     onClose={() => setLocationEditModal(null)}
                     onSave={handleLocationEditGenerate}

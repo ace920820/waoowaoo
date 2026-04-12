@@ -59,10 +59,12 @@ export function useUpdateCharacterAppearanceDescription() {
       characterId,
       appearanceIndex,
       description,
+      artStyle,
     }: {
       characterId: string
       appearanceIndex: number
       description: string
+      artStyle?: string
     }) => {
       const assetQuery = new URLSearchParams({
         scope: 'global',
@@ -85,6 +87,7 @@ export function useUpdateCharacterAppearanceDescription() {
           scope: 'global',
           kind: 'character',
           description,
+          ...(artStyle ? { artStyle } : {}),
         }),
       }, 'Failed to update appearance description')
     },
@@ -100,10 +103,12 @@ export function useUpdateLocationSummary() {
     mutationFn: async ({
       locationId,
       summary,
+      artStyle,
       availableSlots,
     }: {
       locationId: string
       summary: string
+      artStyle?: string
       availableSlots?: LocationAvailableSlot[]
     }) => {
       return await requestJsonWithError(`/api/assets/${locationId}`, {
@@ -113,6 +118,7 @@ export function useUpdateLocationSummary() {
           scope: 'global',
           kind: 'location',
           summary,
+          ...(artStyle ? { artStyle } : {}),
           ...(availableSlots ? { availableSlots } : {}),
         }),
       }, 'Failed to update location summary')

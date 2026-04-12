@@ -26,6 +26,7 @@ import {
 import { AppIcon } from '@/components/ui/icons'
 import { AI_EDIT_BUTTON_CLASS, AI_EDIT_ICON_CLASS } from '@/components/ui/ai-edit-style'
 import AISparklesIcon from '@/components/ui/icons/AISparklesIcon'
+import { resolveSelectedLocationImage } from '@/lib/assets/image-selection-state'
 
 interface LocationImage {
   id: string
@@ -77,7 +78,7 @@ export function LocationCard({ location, assetType = 'location', onImageClick, o
   const orderedImages = [...(location.images || [])].sort((left, right) => left.imageIndex - right.imageIndex)
   const imagesWithUrl = orderedImages.filter((img) => img.imageUrl)
   const generatedImageCount = countGeneratedImageSlots(orderedImages)
-  const selectedImage = orderedImages.find((img) => img.isSelected)
+  const selectedImage = resolveSelectedLocationImage({ images: orderedImages })
   const serverSelectedIndex = selectedImage?.imageIndex ?? null
   const effectiveSelectedIndex = serverSelectedIndex
   const currentImageUrl = selectedImage?.imageUrl || imagesWithUrl[0]?.imageUrl || null

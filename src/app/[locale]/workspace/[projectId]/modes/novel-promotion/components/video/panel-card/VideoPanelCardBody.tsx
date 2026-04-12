@@ -4,6 +4,7 @@ import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
+import { buildPanelSpeechContractViewModel } from '@/lib/novel-promotion/panel-speech-plan'
 import type { VideoPanelRuntime } from './hooks/useVideoPanelActions'
 
 interface VideoPanelCardBodyProps {
@@ -53,6 +54,15 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
   const showsFirstLastFrameActions = layout.isLinked && !!layout.nextPanel
   const hasTailFrameCandidate = layout.hasNext && !!layout.nextPanel
   const cssAspectRatio = layout.videoRatio.replace(':', '/')
+  const effectiveGenerateAudio = typeof videoModel.generationOptions.generateAudio === 'boolean'
+    ? videoModel.generationOptions.generateAudio
+    : true
+  const speechContract = panel.speechPlan
+    ? buildPanelSpeechContractViewModel({
+      speechPlan: panel.speechPlan,
+      generateAudio: effectiveGenerateAudio,
+    })
+    : null
 
   const renderFramePreview = ({
     imageUrl,
@@ -94,6 +104,53 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
     </div>
   )
 
+  const speechModeToneClassName = speechContract?.effectiveMode === 'dialogue'
+    ? 'bg-[var(--glass-accent-from)] text-white'
+    : speechContract?.effectiveMode === 'voiceover'
+      ? 'bg-[var(--glass-tone-warning-fg)] text-white'
+      : 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] border border-[var(--glass-stroke-base)]'
+
+  const speechModeLabel = speechContract
+    ? t(`panelCard.speechContract.mode.${speechContract.effectiveMode}` as never)
+    : null
+
+  const speechSourceLabel = speechContract
+    ? t(`panelCard.speechContract.source.${speechContract.source}` as never)
+    : null
+
+  const speechSummary = (() => {
+    if (!speechContract) return null
+    if (!speechContract.audioEnabled && speechContract.matchKind === 'matched') {
+      return t('panelCard.speechContract.summary.matchedAudioDisabled')
+    }
+    if (!speechContract.audioEnabled && speechContract.matchKind === 'fallback') {
+      return t('panelCard.speechContract.summary.fallbackAudioDisabled')
+    }
+    if (!speechContract.audioEnabled) {
+      return t('panelCard.speechContract.summary.noneAudioDisabled')
+    }
+    if (speechContract.matchKind === 'matched') {
+      return t('panelCard.speechContract.summary.matched')
+    }
+    if (speechContract.matchKind === 'fallback') {
+      return t('panelCard.speechContract.summary.fallback')
+    }
+    return t('panelCard.speechContract.summary.none')
+  })()
+
+  const visibleSpeechGuardrails = speechContract
+    ? (() => {
+      const prioritizedGuardrails = speechContract.guardrails.includes('no_mouth_sync')
+        ? [
+          'no_mouth_sync',
+          ...speechContract.guardrails.filter((guardrail) => guardrail !== 'no_mouth_sync'),
+        ]
+        : speechContract.guardrails
+
+      return prioritizedGuardrails.slice(0, 3)
+    })()
+    : []
+
   return (
     <div className="p-4 space-y-2">
       <div className="flex items-center justify-between text-xs">
@@ -102,6 +159,60 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
       </div>
 
       <p className="text-sm text-[var(--glass-text-secondary)] line-clamp-2">{panel.textPanel?.description}</p>
+
+      {speechContract && speechModeLabel && speechSourceLabel && speechSummary && (
+        <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-[var(--glass-text-primary)]">{t('panelCard.speechContract.title')}</div>
+              <div className="mt-1 text-[11px] text-[var(--glass-text-tertiary)]">{speechSummary}</div>
+            </div>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${speechModeToneClassName}`}>
+              {speechModeLabel}
+            </span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center rounded-full border border-[var(--glass-stroke-base)] px-2 py-0.5 text-[11px] text-[var(--glass-text-secondary)]">
+              {speechSourceLabel}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${speechContract.matchKind === 'none'
+              ? 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)]'
+              : 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)]'
+              }`}>
+              {t(`panelCard.speechContract.match.${speechContract.matchKind}` as never)}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${speechContract.audioEnabled
+              ? 'bg-[var(--glass-tone-success-bg)] text-[var(--glass-tone-success-fg)]'
+              : 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)]'
+              }`}>
+              {t(`panelCard.speechContract.audio.${speechContract.audioEnabled ? 'enabled' : 'disabled'}` as never)}
+            </span>
+          </div>
+
+          {speechContract.lines.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {speechContract.lines.slice(0, 2).map((line, index) => (
+                <div key={`${line.lineIndex ?? 'line'}-${index}`} className="rounded-lg bg-[var(--glass-bg-muted)] px-2.5 py-2 text-[11px] text-[var(--glass-text-secondary)]">
+                  <div className="font-medium text-[var(--glass-text-primary)]">
+                    {line.speaker}
+                    {line.parenthetical ? ` (${line.parenthetical})` : ''}
+                  </div>
+                  <div className="mt-0.5 line-clamp-2">{line.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 space-y-1">
+            {visibleSpeechGuardrails.map((guardrail) => (
+              <div key={guardrail} className="text-[11px] text-[var(--glass-text-tertiary)]">
+                {`• ${t(`panelCard.speechContract.guardrail.${guardrail}` as never)}`}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 pt-3 border-t border-[var(--glass-stroke-base)]">
         {(showsIncomingLinkBadge || showsOutgoingLinkBadge) && (

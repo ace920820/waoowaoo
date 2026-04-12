@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
+import { attachSpeechPlanToStoryboards } from '@/lib/novel-promotion/panel-speech-plan'
 
 /**
  * GET /api/novel-promotion/[projectId]/storyboards
@@ -26,17 +27,34 @@ export const GET = apiHandler(async (
     }
 
     // 获取剧集的分镜数据
-    const storyboards = await prisma.novelPromotionStoryboard.findMany({
-        where: { episodeId },
-        include: {
-            clip: true,
-            panels: { orderBy: { panelIndex: 'asc' } }
-        },
-        orderBy: { createdAt: 'asc' }
-    })
+    const [storyboards, voiceLines] = await Promise.all([
+        prisma.novelPromotionStoryboard.findMany({
+            where: { episodeId },
+            include: {
+                clip: true,
+                panels: { orderBy: { panelIndex: 'asc' } }
+            },
+            orderBy: { createdAt: 'asc' }
+        }),
+        prisma.novelPromotionVoiceLine.findMany({
+            where: { episodeId },
+            select: {
+                lineIndex: true,
+                speaker: true,
+                content: true,
+                matchedPanelId: true,
+                matchedStoryboardId: true,
+                matchedPanelIndex: true,
+            },
+            orderBy: { lineIndex: 'asc' },
+        }),
+    ])
 
     const withMedia = await attachMediaFieldsToProject({ storyboards })
-    const processedStoryboards = withMedia.storyboards || storyboards
+    const processedStoryboards = attachSpeechPlanToStoryboards({
+        storyboards: (withMedia.storyboards || storyboards) as typeof storyboards,
+        voiceLines,
+    })
 
     return NextResponse.json({ storyboards: processedStoryboards })
 })

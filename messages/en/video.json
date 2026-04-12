@@ -51,7 +51,49 @@
     "batchMode": "Batch Mode",
     "batchModeDesc": "Offline inference, 50% cheaper, completes within 24 hours",
     "batchModeEnabled": "Batch mode enabled",
-    "batchModeDisabled": "Batch mode disabled"
+    "batchModeDisabled": "Batch mode disabled",
+    "speechContract": {
+      "title": "Speech Contract Preview",
+      "match": {
+        "matched": "Matched",
+        "fallback": "Fallback",
+        "none": "No Match"
+      },
+      "audio": {
+        "enabled": "Audio enabled",
+        "disabled": "Audio disabled"
+      },
+      "mode": {
+        "silent": "Silent",
+        "dialogue": "Dialogue",
+        "voiceover": "Voiceover"
+      },
+      "source": {
+        "screenplay_voice_lines": "Screenplay speech mapping",
+        "screenplay_panel_match": "Panel text fallback match",
+        "none": "No speech contract match"
+      },
+      "summary": {
+        "matched": "This is a preview of the speech constraints for the current generation settings; the next generation will follow these screenplay lines.",
+        "matchedAudioDisabled": "This is a preview of the speech constraints for the current generation settings; the panel matched screenplay lines, but audio is disabled, so the next generation will follow silent constraints.",
+        "fallback": "This is a preview of the speech constraints for the current generation settings; no explicit speech-line mapping matched, so the next generation will use the panel-text fallback match.",
+        "fallbackAudioDisabled": "This is a preview of the speech constraints for the current generation settings; only panel-text fallback matching hit, but audio is disabled, so the next generation will follow silent constraints.",
+        "none": "This is a preview of the speech constraints for the current generation settings; no speech contract matched, so the next generation will be treated as silent.",
+        "noneAudioDisabled": "This is a preview of the speech constraints for the current generation settings; no speech contract matched and audio is disabled, so the next generation will follow silent constraints."
+      },
+      "guardrail": {
+        "non_verbal_only": "Keep generated audio non-verbal only, such as ambience or movement.",
+        "no_verbal_audio": "Do not generate dialogue, narration, lyrics, or other verbal audio.",
+        "no_mouth_sync": "Avoid visible lip-sync or speech-shaped mouth movement.",
+        "intentional_silent": "Treat this panel as intentionally non-speaking.",
+        "voiceover_only": "Matched lines should play as voiceover or off-screen narration only.",
+        "no_onscreen_speech": "Do not stage the matched words as on-screen mouth speech.",
+        "reaction_over_speaking": "Visible characters should read as acting, listening, or reacting silently.",
+        "verbatim_only": "Use only the matched structured lines as spoken words.",
+        "no_extra_lines": "Do not add paraphrases, extra narration, or invented lines.",
+        "align_visible_speech": "If a speaker is visible, mouth movement should align only to these words."
+      }
+    }
   },
   "promptModal": {
     "title": "Edit Shot #{number} Video Prompt",

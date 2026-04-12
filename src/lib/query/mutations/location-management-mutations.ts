@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { logError as _ulogError } from '@/lib/logging/core'
-import type { Project } from '@/types/project'
+import type { AssetSummary } from '@/lib/assets/contracts'
+import type { Location, Project } from '@/types/project'
 import { queryKeys } from '../keys'
 import type { ProjectAssetsData } from '../hooks/useProjectAssets'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
@@ -16,10 +17,69 @@ import {
     requestTaskResponseWithError,
     requestVoidWithError,
 } from './mutation-shared'
+import { collapseLocationSelection } from '@/lib/assets/image-selection-state'
+import {
+    applyLocationSelectionToUnifiedProjectAssets,
+    captureProjectUnifiedAssetSnapshots,
+    invalidateProjectAssetCaches,
+    restoreProjectUnifiedAssetSnapshots,
+} from './project-assets-mutations-shared'
 
 interface DeleteProjectLocationContext {
     previousAssets: ProjectAssetsData | undefined
     previousProject: Project | undefined
+}
+
+function applyConfirmedSelectionToCollection(
+    items: Location[],
+    locationId: string,
+): Location[] {
+    return items.map((location) => {
+        if (location.id !== locationId) return location
+        return collapseLocationSelection(location)
+    })
+}
+
+function applyConfirmedSelectionToAssets(
+    previous: ProjectAssetsData | undefined,
+    kind: 'location' | 'prop',
+    locationId: string,
+): ProjectAssetsData | undefined {
+    if (!previous) return previous
+    if (kind === 'prop') {
+        return {
+            ...previous,
+            props: applyConfirmedSelectionToCollection(previous.props || [], locationId),
+        }
+    }
+    return {
+        ...previous,
+        locations: applyConfirmedSelectionToCollection(previous.locations || [], locationId),
+    }
+}
+
+function applyConfirmedSelectionToProject(
+    previous: Project | undefined,
+    kind: 'location' | 'prop',
+    locationId: string,
+): Project | undefined {
+    if (!previous?.novelPromotionData) return previous
+    if (kind === 'prop') {
+        return {
+            ...previous,
+            novelPromotionData: {
+                ...previous.novelPromotionData,
+                props: applyConfirmedSelectionToCollection(previous.novelPromotionData.props || [], locationId),
+            },
+        }
+    }
+    return {
+        ...previous,
+        novelPromotionData: {
+            ...previous.novelPromotionData,
+            locations: applyConfirmedSelectionToCollection(previous.novelPromotionData.locations || [], locationId),
+        },
+    }
 }
 
 function removeLocationFromAssets(
@@ -301,7 +361,7 @@ export function useConfirmProjectLocationSelection(
 ) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
     return useMutation({
         mutationFn: async ({ locationId }: { locationId: string }) =>
             await requestJsonWithError(
@@ -318,6 +378,68 @@ export function useConfirmProjectLocationSelection(
                 },
                 '确认选择失败',
             ),
+        onMutate: async ({ locationId }) => {
+            const unifiedAssetsQueryKey = queryKeys.assets.all('project', projectId)
+            const assetsQueryKey = queryKeys.projectAssets.all(projectId)
+            const projectQueryKey = queryKeys.projectData(projectId)
+
+            await queryClient.cancelQueries({ queryKey: unifiedAssetsQueryKey, exact: false })
+            await queryClient.cancelQueries({ queryKey: assetsQueryKey })
+            await queryClient.cancelQueries({ queryKey: projectQueryKey })
+
+            const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
+            const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
+            const previousUnifiedAssets = captureProjectUnifiedAssetSnapshots(queryClient, projectId)
+            const hasSelectedInAssets = kind === 'prop'
+                ? previousAssets?.props?.some((location) => location.id === locationId && location.selectedImageId)
+                : previousAssets?.locations?.some((location) => location.id === locationId && location.selectedImageId)
+            const hasSelectedInProject = kind === 'prop'
+                ? previousProject?.novelPromotionData?.props?.some((location) => location.id === locationId && location.selectedImageId)
+                : previousProject?.novelPromotionData?.locations?.some((location) => location.id === locationId && location.selectedImageId)
+            const hasSelectedInUnified = previousUnifiedAssets
+                .flatMap((snapshot) => snapshot.data ?? [])
+                .some((asset) => asset.kind === kind && asset.id === locationId && Boolean(asset.selectedVariantId))
+
+            if (!hasSelectedInAssets && !hasSelectedInProject && !hasSelectedInUnified) {
+                return {
+                    previousAssets,
+                    previousProject,
+                    previousUnifiedAssets,
+                }
+            }
+
+            const selectedIndex = kind === 'prop'
+                ? previousAssets?.props?.find((location) => location.id === locationId)?.images.find((image) => image.isSelected)?.imageIndex
+                    ?? previousProject?.novelPromotionData?.props?.find((location) => location.id === locationId)?.images.find((image) => image.isSelected)?.imageIndex
+                : previousAssets?.locations?.find((location) => location.id === locationId)?.images.find((image) => image.isSelected)?.imageIndex
+                    ?? previousProject?.novelPromotionData?.locations?.find((location) => location.id === locationId)?.images.find((image) => image.isSelected)?.imageIndex
+
+            queryClient.setQueriesData<AssetSummary[] | undefined>(
+                {
+                    queryKey: unifiedAssetsQueryKey,
+                    exact: false,
+                },
+                (previous) => applyLocationSelectionToUnifiedProjectAssets(previous, locationId, selectedIndex ?? null, true),
+            )
+            queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
+                applyConfirmedSelectionToAssets(previous, kind, locationId),
+            )
+            queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
+                applyConfirmedSelectionToProject(previous, kind, locationId),
+            )
+
+            return {
+                previousAssets,
+                previousProject,
+                previousUnifiedAssets,
+            }
+        },
+        onError: (_error, _variables, context) => {
+            if (!context) return
+            restoreProjectUnifiedAssetSnapshots(queryClient, context.previousUnifiedAssets)
+            queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
+            queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
+        },
         onSettled: invalidateProjectAssets,
     })
 }

@@ -6,6 +6,7 @@ import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { resolveMediaRefFromLegacyValue } from '@/lib/media/service'
+import { attachSpeechPlanToStoryboards } from '@/lib/novel-promotion/panel-speech-plan'
 
 /**
  * GET - 获取单个剧集的完整数据
@@ -56,7 +57,17 @@ export const GET = apiHandler(async (
   // 转换为稳定媒体 URL（并保留兼容字段）
   const episodeWithSignedUrls = await attachMediaFieldsToProject(episode)
 
-  return NextResponse.json({ episode: episodeWithSignedUrls })
+  const storyboardsWithSpeechPlan = attachSpeechPlanToStoryboards({
+    storyboards: (episodeWithSignedUrls.storyboards || []) as NonNullable<typeof episodeWithSignedUrls.storyboards>,
+    voiceLines: episodeWithSignedUrls.voiceLines,
+  })
+
+  return NextResponse.json({
+    episode: {
+      ...episodeWithSignedUrls,
+      storyboards: storyboardsWithSpeechPlan,
+    },
+  })
 })
 
 /**

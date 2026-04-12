@@ -1,24 +1,33 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import {
   clearTaskTargetOverlay,
   upsertTaskTargetOverlay,
 } from '../task-target-overlay'
 import { queryKeys } from '../keys'
 import type { GlobalCharacter } from '../hooks/useGlobalAssets'
+import { collapseCharacterSelection } from '@/lib/assets/image-selection-state'
 import {
   requestJsonWithError,
   requestVoidWithError,
 } from './mutation-shared'
 import {
   GLOBAL_ASSET_PROJECT_ID,
+  applyCharacterSelectionToUnifiedAssets,
+  captureGlobalUnifiedAssetSnapshots,
   invalidateGlobalCharacters,
+  restoreGlobalUnifiedAssetSnapshots,
 } from './asset-hub-mutations-shared'
 
 interface SelectCharacterImageContext {
   previousQueries: Array<{
     queryKey: readonly unknown[]
     data: GlobalCharacter[] | undefined
+  }>
+  previousAssetQueries: Array<{
+    queryKey: readonly unknown[]
+    data: AssetSummary[] | undefined
   }>
   targetKey: string
   requestId: number
@@ -36,6 +45,7 @@ function applyCharacterSelection(
   characterId: string,
   appearanceIndex: number,
   imageIndex: number | null,
+  confirm = false,
 ): GlobalCharacter[] | undefined {
   if (!characters) return characters
   return characters.map((character) => {
@@ -44,15 +54,14 @@ function applyCharacterSelection(
       ...character,
       appearances: (character.appearances || []).map((appearance) => {
         if (appearance.appearanceIndex !== appearanceIndex) return appearance
-        const selectedUrl =
-          imageIndex !== null && imageIndex >= 0
-            ? (appearance.imageUrls[imageIndex] ?? null)
-            : null
-        return {
+        const nextAppearance = {
           ...appearance,
           selectedIndex: imageIndex,
-          imageUrl: selectedUrl ?? appearance.imageUrl ?? null,
+          imageUrl: imageIndex !== null && imageIndex >= 0
+            ? (appearance.imageUrls[imageIndex] ?? null) || appearance.imageUrl || null
+            : appearance.imageUrl || null,
         }
+        return confirm ? collapseCharacterSelection(nextAppearance) : nextAppearance
       }),
     }
   })
@@ -212,6 +221,7 @@ export function useSelectCharacterImage() {
         exact: false,
       })
       const previousQueries = captureCharacterQuerySnapshots(queryClient)
+      const previousAssetQueries = captureGlobalUnifiedAssetSnapshots(queryClient)
 
       queryClient.setQueriesData<GlobalCharacter[] | undefined>(
         {
@@ -223,11 +233,26 @@ export function useSelectCharacterImage() {
           variables.characterId,
           variables.appearanceIndex,
           variables.imageIndex,
+          variables.confirm,
+        ),
+      )
+      queryClient.setQueriesData<AssetSummary[] | undefined>(
+        {
+          queryKey: queryKeys.assets.all('global'),
+          exact: false,
+        },
+        (previous) => applyCharacterSelectionToUnifiedAssets(
+          previous,
+          variables.characterId,
+          variables.appearanceIndex,
+          variables.imageIndex,
+          variables.confirm,
         ),
       )
 
       return {
         previousQueries,
+        previousAssetQueries,
         targetKey,
         requestId,
       }
@@ -237,6 +262,7 @@ export function useSelectCharacterImage() {
       const latestRequestId = latestRequestIdByTargetRef.current[context.targetKey]
       if (latestRequestId !== context.requestId) return
       restoreCharacterQuerySnapshots(queryClient, context.previousQueries)
+      restoreGlobalUnifiedAssetSnapshots(queryClient, context.previousAssetQueries)
     },
     onSettled: (_data, _error, variables) => {
       if (variables.confirm) {

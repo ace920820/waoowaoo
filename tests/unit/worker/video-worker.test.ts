@@ -6,12 +6,29 @@ type WorkerProcessor = (job: Job<TaskJobData>) => Promise<unknown>
 
 type PanelRow = {
   id: string
+  storyboardId: string
+  panelIndex: number
+  srtSegment: string | null
   videoUrl: string | null
   imageUrl: string | null
   videoPrompt: string | null
   description: string | null
   firstLastFramePrompt: string | null
   duration: number | null
+  storyboard?: {
+    clip: {
+      id: string
+      screenplay: string | null
+    } | null
+  }
+  matchedVoiceLines?: Array<{
+    lineIndex: number
+    speaker: string
+    content: string
+    matchedPanelId: string
+    matchedStoryboardId: string
+    matchedPanelIndex: number
+  }>
 }
 
 const workerState = vi.hoisted(() => ({
@@ -102,12 +119,40 @@ vi.mock('@/lib/workers/user-concurrency-gate', () => concurrencyGateMock)
 function buildPanel(overrides?: Partial<PanelRow>): PanelRow {
   return {
     id: 'panel-1',
+    storyboardId: 'storyboard-1',
+    panelIndex: 0,
+    srtSegment: '第一句台词',
     videoUrl: 'cos/base-video.mp4',
     imageUrl: 'cos/panel-image.png',
     videoPrompt: 'panel prompt',
     description: 'panel description',
     firstLastFramePrompt: null,
     duration: 5,
+    storyboard: {
+      clip: {
+        id: 'clip-1',
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '第一句台词' },
+              ],
+            },
+          ],
+        }),
+      },
+    },
+    matchedVoiceLines: [
+      {
+        lineIndex: 1,
+        speaker: 'Hero',
+        content: '第一句台词',
+        matchedPanelId: 'panel-1',
+        matchedStoryboardId: 'storyboard-1',
+        matchedPanelIndex: 0,
+      },
+    ],
     ...(overrides || {}),
   }
 }
@@ -193,6 +238,179 @@ describe('worker video processor behavior', () => {
       {
         Authorization: 'Bearer oa-key',
       },
+    )
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          prompt: expect.stringContaining('[Structured Speech Plan JSON]'),
+        }),
+      }),
+    )
+  })
+
+  it('VIDEO_PANEL: 为 silent panel 注入结构化静音 speech plan', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '人物只是沉默地看着窗外',
+      storyboard: {
+        clip: {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'action', text: '人物只是沉默地看着窗外' },
+                ],
+              },
+            ],
+          }),
+        },
+      },
+      matchedVoiceLines: [],
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          prompt: expect.stringContaining('"mode": "silent"'),
+        }),
+      }),
+    )
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat this panel as intentionally non-speaking.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('"guardrails": ['),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('avoid lip-sync-like mouth performance or speech-shaped mouth cycles.'),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 为 dialogue panel 注入显式口播执行指令', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat the listed lines as intentional on-screen spoken dialogue for this panel.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('speaker="Hero" content="第一句台词"'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('prefer restrained or silent mouth performance over incorrect speech.'),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 为 voiceover panel 注入旁白执行指令', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '城市从不真正入睡。',
+      matchedVoiceLines: [],
+      storyboard: {
+        clip: {
+          id: 'clip-1',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 1,
+                content: [
+                  { type: 'voiceover', text: '城市从不真正入睡。' },
+                ],
+              },
+            ],
+          }),
+        },
+      },
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Treat the listed lines as off-screen narration or voiceover.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Do not stage these lines as on-screen mouth speech or visible lip-sync'),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 显式 generateAudio=false 时使用统一禁音控制面', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+        generationOptions: {
+          generateAudio: false,
+        },
+      },
+    })
+
+    await processor!(job)
+
+    expect(utilsMock.resolveVideoSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: expect.objectContaining({
+          generateAudio: false,
+          prompt: expect.stringContaining('"generateAudio": false'),
+        }),
+      }),
     )
   })
 

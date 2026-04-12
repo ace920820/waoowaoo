@@ -23,6 +23,7 @@ import { useImageGenerationCount } from '@/lib/image-generation/use-image-genera
 import { AppIcon } from '@/components/ui/icons'
 import { AI_EDIT_BUTTON_CLASS, AI_EDIT_ICON_CLASS } from '@/components/ui/ai-edit-style'
 import AISparklesIcon from '@/components/ui/icons/AISparklesIcon'
+import { resolveCharacterSelectedImageUrl } from '@/lib/assets/image-selection-state'
 
 interface CharacterCardProps {
   character: Character
@@ -147,9 +148,7 @@ export default function CharacterCard({
 
   // 🔥 统一图片URL优先级：imageUrl > imageUrls[selectedIndex] > imageUrls[0]
   // 这样确保编辑后的新图片能正确显示
-  const currentImageUrl = appearance.imageUrl ||
-    (selectedIndex !== null ? rawImageUrls[selectedIndex] : null) ||
-    imageUrlsWithIndex[0]?.url
+  const currentImageUrl = resolveCharacterSelectedImageUrl(appearance)
 
   // 调试日志
   if (!currentImageUrl) {
@@ -229,14 +228,19 @@ export default function CharacterCard({
               <span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)] ml-0.5">{t('image.regenCountPrefix')}</span>
             </>
           )}
+          suffix={<span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)]">{t('image.regenCountSuffix')}</span>}
           value={generationCount}
           options={getImageGenerationCountOptions('character')}
           onValueChange={setGenerationCount}
-          onClick={() => onRegenerate(generatedImageCount)}
+          onClick={() => onRegenerate(generationCount)}
           disabled={isAppearanceTaskRunning || isAnyTaskRunning || uploadImage.isPending}
-          showCountControl={false}
-          ariaLabel={t('image.regenCountPrefix')}
+          splitInteractiveZones={true}
+          ariaLabel={t('image.regenCountAriaLabel')}
           className="inline-flex h-6 items-center justify-center rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+          actionClassName="inline-flex h-6 items-center justify-center rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+          countClassName="h-6 text-[10px] text-[var(--glass-tone-info-fg)]"
+          selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-[10px] font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
+          labelClassName="text-[10px] font-medium text-[var(--glass-tone-info-fg)]"
         />
         {onUndo && (appearance.previousImageUrl || appearance.previousImageUrls.length > 0) && (
           <button
@@ -484,6 +488,7 @@ export default function CharacterCard({
         generationCount={generationCount}
         onGenerationCountChange={setGenerationCount}
         onGenerate={onGenerate}
+        onRegenerate={onRegenerate}
         voiceSettings={compactVoiceSettings}
       />
     </div>

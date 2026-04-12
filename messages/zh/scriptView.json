@@ -61,9 +61,9 @@
         "removeLocation": "确定要从当前片段移除该场景吗？"
     },
     "generate": {
-        "missingAssets": "还有 {count} 个资产未生成形象",
-        "missingAssetsTip": "请先在",
-        "missingAssetsTipLink": "中生成所有出场角色和场景的形象",
+        "missingAssets": "还有 {count} 个引用角色/场景未补齐形象",
+        "missingAssetsTip": "现在仍可继续生成分镜文本；但后续生成分镜图前，仍需先在",
+        "missingAssetsTipLink": "中补齐当前引用角色和场景的参考图",
         "generating": "正在生成画面...",
         "startGenerate": "确认并开始绘制 →"
     }

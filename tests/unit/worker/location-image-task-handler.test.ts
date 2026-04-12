@@ -136,11 +136,11 @@ describe('worker location-image-task-handler behavior', () => {
   })
 
   it('payload artStyle overrides project artStyle in prompt', async () => {
-    await handleLocationImageTask(buildJob({ imageIndex: 0, artStyle: 'realistic' }))
+    await handleLocationImageTask(buildJob({ imageIndex: 0, artStyle: 'dark-fantasy' }))
 
     expect(sharedMock.generateProjectLabeledImageToStorage).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: expect.stringContaining(getArtStylePrompt('realistic', 'zh')),
+        prompt: expect.stringContaining(getArtStylePrompt('dark-fantasy', 'zh')),
       }),
     )
   })

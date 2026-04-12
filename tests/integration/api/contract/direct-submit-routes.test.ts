@@ -120,6 +120,21 @@ const prismaMock = vi.hoisted(() => ({
           duration: 3,
         }
       }
+      if (id === 'panel-1') {
+        return {
+          id,
+          storyboardId: 'storyboard-1',
+          panelIndex: 0,
+          shotType: 'medium',
+          cameraMove: 'static',
+          description: 'panel description',
+          videoPrompt: 'panel prompt',
+          location: null,
+          characters: null,
+          srtSegment: '',
+          duration: 3,
+        }
+      }
       return {
         id,
         storyboardId: 'storyboard-1',
@@ -145,8 +160,9 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(async () => ({
       id: 'project-data-1',
       characters: [
-        { name: 'Narrator', customVoiceUrl: 'https://voice.example/narrator.mp3' },
+        { name: 'Narrator', customVoiceUrl: 'https://voice.example/narrator.mp3', appearances: [] },
       ],
+      locations: [],
     })),
   },
   novelPromotionEpisode: {

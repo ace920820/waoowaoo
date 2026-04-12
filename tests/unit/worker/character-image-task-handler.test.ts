@@ -129,13 +129,13 @@ describe('worker character-image-task-handler behavior', () => {
   })
 
   it('payload artStyle overrides project artStyle in prompt', async () => {
-    const job = buildJob({ imageIndex: 0, artStyle: 'japanese-anime' })
+    const job = buildJob({ imageIndex: 0, artStyle: 'cinematic-anime' })
     await handleCharacterImageTask(job)
 
     const generationInput = sharedMock.generateProjectLabeledImageToStorage.mock.calls[0]?.[0] as {
       prompt: string
     }
-    expect(generationInput.prompt).toContain(getArtStylePrompt('japanese-anime', 'zh'))
+    expect(generationInput.prompt).toContain(getArtStylePrompt('cinematic-anime', 'zh'))
     expect(generationInput.prompt).not.toContain(getArtStylePrompt('realistic', 'zh'))
   })
 

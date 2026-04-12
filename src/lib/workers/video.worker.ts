@@ -18,12 +18,14 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
+import { buildPanelVideoGenerationPrompt, derivePanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
 type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
 type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
+type VideoPanelRecord = NonNullable<Awaited<ReturnType<typeof fetchPanelByStoryboardIndex>>>
 
 function toDurationMs(value: number | null | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -52,6 +54,40 @@ async function fetchPanelByStoryboardIndex(storyboardId: string, panelIndex: num
       storyboardId,
       panelIndex,
     },
+    include: {
+      storyboard: {
+        select: {
+          episode: {
+            select: {
+              clips: {
+                select: {
+                  id: true,
+                  screenplay: true,
+                },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          },
+          clip: {
+            select: {
+              id: true,
+              screenplay: true,
+            },
+          },
+        },
+      },
+      matchedVoiceLines: {
+        select: {
+          lineIndex: true,
+          speaker: true,
+          content: true,
+          matchedPanelId: true,
+          matchedStoryboardId: true,
+          matchedPanelIndex: true,
+        },
+        orderBy: { lineIndex: 'asc' },
+      },
+    },
   })
 }
 
@@ -60,7 +96,43 @@ async function getPanelForVideoTask(job: Job<TaskJobData>) {
 
   // 优先使用 targetType=NovelPromotionPanel 直接定位
   if (job.data.targetType === 'NovelPromotionPanel') {
-    const panel = await prisma.novelPromotionPanel.findUnique({ where: { id: job.data.targetId } })
+    const panel = await prisma.novelPromotionPanel.findUnique({
+      where: { id: job.data.targetId },
+      include: {
+        storyboard: {
+          select: {
+            episode: {
+              select: {
+                clips: {
+                  select: {
+                    id: true,
+                    screenplay: true,
+                  },
+                  orderBy: { createdAt: 'asc' },
+                },
+              },
+            },
+            clip: {
+              select: {
+                id: true,
+                screenplay: true,
+              },
+            },
+          },
+        },
+        matchedVoiceLines: {
+          select: {
+            lineIndex: true,
+            speaker: true,
+            content: true,
+            matchedPanelId: true,
+            matchedStoryboardId: true,
+            matchedPanelIndex: true,
+          },
+          orderBy: { lineIndex: 'asc' },
+        },
+      },
+    })
     if (!panel) throw new Error('Panel not found')
     return panel
   }
@@ -79,7 +151,7 @@ async function getPanelForVideoTask(job: Job<TaskJobData>) {
 
 async function generateVideoForPanel(
   job: Job<TaskJobData>,
-  panel: PanelRecord,
+  panel: VideoPanelRecord,
   payload: AnyObj,
   modelId: string,
   projectVideoRatio: string | null | undefined,
@@ -96,10 +168,38 @@ async function generateVideoForPanel(
   const firstLastCustomPrompt = typeof firstLastFramePayload?.customPrompt === 'string' ? firstLastFramePayload.customPrompt : null
   const persistedFirstLastPrompt = firstLastFramePayload ? panel.firstLastFramePrompt : null
   const customPrompt = typeof payload.customPrompt === 'string' ? payload.customPrompt : null
-  const prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
-  if (!prompt) {
+  const basePrompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
+  if (!basePrompt) {
     throw new Error(`Panel ${panel.id} has no video prompt`)
   }
+
+  const speechPlan = derivePanelSpeechPlan({
+    panel: {
+      id: panel.id,
+      storyboardId: panel.storyboardId,
+      panelIndex: panel.panelIndex,
+      srtSegment: panel.srtSegment,
+    },
+    clip: panel.storyboard?.clip || null,
+    clips: panel.storyboard?.episode?.clips || [],
+    voiceLines: panel.matchedVoiceLines,
+  })
+  const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
+    ? generationOptions.generateAudio
+    : undefined
+  const effectiveGenerateAudio = requestedGenerateAudio ?? speechPlan.generatedAudioRequired
+  const prompt = buildPanelVideoGenerationPrompt({
+    basePrompt,
+    panel: {
+      shotType: panel.shotType,
+      cameraMove: panel.cameraMove,
+      description: panel.description,
+      duration: panel.duration,
+      srtSegment: panel.srtSegment,
+    },
+    speechPlan,
+    generateAudio: effectiveGenerateAudio,
+  })
 
   const sourceImageUrl = toSignedUrlIfCos(panel.imageUrl, 3600)
   if (!sourceImageUrl) {
@@ -109,9 +209,6 @@ async function generateVideoForPanel(
 
   let lastFrameImageBase64: string | undefined
   const generationMode: VideoGenerationMode = firstLastFramePayload ? 'firstlastframe' : 'normal'
-  const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
-    ? generationOptions.generateAudio
-    : undefined
   let model = modelId
 
   if (firstLastFramePayload) {
@@ -150,7 +247,7 @@ async function generateVideoForPanel(
       ...(projectVideoRatio ? { aspectRatio: projectVideoRatio } : {}),
       ...generationOptions,
       generationMode,
-      ...(typeof requestedGenerateAudio === 'boolean' ? { generateAudio: requestedGenerateAudio } : {}),
+      generateAudio: effectiveGenerateAudio,
       ...(lastFrameImageBase64 ? { lastFrameImageUrl: lastFrameImageBase64 } : {}),
     },
   })

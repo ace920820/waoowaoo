@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
+import { isArtStyleValue } from '@/lib/constants'
 
 // 获取单个场景
 export const GET = apiHandler(async (
@@ -48,11 +49,21 @@ export const PATCH = apiHandler(async (
     }
 
     const body = await request.json()
-    const { name, summary, folderId } = body
+    const { name, summary, folderId, artStyle } = body
 
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (summary !== undefined) updateData.summary = summary?.trim() || null
+    if (artStyle !== undefined) {
+        const normalizedArtStyle = typeof artStyle === 'string' ? artStyle.trim() : ''
+        if (!isArtStyleValue(normalizedArtStyle)) {
+            throw new ApiError('INVALID_PARAMS', {
+                code: 'INVALID_ART_STYLE',
+                message: 'artStyle must be a supported value',
+            })
+        }
+        updateData.artStyle = normalizedArtStyle
+    }
     if (folderId !== undefined) {
         if (folderId) {
             const folder = await prisma.globalAssetFolder.findUnique({

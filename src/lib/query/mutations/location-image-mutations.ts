@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import type { Location, Project } from '@/types/project'
+import { collapseLocationSelection } from '@/lib/assets/image-selection-state'
 import { queryKeys } from '../keys'
 import type { ProjectAssetsData } from '../hooks/useProjectAssets'
 import {
@@ -8,15 +10,22 @@ import {
     upsertTaskTargetOverlay,
 } from '../task-target-overlay'
 import {
-    invalidateQueryTemplates,
     requestJsonWithError,
     requestTaskResponseWithError,
 } from './mutation-shared'
+import {
+    applyLocationSelectionToUnifiedProjectAssets,
+    captureProjectUnifiedAssetSnapshots,
+    invalidateProjectAssetCaches,
+    restoreProjectUnifiedAssetSnapshots,
+    type ProjectUnifiedAssetSnapshot,
+} from './project-assets-mutations-shared'
 import { resolveTaskResponse } from '@/lib/task/client'
 
 interface SelectProjectLocationImageContext {
     previousAssets: ProjectAssetsData | undefined
     previousProject: Project | undefined
+    previousUnifiedAssets: ProjectUnifiedAssetSnapshot[]
     targetKey: string
     requestId: number
 }
@@ -25,6 +34,7 @@ function applyLocationSelectionToLocations(
     locations: Location[],
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): Location[] {
     return locations.map((location) => {
         if (location.id !== locationId) return location
@@ -32,7 +42,7 @@ function applyLocationSelectionToLocations(
             selectedIndex === null
                 ? null
                 : (location.images || []).find((image) => image.imageIndex === selectedIndex)?.id ?? null
-        return {
+        const nextLocation = {
             ...location,
             selectedImageId,
             images: (location.images || []).map((image) => ({
@@ -40,25 +50,28 @@ function applyLocationSelectionToLocations(
                 isSelected: selectedIndex !== null && image.imageIndex === selectedIndex,
             })),
         }
+        return confirm ? collapseLocationSelection(nextLocation) : nextLocation
     })
 }
 
-function applyLocationSelectionToAssets(
+export function applyLocationSelectionToAssets(
     previous: ProjectAssetsData | undefined,
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): ProjectAssetsData | undefined {
     if (!previous) return previous
     return {
         ...previous,
-        locations: applyLocationSelectionToLocations(previous.locations || [], locationId, selectedIndex),
+        locations: applyLocationSelectionToLocations(previous.locations || [], locationId, selectedIndex, confirm),
     }
 }
 
-function applyLocationSelectionToProject(
+export function applyLocationSelectionToProject(
     previous: Project | undefined,
     locationId: string,
     selectedIndex: number | null,
+    confirm = false,
 ): Project | undefined {
     if (!previous?.novelPromotionData) return previous
     const currentLocations = previous.novelPromotionData.locations || []
@@ -66,7 +79,7 @@ function applyLocationSelectionToProject(
         ...previous,
         novelPromotionData: {
             ...previous.novelPromotionData,
-            locations: applyLocationSelectionToLocations(currentLocations, locationId, selectedIndex),
+            locations: applyLocationSelectionToLocations(currentLocations, locationId, selectedIndex, confirm),
         },
     }
 }
@@ -74,7 +87,7 @@ function applyLocationSelectionToProject(
 export function useGenerateProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({
@@ -143,7 +156,7 @@ export function buildProjectLocationGenerateImageBody(input: {
 export function useUploadProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({
@@ -177,10 +190,7 @@ export function useUploadProjectLocationImage(projectId: string) {
 export function useModifyProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssetAndProjectData = () =>
-        invalidateQueryTemplates(queryClient, [
-            queryKeys.projectAssets.all(projectId),
-            queryKeys.projectData(projectId),
-        ])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async (params: {
@@ -227,7 +237,7 @@ export function useModifyProjectLocationImage(projectId: string) {
 export function useRegenerateLocationGroup(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({ locationId, count }: { locationId: string; count?: number }) => {
@@ -268,7 +278,7 @@ export function useRegenerateLocationGroup(projectId: string) {
 export function useRegenerateSingleLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async ({ locationId, imageIndex }: { locationId: string; imageIndex: number }) => {
@@ -309,12 +319,10 @@ export function useRegenerateSingleLocationImage(projectId: string) {
 export function useSelectProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const latestRequestIdByTargetRef = useRef<Record<string, number>>({})
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
         mutationFn: async ({
-            locationId, imageIndex
+            locationId, imageIndex, confirm = false
         }: {
             locationId: string
             imageIndex: number | null
@@ -328,6 +336,7 @@ export function useSelectProjectLocationImage(projectId: string) {
                     kind: 'location',
                     projectId,
                     imageIndex,
+                    confirm,
                 })
             }, 'Failed to select image')
         },
@@ -336,25 +345,41 @@ export function useSelectProjectLocationImage(projectId: string) {
             const requestId = (latestRequestIdByTargetRef.current[targetKey] ?? 0) + 1
             latestRequestIdByTargetRef.current[targetKey] = requestId
 
+            const unifiedAssetsQueryKey = queryKeys.assets.all('project', projectId)
             const assetsQueryKey = queryKeys.projectAssets.all(projectId)
             const projectQueryKey = queryKeys.projectData(projectId)
 
+            await queryClient.cancelQueries({ queryKey: unifiedAssetsQueryKey, exact: false })
             await queryClient.cancelQueries({ queryKey: assetsQueryKey })
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
 
             const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
+            const previousUnifiedAssets = captureProjectUnifiedAssetSnapshots(queryClient, projectId)
 
+            queryClient.setQueriesData<AssetSummary[] | undefined>(
+                {
+                    queryKey: unifiedAssetsQueryKey,
+                    exact: false,
+                },
+                (previous) => applyLocationSelectionToUnifiedProjectAssets(
+                    previous,
+                    variables.locationId,
+                    variables.imageIndex,
+                    variables.confirm,
+                ),
+            )
             queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
-                applyLocationSelectionToAssets(previous, variables.locationId, variables.imageIndex),
+                applyLocationSelectionToAssets(previous, variables.locationId, variables.imageIndex, variables.confirm),
             )
             queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
-                applyLocationSelectionToProject(previous, variables.locationId, variables.imageIndex),
+                applyLocationSelectionToProject(previous, variables.locationId, variables.imageIndex, variables.confirm),
             )
 
             return {
                 previousAssets,
                 previousProject,
+                previousUnifiedAssets,
                 targetKey,
                 requestId,
             }
@@ -363,12 +388,13 @@ export function useSelectProjectLocationImage(projectId: string) {
             if (!context) return
             const latestRequestId = latestRequestIdByTargetRef.current[context.targetKey]
             if (latestRequestId !== context.requestId) return
+            restoreProjectUnifiedAssetSnapshots(queryClient, context.previousUnifiedAssets)
             queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
             queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
         },
         onSettled: (_data, _error, variables) => {
             if (variables.confirm) {
-                void invalidateProjectAssets()
+                void invalidateProjectAssetCaches(queryClient, projectId)
             }
         },
     })
@@ -381,7 +407,7 @@ export function useSelectProjectLocationImage(projectId: string) {
 export function useUndoProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        invalidateProjectAssetCaches(queryClient, projectId)
 
     return useMutation({
         mutationFn: async (locationId: string) => {

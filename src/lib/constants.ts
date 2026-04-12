@@ -134,20 +134,79 @@ export const TTS_VOICES = [
   { value: 'zh-CN-XiaoyiNeural', label: '晓伊 (女声)', preview: '女' }
 ]
 
-export const ART_STYLES = [
+export type ArtStyleValue =
+  | 'american-comic'
+  | 'shaw-brothers'
+  | 'hk-wuxia-90s'
+  | 'anime-80s-handdrawn'
+  | 'wuxia-2000s-cg'
+  | 'chinese-xianxia'
+  | 'chinese-comic'
+  | 'japanese-anime'
+  | 'japanese-cel'
+  | 'cinematic-anime'
+  | 'cyberpunk-anime'
+  | 'dark-fantasy'
+  | 'chibi-comedy'
+  | 'pixar-3d'
+  | 'realistic'
+
+export const ART_STYLES: Array<{
+  value: ArtStyleValue
+  label: string
+  preview: string
+  promptZh: string
+  promptEn: string
+}> = [
+  // 兼容保留旧值：american-comic 继续可用，但语义修正为西式漫画/动画分镜感，避免再误导到日漫。
   {
     value: 'american-comic',
-    label: '漫画风',
-    preview: '漫',
-    promptZh: '日式动漫风格',
-    promptEn: 'Japanese anime style'
+    label: '美式漫画风',
+    preview: '美',
+    promptZh: '美式漫画与西式动画分镜风格，夸张清晰的轮廓线，强烈光影对比，鲜明配色，动态感强，干净高完成度插画画面。',
+    promptEn: 'American comic and western animated storyboard style, bold contour lines, strong contrast lighting, vivid colors, dynamic composition, polished illustration finish.'
+  },
+  {
+    value: 'shaw-brothers',
+    label: '邵氏武侠片',
+    preview: '邵',
+    promptZh: '邵氏老电影武侠美术风格，棚拍戏曲感布景，艳丽复古色彩，强舞台灯光，经典港产武侠电影构图，戏剧化动作定格。',
+    promptEn: 'Shaw Brothers wuxia cinema style, studio-built theatrical sets, vivid retro colors, dramatic stage lighting, classic Hong Kong martial-arts framing, frozen operatic action.'
+  },
+  {
+    value: 'hk-wuxia-90s',
+    label: '90年代港式武侠',
+    preview: '港',
+    promptZh: '90年代港式武侠电影风格，潇洒江湖气，强运动感镜头，烟雾与逆光，侠客对决氛围，复古胶片质感。',
+    promptEn: '1990s Hong Kong wuxia film style, free-spirited jianghu mood, energetic camera language, mist and backlight, duel-ready heroes, retro film texture.'
+  },
+  {
+    value: 'anime-80s-handdrawn',
+    label: '90s日本手绘',
+    preview: '90',
+    promptZh: '90年代日本传统手绘赛璐璐动画风格（参考城市猎人、吸血鬼猎人D、黄金小子），手工描线可见压力变化（非数码均匀线条），色彩以哑光平涂为主（胶片冲印后的轻微褪色感），阴影为硬边平涂色块（无渐变），人物脸型具有时代特征（高鼻梁、有棱角的下颌、修长身形），背景手绘写实感强，整体带有赛璐璐片叠层的轻微色彩错位感，画面充满粗粝的手工温度，有别于任何现代数码动画。',
+    promptEn: 'Japanese 1990s traditional hand-drawn cel animation style (referencing City Hunter, Vampire Hunter D, Golden Boy), hand-inked lines with visible brush pressure variation (not digitally uniform), matte flat color fills with slight faded film-print desaturation, hard-edge flat shadow blocks without gradients, era-specific character design (sharp high nose bridge, angular jawlines, elongated proportions), hand-painted realistic backgrounds, subtle color misalignment from cel layer stacking, raw handcrafted warmth throughout — distinctly separate from any modern digital animation.'
+  },
+  {
+    value: 'wuxia-2000s-cg',
+    label: '00年代武侠CG',
+    preview: '00',
+    promptZh: '2000年代武侠奇幻CG风格，华丽能量特效，飘逸服装与发丝，强烈纵深透视，电视剧海报级仙侠武侠画面。',
+    promptEn: '2000s wuxia-fantasy CG style, ornate energy effects, flowing costumes and hair, dramatic depth perspective, TV-poster-grade heroic fantasy imagery.'
+  },
+  {
+    value: 'chinese-xianxia',
+    label: '国风仙侠',
+    preview: '仙',
+    promptZh: '中国仙侠风格，云雾灵气，古典山水意境，飘逸法袍与法器，清透发光效果，唯美东方幻想画面。',
+    promptEn: 'Chinese xianxia fantasy style, spiritual mist, classical landscape atmosphere, flowing robes and artifacts, luminous translucent effects, elegant eastern fantasy visuals.'
   },
   {
     value: 'chinese-comic',
     label: '精致国漫',
     preview: '国',
-    promptZh: '现代高质量漫画风格，动漫风格，细节丰富精致，线条锐利干净，质感饱满，超清，干净的画面风格，2D风格，动漫风格。',
-    promptEn: 'Modern premium Chinese comic style, rich details, clean sharp line art, full texture, ultra-clear 2D anime aesthetics.'
+    promptZh: '高品质国漫叙事插画风格，角色设计鲜明，镜头感强，细节密度高，线条利落干净，光影通透，画面精致统一，成熟2D动画概念图质感。',
+    promptEn: 'Premium Chinese comic narrative illustration style, distinctive character design, cinematic framing, dense refined details, crisp clean line art, luminous lighting, cohesive polished 2D animation concept-art quality.'
   },
   {
     value: 'japanese-anime',
@@ -157,18 +216,60 @@ export const ART_STYLES = [
     promptEn: 'Modern Japanese anime style, cel shading, clean line art, visual-novel CG look, high-quality 2D style.'
   },
   {
+    value: 'japanese-cel',
+    label: '经典日式赛璐璐',
+    preview: '璐',
+    promptZh: '经典日式赛璐璐动画风格，分层阴影明确，手绘背景，色块简洁稳定，昭和到平成早期动画气质。',
+    promptEn: 'Classic Japanese cel animation style, distinct layered shadows, hand-painted backgrounds, stable simple color blocks, Showa to early Heisei anime mood.'
+  },
+  {
+    value: 'cinematic-anime',
+    label: '电影感动画',
+    preview: '映',
+    promptZh: '新海诚/京都动画电影级2D风格，写实背景极度精细（玻璃反光、光晕散射、体积光），人物与背景光影高度融合，色调以蓝金/暖橙/青紫为主，大气透视感极强，镜头感强烈（景深虚化、逆光剪影），情绪氛围渲染细腻，唯美治愈系画风。',
+    promptEn: 'Makoto Shinkai / KyoAni cinematic 2D anime style, hyper-detailed realistic backgrounds (glass reflections, lens flares, volumetric light), seamless integration of character and environment lighting, color palette of blue-gold / warm orange / teal-purple, strong atmospheric perspective, cinematic depth-of-field blur and silhouette backlighting, emotionally rich and visually stunning.'
+  },
+  {
+    value: 'cyberpunk-anime',
+    label: '赛博朋克动画',
+    preview: '赛',
+    promptZh: '赛博朋克动漫风格，霓虹灯光反射在湿润街道和机械义体上，高对比度冷暖光影（霓红粉紫 vs 暗蓝阴影），未来都市场景密集细节（全息广告、悬浮车、摩天大楼），人物可有机械义眼/义肢元素，线条硬朗科技感强，画面张力十足，超清2D动漫+赛博美学。',
+    promptEn: 'Cyberpunk anime style, neon light reflections on wet streets and cybernetic limbs, high-contrast warm-cool lighting (neon pink-purple vs deep blue shadows), densely detailed futuristic cityscape (holographic ads, flying vehicles, skyscrapers), characters may feature cybernetic eyes / prosthetic limbs, sharp tech-forward line art, intense visual tension, ultra-HD 2D anime meets cyber aesthetics.'
+  },
+  {
+    value: 'dark-fantasy',
+    label: '黑暗奇幻',
+    preview: '暗',
+    promptZh: '黑暗奇幻风格，低饱和厚重氛围，古老遗迹与异界感，戏剧性阴影，神秘压迫感强，史诗幻想插画质感。',
+    promptEn: 'Dark fantasy style, low-saturation weighty atmosphere, ancient ruins and otherworldly mood, dramatic shadows, oppressive mystery, epic fantasy illustration texture.'
+  },
+  {
+    value: 'chibi-comedy',
+    label: 'Q版喜剧',
+    preview: 'Q',
+    promptZh: 'Q版喜剧动画风格，大头小身比例，夸张表情与肢体动作，色彩明快，节奏轻松，适合幽默搞笑演出。',
+    promptEn: 'Chibi comedy animation style, oversized heads and small bodies, exaggerated expressions and gestures, bright colors, light rhythm, ideal for humorous staging.'
+  },
+  {
+    value: 'pixar-3d',
+    label: '皮克斯3D风',
+    preview: '3D',
+    promptZh: '皮克斯/迪士尼级别3D动画渲染风格，人物造型圆润可爱但细节极度精致（皮肤次表面散射光感、毛发每根可见、布料物理模拟褶皱），眼睛超大且层次丰富（瞳孔虹膜纹理+多层高光反射），面部表情肌肉张力自然夸张兼备，场景灯光温暖柔和（全局光照+环境光遮蔽），材质质感逼真（木头纹理、金属反光、陶瓷光泽），景深虚化自然，色彩明亮饱满但不刺眼，整体画面有电影级3D动画的温暖厚重感，Pixar RenderMan渲染质感。',
+    promptEn: 'Pixar / Disney-level 3D animation rendering style, rounded and charming character designs with hyper-detailed surface quality (subsurface scattering skin luminosity, individual visible hair strands, physically simulated fabric folds), oversized expressive eyes with rich layering (iris texture detail, multi-layer specular reflections), facial expressions balancing naturalistic muscle movement with appealing exaggeration, warm soft scene lighting (global illumination, ambient occlusion), tactile material rendering (wood grain, metallic sheen, ceramic gloss), natural cinematic depth-of-field, bright and saturated yet non-harsh color palette, overall warmth and weight of a feature-length 3D animated film, Pixar RenderMan render quality.'
+  },
+  {
     value: 'realistic',
-    label: '真人风格',
+    label: '电影写实',
     preview: '实',
-    promptZh: '真实电影级画面质感，真实现实场景，色彩饱满通透，画面干净精致，真实感',
-    promptEn: 'Realistic cinematic look, real-world scene fidelity, rich transparent colors, clean and refined image quality.'
+    promptZh: '电影级写实风格，真实人物与场景质感，可信材质细节，镜头语言自然，光线准确，色彩克制高级，整体干净细腻且具有影视剧照感。',
+    promptEn: 'Cinematic realism style, lifelike people and environments, believable material detail, natural camera language, accurate lighting, restrained premium color grading, clean refined frame with film-still quality.'
   }
 ]
 
-export type ArtStyleValue = (typeof ART_STYLES)[number]['value']
+const ART_STYLE_VALUE_SET = new Set<string>(ART_STYLES.map((style) => style.value))
 
 export function isArtStyleValue(value: unknown): value is ArtStyleValue {
-  return typeof value === 'string' && ART_STYLES.some((style) => style.value === value)
+  return typeof value === 'string' && ART_STYLE_VALUE_SET.has(value)
 }
 
 /**

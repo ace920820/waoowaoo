@@ -8,7 +8,7 @@ type EffectCleanup = (() => void) | void | null
 
 const runtime = vi.hoisted(() => ({
   queryClient: {
-    invalidateQueries: vi.fn(async (_arg?: InvalidateArg) => undefined),
+    invalidateQueries: vi.fn(async () => undefined),
   },
   effectCleanup: null as EffectCleanup,
   scheduledTimers: [] as Array<() => void>,
@@ -80,7 +80,8 @@ vi.mock('@/lib/query/task-target-overlay', () => overlayMock)
 
 function hasInvalidation(predicate: (arg: InvalidateArg) => boolean) {
   return runtime.queryClient.invalidateQueries.mock.calls.some((call) => {
-    const arg = (call[0] || {}) as InvalidateArg
+    const [rawArg] = call as unknown[]
+    const arg = (rawArg ?? {}) as InvalidateArg
     return predicate(arg)
   })
 }
@@ -163,5 +164,80 @@ describe('sse invalidation behavior', () => {
         targetId: 'appearance-1',
       }),
     )
+  })
+
+  it('global character completion invalidates unified asset hub queries', async () => {
+    const { useSSE } = await import('@/lib/query/hooks/useSSE')
+
+    useSSE({
+      projectId: 'global-asset-hub',
+      enabled: true,
+    })
+
+    const source = FakeEventSource.instances[0]
+    expect(source).toBeTruthy()
+
+    source.emit(TASK_SSE_EVENT_TYPE.LIFECYCLE, {
+      type: TASK_SSE_EVENT_TYPE.LIFECYCLE,
+      taskId: 'task-1',
+      taskType: 'IMAGE_CHARACTER',
+      targetType: 'GlobalCharacter',
+      targetId: 'character-1',
+      payload: {
+        lifecycleType: TASK_EVENT_TYPE.COMPLETED,
+      },
+    })
+
+    expect(hasInvalidation((arg) => {
+      const key = arg.queryKey || []
+      return Array.isArray(key)
+        && key[0] === queryKeys.assets.all('global')[0]
+        && key[1] === queryKeys.assets.all('global')[1]
+    })).toBe(true)
+
+    expect(hasInvalidation((arg) => {
+      const key = arg.queryKey || []
+      return Array.isArray(key)
+        && key[0] === queryKeys.globalAssets.characters()[0]
+        && key[1] === queryKeys.globalAssets.characters()[1]
+    })).toBe(true)
+  })
+
+  it('project character completion invalidates unified project asset queries', async () => {
+    const { useSSE } = await import('@/lib/query/hooks/useSSE')
+
+    useSSE({
+      projectId: 'project-1',
+      enabled: true,
+    })
+
+    const source = FakeEventSource.instances[0]
+    expect(source).toBeTruthy()
+
+    source.emit(TASK_SSE_EVENT_TYPE.LIFECYCLE, {
+      type: TASK_SSE_EVENT_TYPE.LIFECYCLE,
+      taskId: 'task-1',
+      taskType: 'IMAGE_CHARACTER',
+      targetType: 'CharacterAppearance',
+      targetId: 'appearance-1',
+      payload: {
+        lifecycleType: TASK_EVENT_TYPE.COMPLETED,
+      },
+    })
+
+    expect(hasInvalidation((arg) => {
+      const key = arg.queryKey || []
+      return Array.isArray(key)
+        && key[0] === queryKeys.assets.all('project', 'project-1')[0]
+        && key[1] === queryKeys.assets.all('project', 'project-1')[1]
+        && key[2] === queryKeys.assets.all('project', 'project-1')[2]
+    })).toBe(true)
+
+    expect(hasInvalidation((arg) => {
+      const key = arg.queryKey || []
+      return Array.isArray(key)
+        && key[0] === queryKeys.projectAssets.all('project-1')[0]
+        && key[1] === queryKeys.projectAssets.all('project-1')[1]
+    })).toBe(true)
   })
 })

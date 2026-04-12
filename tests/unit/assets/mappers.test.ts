@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { mapGlobalVoiceToAsset, mapProjectCharacterToAsset, mapProjectPropToAsset } from '@/lib/assets/mappers'
+import {
+  mapGlobalCharacterToAsset,
+  mapGlobalLocationToAsset,
+  mapGlobalVoiceToAsset,
+  mapProjectCharacterToAsset,
+  mapProjectPropToAsset,
+} from '@/lib/assets/mappers'
 import { groupAssetsByKind } from '@/lib/assets/grouping'
 
 describe('asset mappers', () => {
@@ -76,6 +82,66 @@ describe('asset mappers', () => {
         gender: 'male',
         language: 'zh',
       }),
+    }))
+  })
+
+  it('keeps persisted character appearance artStyle in the unified asset contract', () => {
+    const asset = mapGlobalCharacterToAsset({
+      id: 'character-1',
+      name: '林夏',
+      folderId: 'folder-1',
+      customVoiceUrl: null,
+      media: null,
+      appearances: [
+        {
+          id: 'appearance-1',
+          appearanceIndex: 0,
+          changeReason: '初始形象',
+          artStyle: 'realistic',
+          description: '短发，风衣',
+          imageUrl: 'https://example.com/char.jpg',
+          media: null,
+          imageUrls: ['https://example.com/char.jpg'],
+          imageMedias: [],
+          selectedIndex: 0,
+          previousImageUrl: null,
+          previousMedia: null,
+          previousImageUrls: [],
+          previousImageMedias: [],
+        },
+      ],
+    })
+
+    expect(asset.variants[0]).toEqual(expect.objectContaining({
+      id: 'appearance-1',
+      artStyle: 'realistic',
+    }))
+  })
+
+  it('keeps persisted location artStyle in the unified asset contract', () => {
+    const asset = mapGlobalLocationToAsset({
+      id: 'location-1',
+      name: '钟楼',
+      summary: '旧城区钟楼',
+      artStyle: 'japanese-anime',
+      folderId: 'folder-1',
+      images: [
+        {
+          id: 'location-image-1',
+          imageIndex: 0,
+          description: '黄昏下的钟楼',
+          imageUrl: 'https://example.com/location.jpg',
+          media: null,
+          previousImageUrl: null,
+          previousMedia: null,
+          isSelected: true,
+        },
+      ],
+    })
+
+    expect(asset).toEqual(expect.objectContaining({
+      id: 'location-1',
+      artStyle: 'japanese-anime',
     }))
   })
 

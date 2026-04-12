@@ -23,6 +23,7 @@ import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
 import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
 import { AppIcon } from '@/components/ui/icons'
+import { resolveCharacterSelectedImageUrl } from '@/lib/assets/image-selection-state'
 
 interface Appearance {
     id: string
@@ -94,7 +95,9 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     const generatedImageCount = imageUrls.filter(u => isValidUrl(u)).length
     const hasMultipleImages = generatedImageCount > 1
     const effectiveSelectedIndex: number | null = appearance?.selectedIndex ?? null
-    const currentImageUrl = appearance?.imageUrl || (effectiveSelectedIndex !== null ? imageUrls[effectiveSelectedIndex] : null) || imageUrls.find(u => u) || null
+    const currentImageUrl = appearance
+        ? resolveCharacterSelectedImageUrl(appearance)
+        : null
     const hasPreviousVersion = !!(appearance?.previousImageUrl || (appearance?.previousImageUrls && appearance.previousImageUrls.length > 0))
 
     const displayImageUrl = isValidUrl(currentImageUrl) ? currentImageUrl : null
@@ -261,17 +264,22 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
                                     <span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)]">{tAssets('image.regenCountPrefix')}</span>
                                 </>
                             )}
+                            suffix={<span className="text-[10px] font-medium text-[var(--glass-tone-info-fg)]">{tAssets('image.regenCountSuffix')}</span>}
                             value={generationCount}
                             options={getImageGenerationCountOptions('character')}
                             onValueChange={setGenerationCount}
                             onClick={() => {
-                                _ulogInfo('[CharacterCard] 多图模式 - 重新生成按钮点击, characterId:', character.id, 'appearanceCount:', appearanceCount)
-                                handleGenerate(generatedImageCount)
+                                _ulogInfo('[CharacterCard] 多图模式 - 重新生成按钮点击, characterId:', character.id, 'appearanceCount:', appearanceCount, 'generationCount:', generationCount)
+                                handleGenerate(generationCount)
                             }}
                             disabled={isAppearanceTaskRunning}
-                            showCountControl={false}
-                            ariaLabel={tAssets('image.regenCountPrefix')}
+                            splitInteractiveZones={true}
+                            ariaLabel={tAssets('image.regenCountAriaLabel')}
                             className="inline-flex h-6 items-center justify-center gap-1 rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+                            actionClassName="inline-flex h-6 items-center justify-center gap-1 rounded-md px-1.5 hover:bg-[var(--glass-tone-info-bg)] transition-colors disabled:opacity-50"
+                            countClassName="h-6 text-[10px] text-[var(--glass-tone-info-fg)]"
+                            selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-[10px] font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
+                            labelClassName="text-[10px] font-medium text-[var(--glass-tone-info-fg)]"
                         />
                         {hasPreviousVersion && (
                             <button onClick={handleUndo} className="glass-btn-base glass-btn-soft h-6 w-6 rounded-md" title={tAssets('image.undo')}>
@@ -480,6 +488,24 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
                 )}
 
                 {appearance?.description && <p className="mt-2 text-xs text-[var(--glass-text-secondary)] line-clamp-2">{appearance.description}</p>}
+
+
+                {displayImageUrl && (
+                    <div className="mt-3">
+                        <ImageGenerationInlineCountButton
+                            prefix={<span>{tAssets('image.regenCountPrefix')}</span>}
+                            suffix={<span>{tAssets('image.regenCountSuffix')}</span>}
+                            value={generationCount}
+                            options={getImageGenerationCountOptions('character')}
+                            onValueChange={setGenerationCount}
+                            onClick={() => handleGenerate(generationCount)}
+                            disabled={isAppearanceTaskRunning}
+                            ariaLabel={tAssets('image.regenCountAriaLabel')}
+                            className="glass-btn-base glass-btn-tone-info flex w-full items-center justify-center gap-1 py-1.5 text-sm rounded-lg disabled:opacity-50"
+                            selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-sm font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
+                        />
+                    </div>
+                )}
 
                 {/* 音色设置 */}
                 <VoiceSettings

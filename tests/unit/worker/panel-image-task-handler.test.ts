@@ -11,7 +11,7 @@ const prismaMock = vi.hoisted(() => ({
 
 const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => undefined),
-  getProjectModels: vi.fn(async () => ({ storyboardModel: 'storyboard-model-1', artStyle: 'realistic' })),
+  getProjectModels: vi.fn(async () => ({ storyboardModel: 'storyboard-model-1', artStyle: 'shaw-brothers' })),
   resolveImageSourceFromGeneration: vi.fn(),
   uploadImageSourceToCos: vi.fn(),
 }))
@@ -20,13 +20,28 @@ const sharedMock = vi.hoisted(() => ({
   collectPanelReferenceImages: vi.fn(async () => ['https://signed.example/ref-1.png']),
   resolveNovelData: vi.fn(async () => ({
     videoRatio: '16:9',
-    characters: [],
+    characters: [
+      {
+        name: 'Hero',
+        appearances: [
+          {
+            changeReason: 'default',
+            imageUrl: 'cos/hero-default.png',
+            imageUrls: JSON.stringify(['cos/hero-default.png']),
+            selectedIndex: 0,
+          },
+        ],
+      },
+    ],
     locations: [
       {
         name: 'Old Town',
+        selectedImageId: 'location-image-1',
         images: [
           {
+            id: 'location-image-1',
             isSelected: true,
+            imageUrl: 'cos/old-town.png',
             description: '雨夜街道',
             availableSlots: JSON.stringify([
               '街道左侧靠墙的留白位置',
@@ -77,6 +92,7 @@ vi.mock('@/lib/prompt-i18n', () => ({
 }))
 
 import { handlePanelImageTask } from '@/lib/workers/handlers/panel-image-task-handler'
+import { getArtStylePrompt } from '@/lib/constants'
 
 function buildJob(payload: Record<string, unknown>, targetId = 'panel-1'): Job<TaskJobData> {
   return {
@@ -162,6 +178,11 @@ describe('worker panel-image-task-handler behavior', () => {
         storyboard_text_json_input: expect.stringContaining('"available_slots"'),
       }),
     }))
+    expect(promptMock.buildPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      variables: expect.objectContaining({
+        style: getArtStylePrompt('shaw-brothers', 'zh'),
+      }),
+    }))
 
     expect(prismaMock.novelPromotionPanel.update).toHaveBeenCalledWith({
       where: { id: 'panel-1' },
@@ -213,5 +234,44 @@ describe('worker panel-image-task-handler behavior', () => {
         candidateImages: JSON.stringify(['cos/panel-regenerated.png']),
       },
     })
+  })
+
+  it('rejects generation when referenced character/location images are missing', async () => {
+    sharedMock.resolveNovelData.mockResolvedValueOnce({
+      videoRatio: '16:9',
+      characters: [
+        {
+          name: 'Hero',
+          appearances: [
+            {
+              changeReason: 'default',
+              imageUrl: null,
+              imageUrls: JSON.stringify([]),
+              selectedIndex: 0,
+            },
+          ],
+        },
+      ],
+      locations: [
+        {
+          name: 'Old Town',
+          selectedImageId: 'location-image-1',
+          images: [
+            {
+              id: 'location-image-1',
+              isSelected: true,
+              imageUrl: null,
+              description: '雨夜街道',
+              availableSlots: JSON.stringify(['街道左侧靠墙的留白位置']),
+            },
+          ],
+        },
+      ],
+    } as never)
+
+    const job = buildJob({ candidateCount: 1 })
+    await expect(handlePanelImageTask(job)).rejects.toThrow('缺少必要参考资产')
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(prismaMock.novelPromotionPanel.update).not.toHaveBeenCalled()
   })
 })

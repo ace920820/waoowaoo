@@ -38,6 +38,12 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(),
   },
   novelPromotionClip: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
+  novelPromotionVoiceLine: {
+    findMany: vi.fn(),
     update: vi.fn(),
   },
   novelPromotionStoryboard: {
@@ -241,6 +247,54 @@ describe('api contract - crud routes (behavior)', () => {
       content: 'clip content',
       screenplay: JSON.stringify({ scenes: [{ id: 1 }] }),
     })
+    prismaMock.novelPromotionClip.findUnique.mockResolvedValue({
+      id: 'clip-1',
+      episodeId: 'episode-1',
+      screenplay: JSON.stringify({
+        scenes: [
+          {
+            scene_number: 1,
+            content: [
+              { type: 'dialogue', character: 'Hero', lines: '旧对白' },
+            ],
+          },
+        ],
+      }),
+    })
+    prismaMock.novelPromotionClip.findMany.mockResolvedValue([
+      {
+        id: 'clip-1',
+        episodeId: 'episode-1',
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '旧对白' },
+              ],
+            },
+          ],
+        }),
+      },
+    ])
+    prismaMock.novelPromotionVoiceLine.findMany.mockResolvedValue([
+      {
+        id: 'line-1',
+        lineIndex: 1,
+        speaker: 'Hero',
+        content: '旧对白',
+        audioUrl: 'cos/old.mp3',
+        audioMediaId: 'media-1',
+        audioDuration: 1200,
+        matchedPanelId: 'panel-1',
+      },
+      {
+        matchedPanelId: 'panel-1',
+        lineIndex: 1,
+        content: '新对白',
+      },
+    ])
+    prismaMock.novelPromotionVoiceLine.update.mockResolvedValue({ id: 'line-1' })
     prismaMock.novelPromotionStoryboard.findUnique.mockResolvedValue({
       id: 'storyboard-1',
       projectId: 'project-1',
@@ -432,6 +486,67 @@ describe('api contract - crud routes (behavior)', () => {
         content: 'clip content',
         screenplay: JSON.stringify({ scenes: [{ id: 1 }] }),
       },
+    })
+  })
+
+  it('PATCH /novel-promotion/[projectId]/clips/[clipId] reconciles linked voice lines and panel text after screenplay edits', async () => {
+    authState.authenticated = true
+    prismaMock.novelPromotionVoiceLine.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'line-1',
+          lineIndex: 1,
+          speaker: 'Hero',
+          content: '旧对白',
+          audioUrl: 'cos/old.mp3',
+          audioMediaId: 'media-1',
+          audioDuration: 1200,
+          matchedPanelId: 'panel-1',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          matchedPanelId: 'panel-1',
+          lineIndex: 1,
+          content: '新对白',
+        },
+      ])
+    const mod = await import('@/app/api/novel-promotion/[projectId]/clips/[clipId]/route')
+    const req = buildMockRequest({
+      path: '/api/novel-promotion/project-1/clips/clip-1',
+      method: 'PATCH',
+      body: {
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '新对白' },
+              ],
+            },
+          ],
+        }),
+      },
+    })
+
+    const res = await mod.PATCH(req, {
+      params: Promise.resolve({ projectId: 'project-1', clipId: 'clip-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.novelPromotionVoiceLine.update).toHaveBeenCalledWith({
+      where: { id: 'line-1' },
+      data: {
+        speaker: 'Hero',
+        content: '新对白',
+        audioUrl: null,
+        audioMediaId: null,
+        audioDuration: null,
+      },
+    })
+    expect(prismaMock.novelPromotionPanel.update).toHaveBeenCalledWith({
+      where: { id: 'panel-1' },
+      data: { srtSegment: '新对白' },
     })
   })
 

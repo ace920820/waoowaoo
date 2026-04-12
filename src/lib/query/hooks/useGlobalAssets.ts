@@ -111,7 +111,7 @@ export function useGlobalCharacters(folderId?: string | null) {
                 id: variant.id,
                 appearanceIndex: variant.index,
                 changeReason: variant.label,
-                artStyle: null,
+                artStyle: variant.artStyle ?? null,
                 description: variant.description,
                 descriptionSource: null,
                 imageUrl: variant.renders.find((render) => render.isSelected)?.imageUrl
@@ -151,7 +151,7 @@ export function useGlobalLocations(folderId?: string | null) {
             id: asset.id,
             name: asset.name,
             summary: asset.summary,
-            artStyle: null,
+            artStyle: asset.artStyle ?? null,
             folderId: asset.folderId,
             images: asset.variants.map((variant) => {
                 const render = variant.renders[0] ?? null
@@ -184,7 +184,7 @@ export function useGlobalProps(folderId?: string | null) {
             id: asset.id,
             name: asset.name,
             summary: asset.summary,
-            artStyle: null,
+            artStyle: asset.artStyle ?? null,
             folderId: asset.folderId,
             images: asset.variants.map((variant) => {
                 const render = variant.renders[0] ?? null
