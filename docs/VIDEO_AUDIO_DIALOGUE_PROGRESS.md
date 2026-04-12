@@ -219,6 +219,30 @@ P1.1 当前有效分支提交：
   - `tests/integration/api/specific/assets-route.test.ts`
     - 新增 unified route 对 global character appearance / global location 的 `artStyle` 更新转发断言
 
+### Asset Hub 角色图选择/确认/生成后 UI 刷新修复（本次）
+本次补了 asset-hub 角色图一个更窄的同步问题，只处理 `select image / confirm selection / generation completed` 三个无需手动刷新的链路，以及一个重复 i18n 缺键。
+
+- 根因确认：
+  - asset-hub 页面实际渲染数据来自 `useAssets({ scope: 'global' })`，也就是 unified asset query cache。
+  - 角色选择 mutation 的乐观更新与部分完成态 invalidation 仍主要打在 legacy `queryKeys.globalAssets.characters()` 上。
+  - 结果是：
+    - 点选候选图后，legacy cache 变了，但 asset-hub 正在读的 unified cache 没同步，UI 仍停留在旧状态。
+    - 点 confirm 后，同样只折叠了 legacy cache，asset-hub 卡片要等刷新才看到确认后的单图状态。
+    - 全局角色图片任务完成后，SSE invalidation 没有稳定命中 unified asset query，导致新图/新状态也可能要手动刷新。
+  - 同时 `src/components/shared/assets/CharacterEditModal.tsx` 使用了 `t('character.appearance')`，但 `messages/zh/assets.json` 缺这个键；本次顺手核对后补齐 `zh/en`。
+
+- 本次修复：
+  - `asset-hub` 角色选择 mutation 现在会同时对 unified global asset query 做乐观更新与回滚。
+  - confirm 时 unified cache 也会立刻折叠到确认后的最终选中图，避免卡片继续显示旧候选列表。
+  - `useSSE` 在 `global-asset-hub` 下收到 `GlobalCharacter / GlobalLocation / GlobalVoice` 完成态事件时，额外 invalidates `queryKeys.assets.all('global')`，确保 asset-hub 页面自动刷新。
+  - `invalidateGlobalCharacters / Locations / Voices` 也同步覆盖 unified global asset query，避免后续 mutation 继续只刷 legacy key。
+
+- 验证补充：
+  - `tests/unit/optimistic/asset-hub-mutations.test.ts`
+    - 新增 unified asset cache 断言，覆盖角色候选图即时选中、confirm 立即折叠、错误回滚。
+  - `tests/unit/optimistic/sse-invalidation.test.ts`
+    - 新增 global character 完成态会 invalidates unified asset query 的断言。
+
 ### 候选图选择 / 确认选择 UI 状态链路修复（本次）
 本次修复聚焦“生成图像后的选择期间”广泛 UI 状态不同步问题，覆盖了 `asset-hub` 与 `project / novel-promotion assets` 两套链路，不通过刷新页面或整页重载兜底。
 

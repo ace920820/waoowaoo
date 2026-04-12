@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import {
   clearTaskTargetOverlay,
   upsertTaskTargetOverlay,
@@ -13,13 +14,20 @@ import {
 } from './mutation-shared'
 import {
   GLOBAL_ASSET_PROJECT_ID,
+  applyCharacterSelectionToUnifiedAssets,
+  captureGlobalUnifiedAssetSnapshots,
   invalidateGlobalCharacters,
+  restoreGlobalUnifiedAssetSnapshots,
 } from './asset-hub-mutations-shared'
 
 interface SelectCharacterImageContext {
   previousQueries: Array<{
     queryKey: readonly unknown[]
     data: GlobalCharacter[] | undefined
+  }>
+  previousAssetQueries: Array<{
+    queryKey: readonly unknown[]
+    data: AssetSummary[] | undefined
   }>
   targetKey: string
   requestId: number
@@ -213,6 +221,7 @@ export function useSelectCharacterImage() {
         exact: false,
       })
       const previousQueries = captureCharacterQuerySnapshots(queryClient)
+      const previousAssetQueries = captureGlobalUnifiedAssetSnapshots(queryClient)
 
       queryClient.setQueriesData<GlobalCharacter[] | undefined>(
         {
@@ -227,9 +236,23 @@ export function useSelectCharacterImage() {
           variables.confirm,
         ),
       )
+      queryClient.setQueriesData<AssetSummary[] | undefined>(
+        {
+          queryKey: queryKeys.assets.all('global'),
+          exact: false,
+        },
+        (previous) => applyCharacterSelectionToUnifiedAssets(
+          previous,
+          variables.characterId,
+          variables.appearanceIndex,
+          variables.imageIndex,
+          variables.confirm,
+        ),
+      )
 
       return {
         previousQueries,
+        previousAssetQueries,
         targetKey,
         requestId,
       }
@@ -239,6 +262,7 @@ export function useSelectCharacterImage() {
       const latestRequestId = latestRequestIdByTargetRef.current[context.targetKey]
       if (latestRequestId !== context.requestId) return
       restoreCharacterQuerySnapshots(queryClient, context.previousQueries)
+      restoreGlobalUnifiedAssetSnapshots(queryClient, context.previousAssetQueries)
     },
     onSettled: (_data, _error, variables) => {
       if (variables.confirm) {

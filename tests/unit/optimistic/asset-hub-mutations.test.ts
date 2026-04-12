@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalCharacter, GlobalLocation } from '@/lib/query/hooks/useGlobalAssets'
+import type { AssetSummary } from '@/lib/assets/contracts'
 import { queryKeys } from '@/lib/query/keys'
 import { MockQueryClient } from '../../helpers/mock-query-client'
 import { requestJsonWithError } from '@/lib/query/mutations/mutation-shared'
@@ -102,6 +103,62 @@ function buildGlobalCharacter(selectedIndex: number | null): GlobalCharacter {
   }
 }
 
+function buildUnifiedCharacterAsset(selectedIndex: number | null): AssetSummary {
+  return {
+    id: 'character-1',
+    scope: 'global',
+    kind: 'character',
+    family: 'visual',
+    name: 'Hero',
+    folderId: 'folder-1',
+    capabilities: {
+      canGenerate: true,
+      canSelectRender: true,
+      canRevertRender: true,
+      canModifyRender: true,
+      canUploadRender: true,
+      canBindVoice: true,
+      canCopyFromGlobal: false,
+    },
+    taskRefs: [],
+    taskState: { isRunning: false, lastError: null },
+    variants: [{
+      id: 'appearance-1',
+      index: 0,
+      label: 'default',
+      description: null,
+      artStyle: 'realistic',
+      selectionState: {
+        selectedRenderIndex: selectedIndex,
+      },
+      renders: ['img-0', 'img-1', 'img-2'].map((imageUrl, index) => ({
+        id: `appearance-1:${index}`,
+        index,
+        imageUrl,
+        media: null,
+        isSelected: selectedIndex === index,
+        previousImageUrl: null,
+        previousMedia: null,
+        taskRefs: [],
+        taskState: { isRunning: false, lastError: null },
+      })),
+      taskRefs: [],
+      taskState: { isRunning: false, lastError: null },
+    }],
+    introduction: null,
+    profileData: null,
+    profileConfirmed: null,
+    profileTaskRefs: [],
+    profileTaskState: { isRunning: false, lastError: null },
+    voice: {
+      voiceType: null,
+      voiceId: null,
+      customVoiceUrl: null,
+      media: null,
+    },
+  }
+}
+
 function buildGlobalLocation(id: string): GlobalLocation {
   return {
     id,
@@ -143,8 +200,10 @@ describe('asset hub optimistic mutations', () => {
   it('updates all character query caches optimistically and ignores stale rollback', async () => {
     const allCharactersKey = queryKeys.globalAssets.characters()
     const folderCharactersKey = queryKeys.globalAssets.characters('folder-1')
+    const unifiedAssetsKey = queryKeys.assets.list({ scope: 'global', folderId: 'folder-1' })
     queryClient.seedQuery(allCharactersKey, [buildGlobalCharacter(0)])
     queryClient.seedQuery(folderCharactersKey, [buildGlobalCharacter(0)])
+    queryClient.seedQuery(unifiedAssetsKey, [buildUnifiedCharacterAsset(0)])
 
     const mutation = useSelectCharacterImage() as unknown as SelectCharacterMutation
     const firstVariables = {
@@ -161,12 +220,22 @@ describe('asset hub optimistic mutations', () => {
     const firstContext = await mutation.onMutate(firstVariables)
     const afterFirstAll = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
     const afterFirstFolder = queryClient.getQueryData<GlobalCharacter[]>(folderCharactersKey)
+    const afterFirstUnified = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterFirstAll?.[0]?.appearances[0]?.selectedIndex).toBe(1)
     expect(afterFirstFolder?.[0]?.appearances[0]?.selectedIndex).toBe(1)
+    expect(afterFirstUnified?.[0]?.kind).toBe('character')
+    if (afterFirstUnified?.[0]?.kind === 'character') {
+      expect(afterFirstUnified[0].variants[0]?.selectionState.selectedRenderIndex).toBe(1)
+      expect(afterFirstUnified[0].variants[0]?.renders[1]?.isSelected).toBe(true)
+    }
 
     const secondContext = await mutation.onMutate(secondVariables)
     const afterSecondAll = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
+    const afterSecondUnified = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterSecondAll?.[0]?.appearances[0]?.selectedIndex).toBe(2)
+    if (afterSecondUnified?.[0]?.kind === 'character') {
+      expect(afterSecondUnified[0].variants[0]?.selectionState.selectedRenderIndex).toBe(2)
+    }
 
     mutation.onError(new Error('first failed'), firstVariables, firstContext)
     const afterStaleError = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
@@ -174,7 +243,11 @@ describe('asset hub optimistic mutations', () => {
 
     mutation.onError(new Error('second failed'), secondVariables, secondContext)
     const afterLatestRollback = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
+    const afterUnifiedRollback = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterLatestRollback?.[0]?.appearances[0]?.selectedIndex).toBe(1)
+    if (afterUnifiedRollback?.[0]?.kind === 'character') {
+      expect(afterUnifiedRollback[0].variants[0]?.selectionState.selectedRenderIndex).toBe(1)
+    }
   })
 
   it('optimistically removes location and restores on error', async () => {
@@ -201,7 +274,9 @@ describe('asset hub optimistic mutations', () => {
 
   it('collapses asset hub character candidates immediately when confirming selection', async () => {
     const allCharactersKey = queryKeys.globalAssets.characters()
+    const unifiedAssetsKey = queryKeys.assets.list({ scope: 'global', folderId: 'folder-1' })
     queryClient.seedQuery(allCharactersKey, [buildGlobalCharacter(2)])
+    queryClient.seedQuery(unifiedAssetsKey, [buildUnifiedCharacterAsset(2)])
 
     const mutation = useSelectCharacterImage() as unknown as SelectCharacterMutation
     await mutation.onMutate({
@@ -212,9 +287,17 @@ describe('asset hub optimistic mutations', () => {
     })
 
     const afterConfirm = queryClient.getQueryData<GlobalCharacter[]>(allCharactersKey)
+    const afterUnifiedConfirm = queryClient.getQueryData<AssetSummary[]>(unifiedAssetsKey)
     expect(afterConfirm?.[0]?.appearances[0]?.selectedIndex).toBe(0)
     expect(afterConfirm?.[0]?.appearances[0]?.imageUrl).toBe('img-2')
     expect(afterConfirm?.[0]?.appearances[0]?.imageUrls).toEqual(['img-2'])
+    expect(afterUnifiedConfirm?.[0]?.kind).toBe('character')
+    if (afterUnifiedConfirm?.[0]?.kind === 'character') {
+      expect(afterUnifiedConfirm[0].variants[0]?.selectionState.selectedRenderIndex).toBe(0)
+      expect(afterUnifiedConfirm[0].variants[0]?.renders).toHaveLength(1)
+      expect(afterUnifiedConfirm[0].variants[0]?.renders[0]?.imageUrl).toBe('img-2')
+      expect(afterUnifiedConfirm[0].variants[0]?.renders[0]?.isSelected).toBe(true)
+    }
   })
 
   it('collapses asset hub location candidates immediately when confirming selection', async () => {
