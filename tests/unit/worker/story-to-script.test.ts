@@ -280,4 +280,85 @@ describe('worker story-to-script behavior', () => {
       clipList: [expect.objectContaining({ id: 'clip_1' })],
     }))
   })
+
+  it('accepts analyze_props retry and continues through split screenplay and persist using cached analysis artifacts', async () => {
+    orchestratorMock.runStoryToScriptOrchestrator.mockReset()
+    runRuntimeServiceMock.listArtifacts.mockImplementation((async (...args: unknown[]) => {
+      const artifactType = (args[0] as { artifactType?: string } | undefined)?.artifactType
+      if (artifactType === 'analysis.characters') {
+        return [{
+          payload: {
+            characters: [{ name: 'Hero', introduction: 'hero intro' }],
+            raw: { characters: [{ name: 'Hero', introduction: 'hero intro' }] },
+          },
+        }]
+      }
+      if (artifactType === 'analysis.locations') {
+        return [{
+          payload: {
+            locations: [{ name: 'Old Town', summary: 'town' }],
+            raw: { locations: [{ name: 'Old Town', summary: 'town' }] },
+          },
+        }]
+      }
+      return []
+    }) as never)
+    aiRuntimeMock.executeAiTextStep
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ props: [{ name: 'Knife', summary: 'bronze dagger' }] }),
+        reasoning: '',
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify([
+          {
+            start: 'episode',
+            end: 'text',
+            summary: 'clip summary',
+            location: 'Old Town',
+            characters: ['Hero'],
+            props: ['Knife'],
+          },
+        ]),
+        reasoning: '',
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ scenes: [{ shot: 'close-up' }] }),
+        reasoning: '',
+      })
+
+    const job = buildJob({
+      episodeId: 'episode-1',
+      content: 'episode text',
+      retryStepKey: 'analyze_props',
+      retryStepAttempt: 2,
+    })
+    const result = await handleStoryToScriptTask(job)
+
+    expect(result).toMatchObject({
+      episodeId: 'episode-1',
+      clipCount: 1,
+      screenplaySuccessCount: 1,
+      screenplayFailedCount: 0,
+      persistedProps: 1,
+      persistedClips: 1,
+      retryStepKey: 'analyze_props',
+    })
+    expect(orchestratorMock.runStoryToScriptOrchestrator).not.toHaveBeenCalled()
+    expect(helperMock.persistAnalyzedProps).toHaveBeenCalledWith(expect.objectContaining({
+      analyzedProps: [{ name: 'Knife', summary: 'bronze dagger' }],
+    }))
+    expect(helperMock.persistClips).toHaveBeenCalledWith(expect.objectContaining({
+      episodeId: 'episode-1',
+      clipList: [expect.objectContaining({ id: 'clip_1', props: ['Knife'] })],
+    }))
+    expect(aiRuntimeMock.executeAiTextStep).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      action: 'analyze_props',
+    }))
+    expect(aiRuntimeMock.executeAiTextStep).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      action: 'split_clips',
+    }))
+    expect(aiRuntimeMock.executeAiTextStep).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      action: 'screenplay_conversion',
+    }))
+  })
 })
