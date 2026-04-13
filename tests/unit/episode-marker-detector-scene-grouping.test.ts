@@ -64,6 +64,21 @@ describe('episode-marker-detector scene grouping', () => {
     expect(result.previewSplits.map(split => split.number)).toEqual([1, 2])
   })
 
+  it('keeps short structured headings with suffix labels', () => {
+    const content = [
+      buildSceneBlock('场景1：客厅 夜', '场景1'),
+      buildSceneBlock('场景2：走廊 夜', '场景2'),
+      buildSceneBlock('场景3：天台 夜', '场景3'),
+      buildSceneBlock('场景4：病房 夜', '场景4'),
+    ].join('\n\n')
+
+    const result = detectEpisodeMarkers(content, { episodeSplitPreference: 'scene_group_2' })
+
+    expect(result.hasMarkers).toBe(true)
+    expect(result.markerTypeKey).toBe('sceneNumberGrouping')
+    expect(result.matches.map(match => match.episodeNumber)).toEqual([1, 2, 3, 4])
+  })
+
   it('falls back when scene numbering contains gaps', () => {
     const content = [
       buildSceneBlock('场景1', '场景1'),
@@ -90,6 +105,25 @@ describe('episode-marker-detector scene grouping', () => {
     const result = detectEpisodeMarkers(content, { episodeSplitPreference: 'scene_group_2' })
 
     expect(result.hasMarkers).toBe(false)
+  })
+
+  it('ignores long narrative lines that start with 场景N：', () => {
+    const content = [
+      '场景1：这是正文而不是场景头，主角在客厅里来回踱步，反复确认门窗是否锁好，同时继续回想刚才发生的争执。',
+      '补充段落：继续描述人物心理、动作和环境变化，长度足够接近真实剧本正文。',
+      '场景2：这同样是正文句子，虽然以场景编号开头，但整行都在叙述事件推进和角色反应，不应被当成新场景。',
+      '补充段落：第二段继续扩展冲突，让文本足够长。',
+      '场景3：第三段正文仍然沿用相同写法，用来验证长叙述不会误触发按场景编号分组。',
+      '补充段落：第三段继续补足篇幅。',
+      '场景4：第四段正文补齐连续编号，确保旧实现会误判，而新实现保持保守回退。',
+      '补充段落：第四段继续补足篇幅。',
+    ].join('\n\n')
+
+    const result = detectEpisodeMarkers(content, { episodeSplitPreference: 'scene_group_2' })
+
+    expect(result.hasMarkers).toBe(false)
+    expect(result.markerTypeKey).toBe('')
+    expect(result.previewSplits).toHaveLength(0)
   })
 
   it('keeps explicit markers ahead of scene grouping', () => {

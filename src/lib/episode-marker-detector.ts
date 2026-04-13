@@ -95,7 +95,28 @@ interface DetectEpisodeMarkersOptions {
     episodeSplitPreference?: EpisodeSplitPreference | null
 }
 
-const STRUCTURED_SCENE_HEADING_REGEX = /^[ \t]*场景 ?(\d{1,3})(?=$|\s|[：:、.．\-—])(?:.*)?$/gm
+const STRUCTURED_SCENE_HEADING_LINE_REGEX = /^[ \t]*场景 ?(\d{1,3})(?:(?:\s*([：:、.．\-—])\s*|\s+)(.*))?[ \t]*$/
+const STRUCTURED_SCENE_HEADING_MAX_LENGTH = 40
+const STRUCTURED_SCENE_HEADING_BODY_PUNCTUATION_REGEX = /[，,。！？；;]/
+
+function parseStructuredSceneHeading(line: string): number | null {
+    const trimmedLine = line.trim()
+    if (!trimmedLine || trimmedLine.length > STRUCTURED_SCENE_HEADING_MAX_LENGTH) {
+        return null
+    }
+
+    const match = trimmedLine.match(STRUCTURED_SCENE_HEADING_LINE_REGEX)
+    if (!match) {
+        return null
+    }
+
+    const suffix = match[3]?.trim() ?? ''
+    if (suffix && STRUCTURED_SCENE_HEADING_BODY_PUNCTUATION_REGEX.test(suffix)) {
+        return null
+    }
+
+    return parseInt(match[1], 10)
+}
 
 const DETECTION_PATTERNS: DetectionPattern[] = [
     // 1. 中文"第X集"
@@ -342,12 +363,16 @@ function detectSceneNumberGrouping(
     }
 
     const matches: EpisodeMarkerMatch[] = []
-    const regex = new RegExp(STRUCTURED_SCENE_HEADING_REGEX.source, STRUCTURED_SCENE_HEADING_REGEX.flags)
-    let match: RegExpExecArray | null
     let previousSceneNumber: number | null = null
 
-    while ((match = regex.exec(content)) !== null) {
-        const sceneNumber = parseInt(match[1], 10)
+    let currentIndex = 0
+
+    for (const line of content.split('\n')) {
+        const sceneNumber = parseStructuredSceneHeading(line)
+        if (sceneNumber === null) {
+            currentIndex += line.length + 1
+            continue
+        }
 
         // Conservative rule: scene-number grouping only applies to strictly consecutive headings.
         if (previousSceneNumber !== null && sceneNumber !== previousSceneNumber + 1) {
@@ -356,10 +381,12 @@ function detectSceneNumberGrouping(
 
         previousSceneNumber = sceneNumber
         matches.push({
-            index: match.index,
-            text: match[0],
+            index: currentIndex,
+            text: line,
             episodeNumber: sceneNumber
         })
+
+        currentIndex += line.length + 1
     }
 
     if (matches.length < sceneGroupSize + 1) {
