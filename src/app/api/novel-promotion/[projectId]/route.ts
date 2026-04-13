@@ -9,6 +9,7 @@ import {
   normalizeStoryboardMoodText,
   serializeStoryboardMoodPresets,
 } from '@/lib/storyboard-mood-presets'
+import { DEFAULT_EPISODE_SPLIT_PREFERENCE, isEpisodeSplitPreference } from '@/lib/episode-split-preference'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import {
   parseModelKeyStrict,
@@ -139,6 +140,19 @@ function validateArtStyleField(value: unknown): string {
 
 function validateStoryboardMoodPresetsField(value: unknown): string {
   return serializeStoryboardMoodPresets(normalizeStoryboardMoodPresets(value))
+}
+
+function validateEpisodeSplitPreferenceField(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return DEFAULT_EPISODE_SPLIT_PREFERENCE
+  }
+  if (!isEpisodeSplitPreference(value)) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'INVALID_EPISODE_SPLIT_PREFERENCE',
+      field: 'episodeSplitPreference',
+    })
+  }
+  return value
 }
 
 function getNextProjectModelMap(
@@ -304,6 +318,7 @@ export const PATCH = apiHandler(async (
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
     'editModel', 'videoModel', 'audioModel', 'videoRatio', 'artStyle',
     'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides', 'storyboardMoodPresets', 'storyboardDefaultMoodPresetId',
+    'episodeSplitPreference',
   ] as const
 
   const updateData: Record<string, unknown> = {}
@@ -335,6 +350,11 @@ export const PATCH = apiHandler(async (
 
     if (field === 'storyboardDefaultMoodPresetId') {
       updateData.storyboardDefaultMoodPresetId = normalizeStoryboardMoodText(body[field])
+      continue
+    }
+
+    if (field === 'episodeSplitPreference') {
+      updateData.episodeSplitPreference = validateEpisodeSplitPreferenceField(body[field])
       continue
     }
 

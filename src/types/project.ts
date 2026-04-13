@@ -266,6 +266,7 @@ export interface NovelPromotionProject {
   artStylePrompt: string | null
   storyboardMoodPresets?: StoryboardMoodPreset[] | string | null
   storyboardDefaultMoodPresetId?: string | null
+  episodeSplitPreference?: 'auto' | 'scene_group_2' | 'scene_group_3'
   audioUrl: string | null
   media?: MediaRef | null
   srtContent: string | null

@@ -272,6 +272,7 @@ model NovelPromotionProject {
   lastEpisodeId   String?
   imageResolution String                    @default("2K")
   importStatus    String?
+  episodeSplitPreference String             @default("auto")
   characters      NovelPromotionCharacter[]
   episodes        NovelPromotionEpisode[]
   locations       NovelPromotionLocation[]
