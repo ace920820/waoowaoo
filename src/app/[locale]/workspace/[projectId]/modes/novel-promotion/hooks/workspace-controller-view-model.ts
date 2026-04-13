@@ -6,6 +6,7 @@ import type { TaskPresentationState } from '@/lib/task/presentation'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from '../components/video'
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 import type {
   useScriptToStoryboardRunStream,
   useStoryToScriptRunStream,
@@ -18,6 +19,8 @@ interface ProjectSnapshotInput {
   projectData: unknown
   projectCharacters: unknown[]
   projectLocations: unknown[]
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  storyboardDefaultMoodPresetId: string | null
   globalAssetText: string
   novelText: string
   analysisModel: string | undefined

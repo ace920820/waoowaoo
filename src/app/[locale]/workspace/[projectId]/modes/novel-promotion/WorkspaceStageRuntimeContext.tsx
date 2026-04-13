@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config-contract'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from './components/video'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 export interface WorkspaceStageVideoModelOption {
   value: string
@@ -23,10 +24,13 @@ export interface WorkspaceStageRuntimeValue {
   isStartingScriptToStoryboard: boolean
   videoRatio: string | null | undefined
   artStyle: string | null | undefined
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  storyboardDefaultMoodPresetId: string | null | undefined
   videoModel: string | null | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: WorkspaceStageVideoModelOption[]
   onNovelTextChange: (value: string) => Promise<void>
+  onEpisodeDefaultMoodPresetChange: (value: string | null) => Promise<void>
   onVideoRatioChange: (value: string) => Promise<void>
   onArtStyleChange: (value: string) => Promise<void>
   onRunStoryToScript: () => Promise<void>

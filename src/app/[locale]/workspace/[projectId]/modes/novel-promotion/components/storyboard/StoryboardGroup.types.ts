@@ -4,6 +4,7 @@ import type { PanelEditData } from '../PanelEditForm'
 import type { VariantData, VariantOptions } from './hooks/usePanelVariant'
 import type { PanelSaveState } from './hooks/usePanelCrudActions'
 import type { PanelImageStatus } from './hooks/image-generation-runtime'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 export interface StoryboardGroupProps {
   storyboard: NovelPromotionStoryboard
@@ -36,7 +37,11 @@ export interface StoryboardGroupProps {
   onPreviewImage: (url: string) => void
   onCloseError: () => void
   getPanelEditData: (panel: StoryboardPanel) => PanelEditData
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId: string | null
+  episodeDefaultMoodPresetId: string | null
   onPanelUpdate: (panelId: string, panel: StoryboardPanel, updates: Partial<PanelEditData>) => void
+  onApplyClipMood: (clipId: string, updates: { storyboardMoodPresetId: string | null; customMood: string | null }) => Promise<void>
   onPanelDelete: (panelId: string) => void
   onOpenCharacterPicker: (panelId: string) => void
   onOpenLocationPicker: (panelId: string) => void

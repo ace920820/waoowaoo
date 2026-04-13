@@ -172,7 +172,8 @@ export function useRunStreamState<TParams extends Record<string, unknown>>(
     modelOverride?: string
     reason?: string
   }): Promise<RunResult> => {
-    const runId = runStateRef.current?.runId || ''
+    const currentRunState = runStateRef.current
+    const runId = currentRunState?.runId || ''
     if (!runId) {
       throw new Error('runId is required')
     }
@@ -180,6 +181,8 @@ export function useRunStreamState<TParams extends Record<string, unknown>>(
     if (!stepId) {
       throw new Error('stepId is required')
     }
+    const existingStep = currentRunState?.stepsById[stepId]
+    const nextAttempt = Math.max(1, (existingStep?.attempt || 0) + 1)
 
     const response = await apiFetch(
       `/api/runs/${runId}/steps/${encodeURIComponent(stepId)}/retry`,
@@ -206,6 +209,19 @@ export function useRunStreamState<TParams extends Record<string, unknown>>(
       event: 'run.start',
       ts: new Date().toISOString(),
       status: 'running',
+      message: 'retrying failed step',
+    })
+    applyEvent({
+      runId,
+      event: 'step.start',
+      ts: new Date().toISOString(),
+      status: 'running',
+      stepId,
+      stepAttempt: nextAttempt,
+      stepTitle: existingStep?.title,
+      stepIndex: existingStep?.stepIndex,
+      stepTotal: existingStep?.stepTotal,
+      retryable: existingStep?.retryable,
       message: 'retrying failed step',
     })
     setIsRecoveredRunning(true)

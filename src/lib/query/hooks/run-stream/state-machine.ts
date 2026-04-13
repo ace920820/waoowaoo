@@ -32,6 +32,7 @@ function rankRunStatus(status: RunStreamStatus): number {
 
 function lockForwardStepStatus(prev: RunStepStatus, next: RunStepStatus): RunStepStatus {
   if (prev === 'failed') return prev
+  if (prev === 'completed' && next === 'failed') return next
   if (prev === 'completed' && next !== 'stale') return prev
   if (prev === 'stale' && next !== 'failed') return prev
   return rankStepStatus(next) >= rankStepStatus(prev) ? next : prev
@@ -291,7 +292,13 @@ export function applyRunStreamEvent(prev: RunState | null, event: RunStreamEvent
 
   if (event.event === 'run.start') {
     const nextStatus = normalizeRunStatus(event.status)
-    base.status = lockForwardRunStatus(base.status, nextStatus === 'idle' ? 'running' : nextStatus)
+    if (nextStatus === 'running' || nextStatus === 'idle') {
+      base.status = 'running'
+      base.terminalAt = null
+      base.errorMessage = ''
+    } else {
+      base.status = lockForwardRunStatus(base.status, nextStatus)
+    }
     if (event.payload && typeof event.payload === 'object') {
       base.payload = event.payload
     }

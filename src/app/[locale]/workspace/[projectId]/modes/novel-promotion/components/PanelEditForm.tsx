@@ -6,6 +6,7 @@ import { GlassButton, GlassModalShell, GlassSurface } from '@/components/ui/prim
 import { Character, Location } from '@/types/project'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { AppIcon } from '@/components/ui/icons'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface CharacterAppearance {
   id?: string
@@ -29,6 +30,12 @@ export interface PanelEditData {
   photographyRules?: string | null
   actingNotes?: string | null
   sourceText?: string | null
+  storyboardMoodPresetId?: string | null
+  customMood?: string | null
+  effectiveMoodPresetId?: string | null
+  effectiveMoodPresetLabel?: string | null
+  effectiveMoodSummary?: string | null
+  effectiveMoodSource?: string | null
 }
 
 interface PanelEditFormProps {
@@ -42,6 +49,7 @@ interface PanelEditFormProps {
   onOpenLocationPicker: () => void
   onRemoveCharacter: (index: number) => void
   onRemoveLocation: () => void
+  storyboardMoodPresets?: StoryboardMoodPreset[]
 }
 
 export default function PanelEditForm({
@@ -54,7 +62,8 @@ export default function PanelEditForm({
   onOpenCharacterPicker,
   onOpenLocationPicker,
   onRemoveCharacter,
-  onRemoveLocation
+  onRemoveLocation,
+  storyboardMoodPresets = [],
 }: PanelEditFormProps) {
   return (
     <PanelEditFormV2
@@ -68,6 +77,7 @@ export default function PanelEditForm({
       onOpenLocationPicker={onOpenLocationPicker}
       onRemoveCharacter={onRemoveCharacter}
       onRemoveLocation={onRemoveLocation}
+      storyboardMoodPresets={storyboardMoodPresets}
       uiMode="flow"
     />
   )

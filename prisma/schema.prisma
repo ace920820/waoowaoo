@@ -125,6 +125,7 @@ model NovelPromotionEpisode {
   name                    String
   description             String?                    @db.Text
   novelText               String?                    @db.Text
+  storyboardDefaultMoodPresetId String?             @db.Text
   audioUrl                String?                    @db.Text
   audioMediaId            String?
   audioMedia              MediaObject?               @relation("NovelPromotionEpisodeAudioMedia", fields: [audioMediaId], references: [id], onDelete: SetNull)
@@ -177,6 +178,8 @@ model NovelPromotionClip {
   shotCount  Int?
   startText  String?                   @db.Text
   screenplay String?                   @db.Text
+  storyboardMoodPresetId String?       @db.Text
+  customMood String?                   @db.Text
   episode    NovelPromotionEpisode     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   shots      NovelPromotionShot[]
   storyboard NovelPromotionStoryboard?
@@ -225,6 +228,8 @@ model NovelPromotionPanel {
   sketchImageMedia  MediaObject?              @relation("NovelPromotionPanelSketchMedia", fields: [sketchImageMediaId], references: [id], onDelete: SetNull)
   photographyRules  String?                   @db.Text
   actingNotes       String?                   @db.Text // 演技指导数据 JSON
+  storyboardMoodPresetId String?              @db.Text
+  customMood        String?                   @db.Text
   previousImageUrl  String?                   @db.Text
   previousImageMediaId String?
   previousImageMedia MediaObject?             @relation("NovelPromotionPanelPreviousImageMedia", fields: [previousImageMediaId], references: [id], onDelete: SetNull)
@@ -255,6 +260,8 @@ model NovelPromotionProject {
   globalAssetText String?                   @db.Text
   artStyle        String                    @default("american-comic")
   artStylePrompt  String?                   @db.Text
+  storyboardMoodPresets String?             @db.Text
+  storyboardDefaultMoodPresetId String?     @db.Text
   characterModel  String? // 用户配置的角色图片模型
   locationModel   String? // 用户配置的场景图片模型
   storyboardModel String? // 用户配置的分镜图片模型

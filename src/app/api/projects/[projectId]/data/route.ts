@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
+import { normalizeStoryboardMoodPresets } from '@/lib/storyboard-mood-presets'
 
 function readAssetKind(value: Record<string, unknown>): string {
   return typeof value.assetKind === 'string' ? value.assetKind : 'location'
@@ -75,8 +76,10 @@ export const GET = apiHandler(async (
 
   // 转换为稳定媒体 URL（并保留兼容字段）
   const novelPromotionDataWithSignedUrls = await attachMediaFieldsToProject(novelPromotionData)
+  const projectDataRecord = novelPromotionDataWithSignedUrls as Record<string, unknown>
   const filteredNovelPromotionData = {
     ...novelPromotionDataWithSignedUrls,
+    storyboardMoodPresets: normalizeStoryboardMoodPresets(projectDataRecord.storyboardMoodPresets),
     locations: (novelPromotionDataWithSignedUrls.locations || []).filter((item) => readAssetKind(item) !== 'prop'),
     props: (novelPromotionDataWithSignedUrls.locations || []).filter((item) => readAssetKind(item) === 'prop'),
   }

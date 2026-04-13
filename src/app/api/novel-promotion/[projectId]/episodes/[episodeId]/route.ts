@@ -1,12 +1,12 @@
 import { logError as _ulogError } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { resolveMediaRefFromLegacyValue } from '@/lib/media/service'
 import { attachSpeechPlanToStoryboards } from '@/lib/novel-promotion/panel-speech-plan'
+import { normalizeStoryboardMoodText } from '@/lib/storyboard-mood-presets'
 
 /**
  * GET - 获取单个剧集的完整数据
@@ -84,12 +84,15 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { name, description, novelText, audioUrl, srtContent } = body
+  const { name, description, novelText, storyboardDefaultMoodPresetId, audioUrl, srtContent } = body
 
-  const updateData: Prisma.NovelPromotionEpisodeUncheckedUpdateInput = {}
+  const updateData: Record<string, unknown> = {}
   if (name !== undefined) updateData.name = name.trim()
   if (description !== undefined) updateData.description = description?.trim() || null
   if (novelText !== undefined) updateData.novelText = novelText
+  if (storyboardDefaultMoodPresetId !== undefined) {
+    updateData.storyboardDefaultMoodPresetId = normalizeStoryboardMoodText(storyboardDefaultMoodPresetId)
+  }
   if (audioUrl !== undefined) {
     updateData.audioUrl = audioUrl
     const media = await resolveMediaRefFromLegacyValue(audioUrl)

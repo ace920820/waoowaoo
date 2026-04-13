@@ -1,7 +1,7 @@
 'use client'
 import { useTranslations } from 'next-intl'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import ScreenplayDisplay from './ScreenplayDisplay'
 import { StoryboardPanel } from './hooks/useStoryboardState'
 import StoryboardGroupHeader from './StoryboardGroupHeader'
@@ -15,6 +15,7 @@ import StoryboardGroupFailedAlert from './StoryboardGroupFailedAlert'
 import StoryboardGroupDialogs from './StoryboardGroupDialogs'
 import type { StoryboardGroupProps } from './StoryboardGroup.types'
 import { AppIcon } from '@/components/ui/icons'
+import { resolveStoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 export default function StoryboardGroup({
   storyboard,
@@ -46,7 +47,11 @@ export default function StoryboardGroup({
   onPreviewImage,
   onCloseError,
   getPanelEditData,
+  storyboardMoodPresets,
+  projectDefaultMoodPresetId,
+  episodeDefaultMoodPresetId,
   onPanelUpdate,
+  onApplyClipMood,
   onPanelDelete,
   onOpenCharacterPicker,
   onOpenLocationPicker,
@@ -74,6 +79,16 @@ export default function StoryboardGroup({
   submittingVariantPanelId,
 }: StoryboardGroupProps) {
   const t = useTranslations('storyboard')
+  const [clipMoodPresetId, setClipMoodPresetId] = useState<string>(clip?.storyboardMoodPresetId || '')
+  const [clipCustomMood, setClipCustomMood] = useState<string>(clip?.customMood || '')
+  const [isApplyingClipMood, setIsApplyingClipMood] = useState(false)
+  const projectDefaultLabel = resolveStoryboardMoodPreset(storyboardMoodPresets, projectDefaultMoodPresetId)?.label || '未设置'
+  const episodeDefaultLabel = resolveStoryboardMoodPreset(storyboardMoodPresets, episodeDefaultMoodPresetId)?.label || '未设置'
+
+  useEffect(() => {
+    setClipMoodPresetId(clip?.storyboardMoodPresetId || '')
+    setClipCustomMood(clip?.customMood || '')
+  }, [clip?.customMood, clip?.storyboardMoodPresetId])
 
   const {
     insertModalOpen,
@@ -182,6 +197,66 @@ export default function StoryboardGroup({
       </div>
 
       {clip && (
+        <div className="mb-4 rounded-xl border border-[var(--glass-border-subtle)] bg-[var(--glass-bg-subtle)]/60 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-medium text-[var(--glass-text-primary)]">分镜组氛围批量应用</h4>
+              <p className="text-xs text-[var(--glass-text-tertiary)]">
+                显式应用到本组所有分镜。优先级低于单格覆盖，高于剧集和项目默认。
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isApplyingClipMood}
+              onClick={async () => {
+                setIsApplyingClipMood(true)
+                try {
+                  await onApplyClipMood(clip.id, {
+                    storyboardMoodPresetId: clipMoodPresetId || null,
+                    customMood: clipCustomMood || null,
+                  })
+                } finally {
+                  setIsApplyingClipMood(false)
+                }
+              }}
+              className="glass-btn-base glass-btn-soft px-3 py-2 text-xs"
+            >
+              {isApplyingClipMood ? '应用中...' : '应用到本组全部分镜'}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs text-[var(--glass-text-secondary)]">分镜组预设</span>
+              <select
+                value={clipMoodPresetId}
+                onChange={(event) => setClipMoodPresetId(event.target.value)}
+                className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+              >
+                <option value="">不设置分镜组预设</option>
+                {storyboardMoodPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs text-[var(--glass-text-secondary)]">分镜组自定义氛围</span>
+              <input
+                value={clipCustomMood}
+                onChange={(event) => setClipCustomMood(event.target.value)}
+                placeholder="例如：空气潮湿、关系紧绷"
+                className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-[var(--glass-text-tertiary)]">
+            当前上层默认链路：剧集 {episodeDefaultLabel} / 项目 {projectDefaultLabel}
+          </p>
+        </div>
+      )}
+
+      {clip && (
         <div className="mb-4">
           <button
             onClick={onToggleExpand}
@@ -218,6 +293,7 @@ export default function StoryboardGroup({
         panelTaskErrorMap={panelTaskErrorMap}
         isPanelTaskRunning={isPanelTaskRunning}
         getPanelEditData={getPanelEditData}
+        storyboardMoodPresets={storyboardMoodPresets}
         getPanelCandidates={getPanelCandidates}
         onPanelUpdate={onPanelUpdate}
         onPanelDelete={onPanelDelete}

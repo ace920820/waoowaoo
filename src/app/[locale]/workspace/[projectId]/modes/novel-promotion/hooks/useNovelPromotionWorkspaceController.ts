@@ -159,6 +159,8 @@ export function useNovelPromotionWorkspaceController({
     isStartingScriptToStoryboard,
     videoRatio: projectSnapshot.videoRatio,
     artStyle: projectSnapshot.artStyle,
+    storyboardMoodPresets: projectSnapshot.storyboardMoodPresets,
+    storyboardDefaultMoodPresetId: projectSnapshot.storyboardDefaultMoodPresetId,
     videoModel: projectSnapshot.videoModel,
     capabilityOverrides: projectSnapshot.capabilityOverrides,
     userVideoModels: userModels.userVideoModels || [],

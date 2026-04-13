@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { GlassButton, GlassChip, GlassSurface } from '@/components/ui/primitives'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface StoryboardHeaderProps {
   totalSegments: number
@@ -11,6 +13,9 @@ interface StoryboardHeaderProps {
   isDownloadingImages: boolean
   runningCount: number
   pendingPanelCount: number
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  episodeDefaultMoodPresetId: string | null
+  onEpisodeDefaultMoodPresetIdChange: (value: string | null) => Promise<void>
   isBatchSubmitting: boolean
   onDownloadAllImages: () => void
   onGenerateAllPanels: () => void
@@ -23,12 +28,16 @@ export default function StoryboardHeader({
   isDownloadingImages,
   runningCount,
   pendingPanelCount,
+  storyboardMoodPresets,
+  episodeDefaultMoodPresetId,
+  onEpisodeDefaultMoodPresetIdChange,
   isBatchSubmitting,
   onDownloadAllImages,
   onGenerateAllPanels,
   onBack
 }: StoryboardHeaderProps) {
   const t = useTranslations('storyboard')
+  const [isSavingMood, setIsSavingMood] = useState(false)
   const storyboardTaskRunningState = runningCount > 0
     ? resolveTaskPresentationState({
       phase: 'processing',
@@ -84,6 +93,33 @@ export default function StoryboardHeader({
         </GlassButton>
 
         <GlassButton variant="ghost" onClick={onBack}>{t('header.back')}</GlassButton>
+      </div>
+
+      <div className="rounded-xl border border-[var(--glass-border-subtle)] bg-[var(--glass-bg-subtle)]/60 p-3">
+        <div className="mb-2">
+          <h4 className="text-sm font-medium text-[var(--glass-text-primary)]">剧集默认分镜氛围</h4>
+          <p className="text-xs text-[var(--glass-text-tertiary)]">作为当前剧集的默认值，分镜组和单格可继续覆盖。</p>
+        </div>
+        <select
+          value={episodeDefaultMoodPresetId || ''}
+          disabled={isSavingMood}
+          onChange={async (event) => {
+            setIsSavingMood(true)
+            try {
+              await onEpisodeDefaultMoodPresetIdChange(event.target.value || null)
+            } finally {
+              setIsSavingMood(false)
+            }
+          }}
+          className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+        >
+          <option value="">无剧集默认预设</option>
+          {storyboardMoodPresets.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
       </div>
     </GlassSurface>
   )

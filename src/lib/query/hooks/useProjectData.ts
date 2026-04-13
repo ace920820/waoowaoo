@@ -55,6 +55,7 @@ export interface Episode {
     name: string
     description?: string | null
     novelText?: string | null
+    storyboardDefaultMoodPresetId?: string | null
     audioUrl?: string | null
     media?: MediaRef | null
     srtContent?: string | null

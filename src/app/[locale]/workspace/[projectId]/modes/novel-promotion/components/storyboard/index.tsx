@@ -10,6 +10,7 @@ import StoryboardToolbar from './StoryboardToolbar'
 import StoryboardCanvas from './StoryboardCanvas'
 import { useStoryboardStageController } from './hooks/useStoryboardStageController'
 import { useStoryboardModalRuntime } from './hooks/useStoryboardModalRuntime'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface StoryboardStageProps {
   projectId: string
@@ -17,6 +18,10 @@ interface StoryboardStageProps {
   storyboards: NovelPromotionStoryboard[]
   clips: NovelPromotionClip[]
   videoRatio: string
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId: string | null
+  episodeDefaultMoodPresetId: string | null
+  onEpisodeDefaultMoodPresetIdChange: (value: string | null) => Promise<void>
   onBack: () => void
   onNext: () => void
   isTransitioning?: boolean
@@ -28,6 +33,10 @@ export default function StoryboardStage({
   storyboards: initialStoryboards,
   clips,
   videoRatio,
+  storyboardMoodPresets,
+  projectDefaultMoodPresetId,
+  episodeDefaultMoodPresetId,
+  onEpisodeDefaultMoodPresetIdChange,
   onBack,
   onNext,
   isTransitioning = false,
@@ -37,6 +46,9 @@ export default function StoryboardStage({
     episodeId,
     initialStoryboards,
     clips,
+    storyboardMoodPresets,
+    projectDefaultMoodPresetId,
+    episodeDefaultMoodPresetId,
     isTransitioning,
   })
 
@@ -111,6 +123,7 @@ export default function StoryboardStage({
     handleRemoveCharacter,
     handleRemoveLocation,
     retrySave,
+    applyClipMood,
 
     updatePhotographyPlanMutation,
     updatePanelActingNotesMutation,
@@ -159,6 +172,9 @@ export default function StoryboardStage({
           isDownloadingImages={isDownloadingImages}
           runningCount={runningCount}
           pendingPanelCount={pendingPanelCount}
+          storyboardMoodPresets={storyboardMoodPresets}
+          episodeDefaultMoodPresetId={episodeDefaultMoodPresetId}
+          onEpisodeDefaultMoodPresetIdChange={onEpisodeDefaultMoodPresetIdChange}
           isBatchSubmitting={isEpisodeBatchSubmitting}
           addingStoryboardGroup={addingStoryboardGroup}
           addingStoryboardGroupState={addingStoryboardGroupState}
@@ -191,7 +207,11 @@ export default function StoryboardStage({
           getClipInfo={getClipInfo}
           getTextPanels={getTextPanels}
           getPanelEditData={getPanelEditData}
+          storyboardMoodPresets={storyboardMoodPresets}
+          projectDefaultMoodPresetId={projectDefaultMoodPresetId}
+          episodeDefaultMoodPresetId={episodeDefaultMoodPresetId}
           formatClipTitle={formatClipTitle}
+          onApplyClipMood={applyClipMood}
           onToggleExpandedClip={toggleExpandedClip}
           onMoveStoryboardGroup={moveStoryboardGroup}
           onRegenerateStoryboardText={regenerateStoryboardText}

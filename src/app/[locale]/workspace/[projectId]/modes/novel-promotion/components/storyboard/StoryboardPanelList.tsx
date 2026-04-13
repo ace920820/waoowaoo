@@ -8,6 +8,7 @@ import { ASPECT_RATIO_CONFIGS } from '@/lib/constants'
 import PanelCard from './PanelCard'
 import type { PanelSaveState } from './hooks/usePanelCrudActions'
 import type { PanelImageStatus } from './hooks/image-generation-runtime'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface StoryboardPanelListProps {
   storyboardId: string
@@ -23,6 +24,7 @@ interface StoryboardPanelListProps {
   panelTaskErrorMap: Map<string, { taskId: string; message: string }>
   isPanelTaskRunning: (panel: StoryboardPanel) => boolean
   getPanelEditData: (panel: StoryboardPanel) => PanelEditData
+  storyboardMoodPresets: StoryboardMoodPreset[]
   getPanelCandidates: (panel: NovelPromotionPanel) => { candidates: string[]; selectedIndex: number } | null
   onPanelUpdate: (panelId: string, panel: StoryboardPanel, updates: Partial<PanelEditData>) => void
   onPanelDelete: (panelId: string) => void
@@ -62,6 +64,7 @@ export default function StoryboardPanelList({
   panelTaskErrorMap,
   isPanelTaskRunning,
   getPanelEditData,
+  storyboardMoodPresets,
   getPanelCandidates,
   onPanelUpdate,
   onPanelDelete,
@@ -134,6 +137,7 @@ export default function StoryboardPanelList({
               candidateData={panelCandidateData}
               previousImageUrl={panel.previousImageUrl}
               imageStatus={getPanelImageStatus(panel.id)}
+              storyboardMoodPresets={storyboardMoodPresets}
               onUpdate={(updates) => onPanelUpdate(panel.id, panel, updates)}
               onDelete={() => onPanelDelete(panel.id)}
               onOpenCharacterPicker={() => onOpenCharacterPicker(panel.id)}

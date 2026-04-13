@@ -308,6 +308,16 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('avoid lip-sync-like mouth performance or speech-shaped mouth cycles.'),
       }),
     })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Do not add background music, soundtrack, score, or musical bed.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 为 dialogue panel 注入显式口播执行指令', async () => {
@@ -337,6 +347,11 @@ describe('worker video processor behavior', () => {
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.objectContaining({
         prompt: expect.stringContaining('prefer restrained or silent mouth performance over incorrect speech.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
       }),
     })
   })
@@ -385,9 +400,14 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('Do not stage these lines as on-screen mouth speech or visible lip-sync'),
       }),
     })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
-  it('VIDEO_PANEL: 显式 generateAudio=false 时使用统一禁音控制面', async () => {
+  it('VIDEO_PANEL: 非 Vidu 模型不向共享 worker 请求注入不受支持的 bgm 参数', async () => {
     const processor = workerState.processor
     expect(processor).toBeTruthy()
 
@@ -412,6 +432,14 @@ describe('worker video processor behavior', () => {
         }),
       }),
     )
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      modelId: 'fal::kling-v1',
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 将 Ark 返回的实际视频 token 用量透传到任务结果', async () => {

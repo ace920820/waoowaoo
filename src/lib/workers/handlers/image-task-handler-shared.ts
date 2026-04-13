@@ -47,6 +47,8 @@ interface LocationLike {
 
 interface NovelProjectData {
   videoRatio?: string | null
+  storyboardMoodPresets?: unknown
+  storyboardDefaultMoodPresetId?: string | null
   characters?: CharacterLike[]
   locations?: LocationLike[]
 }

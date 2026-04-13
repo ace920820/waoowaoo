@@ -512,7 +512,7 @@ export class ViduVideoGenerator extends BaseVideoGenerator {
             }
         }
 
-        const bgm = normalizeOptionalBoolean(rawOptions.bgm, 'bgm')
+        normalizeOptionalBoolean(rawOptions.bgm, 'bgm')
         const isRec = normalizeOptionalBoolean(pickFirstDefined(rawOptions.isRec, rawOptions.is_rec), 'isRec')
         const offPeak = normalizeOptionalBoolean(pickFirstDefined(rawOptions.offPeak, rawOptions.off_peak), 'offPeak')
         const watermark = normalizeOptionalBoolean(rawOptions.watermark, 'watermark')
@@ -599,9 +599,7 @@ export class ViduVideoGenerator extends BaseVideoGenerator {
         if (movementAmplitude) {
             requestBody.movement_amplitude = movementAmplitude
         }
-        if (bgm !== undefined) {
-            requestBody.bgm = bgm
-        }
+        requestBody.bgm = false
         if (payload) {
             requestBody.payload = payload
         }

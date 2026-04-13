@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import type { NovelPromotionWorkspaceProps } from '../types'
 import type { CapabilitySelections } from '@/lib/model-config-contract'
+import { normalizeStoryboardMoodPresets } from '@/lib/storyboard-mood-presets'
 
 function parseCapabilitySelections(raw: unknown): CapabilitySelections {
   if (!raw) return {}
@@ -31,6 +32,8 @@ export function useWorkspaceProjectSnapshot({
       projectData,
       projectCharacters: projectData?.characters || [],
       projectLocations: projectData?.locations || [],
+      storyboardMoodPresets: normalizeStoryboardMoodPresets(projectData?.storyboardMoodPresets),
+      storyboardDefaultMoodPresetId: projectData?.storyboardDefaultMoodPresetId || null,
       episodeStoryboards: episode?.storyboards || [],
       currentStage: urlStage === 'editor' ? 'videos' : (urlStage || 'config'),
       globalAssetText: projectData?.globalAssetText || '',

@@ -70,7 +70,7 @@ export type StoryToScriptOrchestratorInput = {
     action: string,
     maxOutputTokens: number,
   ) => Promise<StoryToScriptStepOutput>
-  onStepError?: (meta: StoryToScriptStepMeta, message: string) => void
+  onStepError?: (meta: StoryToScriptStepMeta, message: string) => void | Promise<void>
   onLog?: (message: string, details?: Record<string, unknown>) => void
 }
 
@@ -416,6 +416,7 @@ export async function runStoryToScriptOrchestrator(
   let splitStep: StoryToScriptStepOutput | null = null
   let clipList: StoryToScriptClipCandidate[] = []
   let lastBoundaryError: Error | null = null
+  let lastSplitMeta: StoryToScriptStepMeta | null = null
 
   for (let attempt = 1; attempt <= MAX_SPLIT_BOUNDARY_ATTEMPTS; attempt += 1) {
     const splitMeta: StoryToScriptStepMeta = {
@@ -427,6 +428,7 @@ export async function runStoryToScriptOrchestrator(
       dependsOn: ['analyze_characters', 'analyze_locations'],
       retryable: true,
     }
+    lastSplitMeta = splitMeta
 
     const { output, parsed: rawClipList } = await runStepWithRetry(
       runStep,
@@ -504,6 +506,10 @@ export async function runStoryToScriptOrchestrator(
   }
 
   if (!splitStep) {
+    const errorMessage = (lastBoundaryError || new Error('split_clips boundary matching failed')).message
+    if (lastSplitMeta) {
+      await onStepError?.(lastSplitMeta, errorMessage)
+    }
     throw lastBoundaryError || new Error('split_clips boundary matching failed')
   }
 
@@ -551,7 +557,7 @@ export async function runStoryToScriptOrchestrator(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        onStepError?.(stepMeta, message)
+        await onStepError?.(stepMeta, message)
         return {
           clipId: clip.id,
           success: false,

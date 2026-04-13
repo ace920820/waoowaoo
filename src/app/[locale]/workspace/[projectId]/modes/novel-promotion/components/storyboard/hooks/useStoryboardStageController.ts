@@ -11,6 +11,7 @@ import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import {
   useUpdateProjectPhotographyPlan,
   useUpdateProjectPanelActingNotes,
+  useUpdateProjectClip,
 } from '@/lib/query/hooks'
 import { useStoryboardState } from './useStoryboardState'
 import { usePanelOperations } from './usePanelOperations'
@@ -20,12 +21,16 @@ import { useStoryboardTaskAwareStoryboards } from './useStoryboardTaskAwareStory
 import { useStoryboardPanelAssetActions } from './useStoryboardPanelAssetActions'
 import { useStoryboardStageUiState } from './useStoryboardStageUiState'
 import { useStoryboardStageStatus } from './useStoryboardStageStatus'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface UseStoryboardStageControllerProps {
   projectId: string
   episodeId: string
   initialStoryboards: NovelPromotionStoryboard[]
   clips: NovelPromotionClip[]
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId: string | null
+  episodeDefaultMoodPresetId: string | null
   isTransitioning: boolean
 }
 
@@ -34,6 +39,9 @@ export function useStoryboardStageController({
   episodeId,
   initialStoryboards,
   clips,
+  storyboardMoodPresets,
+  projectDefaultMoodPresetId,
+  episodeDefaultMoodPresetId,
   isTransitioning,
 }: UseStoryboardStageControllerProps) {
   const isRunningPhase = useCallback((phase: string | null | undefined) => {
@@ -55,6 +63,9 @@ export function useStoryboardStageController({
     episodeId,
     initialStoryboards: taskAwareStoryboards,
     clips,
+    storyboardMoodPresets,
+    projectDefaultMoodPresetId,
+    episodeDefaultMoodPresetId,
   })
 
   const {
@@ -145,6 +156,18 @@ export function useStoryboardStageController({
 
   const updatePhotographyPlanMutation = useUpdateProjectPhotographyPlan(projectId)
   const updatePanelActingNotesMutation = useUpdateProjectPanelActingNotes(projectId)
+  const updateClipMutation = useUpdateProjectClip(projectId)
+
+  const applyClipMood = useCallback(async (
+    clipId: string,
+    updates: { storyboardMoodPresetId: string | null; customMood: string | null },
+  ) => {
+    await updateClipMutation.mutateAsync({
+      clipId,
+      episodeId,
+      data: updates,
+    })
+  }, [episodeId, updateClipMutation])
 
   const {
     assetPickerPanel,
@@ -196,7 +219,7 @@ export function useStoryboardStageController({
 
   return {
     localStoryboards, setLocalStoryboards, sortedStoryboards, expandedClips, toggleExpandedClip,
-    getClipInfo, getTextPanels, getPanelEditData, updatePanelEdit, formatClipTitle, totalPanels, storyboardStartIndex,
+    getClipInfo, getTextPanels, getPanelEditData, updatePanelEdit, formatClipTitle, totalPanels, storyboardStartIndex, storyboardMoodPresets,
     savingPanels, deletingPanelIds, saveStateByPanel, hasUnsavedByPanel, submittingStoryboardTextIds, addingStoryboardGroup, movingClipId, insertingAfterPanelId,
     savePanelWithData, addPanel, deletePanel, deleteStoryboard, regenerateStoryboardText, addStoryboardGroup, moveStoryboardGroup, insertPanel,
     submittingVariantPanelId, generatePanelVariant,
@@ -207,6 +230,7 @@ export function useStoryboardStageController({
     assetPickerPanel, setAssetPickerPanel, aiDataPanel, setAIDataPanel, isEpisodeBatchSubmitting,
     getDefaultAssetsForClip, handleEditSubmit, handlePanelUpdate, handleAddCharacter, handleSetLocation, handleRemoveCharacter, handleRemoveLocation,
     retrySave,
+    applyClipMood,
     updatePhotographyPlanMutation, updatePanelActingNotesMutation,
     addingStoryboardGroupState, transitioningState, runningCount, pendingPanelCount, handleGenerateAllPanels,
   }

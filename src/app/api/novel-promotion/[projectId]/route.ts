@@ -4,6 +4,11 @@ import { logProjectAction } from '@/lib/logging/semantic'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { isArtStyleValue } from '@/lib/constants'
+import {
+  normalizeStoryboardMoodPresets,
+  normalizeStoryboardMoodText,
+  serializeStoryboardMoodPresets,
+} from '@/lib/storyboard-mood-presets'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import {
   parseModelKeyStrict,
@@ -130,6 +135,10 @@ function validateArtStyleField(value: unknown): string {
     })
   }
   return artStyle
+}
+
+function validateStoryboardMoodPresetsField(value: unknown): string {
+  return serializeStoryboardMoodPresets(normalizeStoryboardMoodPresets(value))
 }
 
 function getNextProjectModelMap(
@@ -294,7 +303,7 @@ export const PATCH = apiHandler(async (
   const allowedProjectFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
     'editModel', 'videoModel', 'audioModel', 'videoRatio', 'artStyle',
-    'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides',
+    'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides', 'storyboardMoodPresets', 'storyboardDefaultMoodPresetId',
   ] as const
 
   const updateData: Record<string, unknown> = {}
@@ -319,6 +328,16 @@ export const PATCH = apiHandler(async (
       continue
     }
 
+    if (field === 'storyboardMoodPresets') {
+      updateData.storyboardMoodPresets = validateStoryboardMoodPresetsField(body[field])
+      continue
+    }
+
+    if (field === 'storyboardDefaultMoodPresetId') {
+      updateData.storyboardDefaultMoodPresetId = normalizeStoryboardMoodText(body[field])
+      continue
+    }
+
     updateData[field] = body[field]
   }
 
@@ -327,10 +346,15 @@ export const PATCH = apiHandler(async (
     data: updateData})
 
   const novelPromotionDataWithSignedUrls = await attachMediaFieldsToProject(updatedNovelPromotionData)
+  const projectDataRecord = novelPromotionDataWithSignedUrls as Record<string, unknown>
+  const normalizedNovelPromotionData = {
+    ...novelPromotionDataWithSignedUrls,
+    storyboardMoodPresets: normalizeStoryboardMoodPresets(projectDataRecord.storyboardMoodPresets),
+  }
 
   const fullProject = {
     ...project,
-    novelPromotionData: novelPromotionDataWithSignedUrls}
+    novelPromotionData: normalizedNovelPromotionData}
 
   logProjectAction(
     'UPDATE_NOVEL_PROMOTION',

@@ -384,8 +384,10 @@ describe('panel speech plan helpers', () => {
     expect(payload.guardrails).toEqual([
       'generated audio disabled for this request',
       'no spoken dialogue, narration, lyrics, or other verbal audio',
+      'no background music, soundtrack, score, or musical bed',
       'no mouth-sync or speech-shaped facial performance that implies unheard words',
     ])
+    expect(payload.instruction).toContain('background music, soundtrack, score, musical bed')
   })
 
   it('emits explicit voiceover execution guidance', () => {
@@ -418,9 +420,11 @@ describe('panel speech plan helpers', () => {
     const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(payload.guardrails).toEqual([
       'listed lines are voiceover or off-screen narration only',
+      'no background music, soundtrack, score, or musical bed',
       'do not present listed words as on-screen mouth speech',
       'visible characters should read as listening, acting, or silent reaction',
     ])
+    expect(payload.instruction).toContain('Do not add background music, soundtrack, score, or musical bed.')
   })
 
   it('emits stronger silent and dialogue guardrails for regression-sensitive modes', () => {
@@ -437,9 +441,11 @@ describe('panel speech plan helpers', () => {
     })
     const silentPayload = JSON.parse(silentPrompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(silentPrompt).toContain('avoid lip-sync-like mouth performance or speech-shaped mouth cycles')
+    expect(silentPrompt).toContain('Do not add background music, soundtrack, score, or musical bed.')
     expect(silentPayload.guardrails).toEqual([
       'intentional non-speaking panel',
       'no spoken dialogue, narration, ad-libs, or implied verbal beats',
+      'no background music, soundtrack, score, or musical bed',
       'avoid lip-sync and speech-shaped mouth movement',
       'generated audio must stay non-verbal only',
     ])
@@ -464,10 +470,12 @@ describe('panel speech plan helpers', () => {
       },
     })
     const dialoguePayload = JSON.parse(dialoguePrompt.split('[Structured Speech Plan JSON]\n')[1])
+    expect(dialoguePrompt).toContain('Do not add background music, soundtrack, score, or musical bed.')
     expect(dialoguePrompt).toContain('Do not add extra spoken lines, narration, paraphrases, or substitute wording')
     expect(dialoguePrompt).toContain('prefer restrained or silent mouth performance over incorrect speech')
     expect(dialoguePayload.guardrails).toEqual([
       'use only the listed structured lines as spoken words',
+      'no background music, soundtrack, score, or musical bed',
       'keep spoken wording verbatim; do not paraphrase, summarize, or add new lines',
       'if a speaker is visible, mouth movement should align to the listed words only',
       'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',

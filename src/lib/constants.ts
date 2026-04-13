@@ -139,6 +139,7 @@ export type ArtStyleValue =
   | 'shaw-brothers'
   | 'hk-wuxia-90s'
   | 'anime-80s-handdrawn'
+  | 'cel-90s-hand-drawn'
   | 'wuxia-2000s-cg'
   | 'chinese-xianxia'
   | 'chinese-comic'
@@ -186,6 +187,13 @@ export const ART_STYLES: Array<{
     preview: '90',
     promptZh: '90年代日本传统手绘赛璐璐动画风格（参考城市猎人、吸血鬼猎人D、黄金小子），手工描线可见压力变化（非数码均匀线条），色彩以哑光平涂为主（胶片冲印后的轻微褪色感），阴影为硬边平涂色块（无渐变），人物脸型具有时代特征（高鼻梁、有棱角的下颌、修长身形），背景手绘写实感强，整体带有赛璐璐片叠层的轻微色彩错位感，画面充满粗粝的手工温度，有别于任何现代数码动画。',
     promptEn: 'Japanese 1990s traditional hand-drawn cel animation style (referencing City Hunter, Vampire Hunter D, Golden Boy), hand-inked lines with visible brush pressure variation (not digitally uniform), matte flat color fills with slight faded film-print desaturation, hard-edge flat shadow blocks without gradients, era-specific character design (sharp high nose bridge, angular jawlines, elongated proportions), hand-painted realistic backgrounds, subtle color misalignment from cel layer stacking, raw handcrafted warmth throughout — distinctly separate from any modern digital animation.'
+  },
+  {
+    value: 'cel-90s-hand-drawn',
+    label: '90s赛璐璐手绘风格',
+    preview: '赛',
+    promptZh: '90年代传统手绘赛璐璐动画风格，手工描线带自然粗细变化，哑光平涂色块，硬边阴影，无现代数码渐变，角色造型带时代感，背景为手绘上色，整体保留胶片时代的轻微颗粒、色偏与手工温度。',
+    promptEn: '1990s traditional hand-drawn cel animation style, naturally varied hand-inked line weight, matte flat color blocks, hard-edge shadows, no modern digital gradients, era-specific character styling, hand-painted backgrounds, with subtle film-era grain, color drift, and handcrafted warmth.'
   },
   {
     value: 'wuxia-2000s-cg',

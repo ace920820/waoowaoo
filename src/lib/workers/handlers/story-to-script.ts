@@ -1,10 +1,12 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { executeAiTextStep } from '@/lib/ai-runtime'
+import { safeParseJsonArray } from '@/lib/json-repair'
 import {
   getUserWorkflowConcurrencyConfig,
   resolveProjectModelCapabilityGenerationOptions,
 } from '@/lib/config-service'
+import { buildCharactersIntroduction } from '@/lib/constants'
 import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
 import { logAIAnalysis } from '@/lib/logging/semantic'
 import { onProjectNameAvailable } from '@/lib/logging/file-writer'
@@ -12,10 +14,13 @@ import { TaskTerminatedError } from '@/lib/task/errors'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import {
   runStoryToScriptOrchestrator,
+  type StoryToScriptClipCandidate,
+  type StoryToScriptOrchestratorInput,
   type StoryToScriptStepMeta,
   type StoryToScriptStepOutput,
   type StoryToScriptOrchestratorResult,
 } from '@/lib/novel-promotion/story-to-script/orchestrator'
+import { createClipContentMatcher } from '@/lib/novel-promotion/story-to-script/clip-matching'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import type { TaskJobData } from '@/lib/task/types'
 import {
@@ -47,6 +52,107 @@ function resolveRetryClipId(retryStepKey: string): string | null {
   if (!retryStepKey.startsWith('screenplay_')) return null
   const clipId = retryStepKey.slice('screenplay_'.length).trim()
   return clipId || null
+}
+
+const MAX_SPLIT_BOUNDARY_ATTEMPTS = 2
+const CLIP_BOUNDARY_SUFFIX = `
+
+[Boundary Constraints]
+1. The "start" and "end" anchors must come from the original text and be locatable.
+2. Allow punctuation/whitespace differences, but do not rewrite key entities or events.
+3. If anchors cannot be located reliably, return [] directly.`
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+}
+
+function parseClipArrayResponse(responseText: string): Array<Record<string, unknown>> {
+  return safeParseJsonArray(responseText, 'clips')
+}
+
+function computeStepProgress(meta: StoryToScriptStepMeta) {
+  return 15 + Math.min(55, Math.floor((meta.stepIndex / Math.max(1, meta.stepTotal)) * 55))
+}
+
+function readArtifactPayload(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readArtifactRows(payload: Record<string, unknown> | null, key: string): Record<string, unknown>[] {
+  const value = payload?.[key]
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+}
+
+function resolveStoryToScriptLibraries(params: {
+  novelData: {
+    characters: Array<{ name: string; introduction?: string | null }>
+    locations: Array<{ name: string; summary?: string | null; assetKind?: string | null }>
+  }
+  analysisArtifacts: {
+    characters: Record<string, unknown> | null
+    locations: Record<string, unknown> | null
+    props: Record<string, unknown> | null
+  }
+}) {
+  const baseCharacters = params.novelData.characters.map((item) => item.name)
+  const baseLocations = params.novelData.locations
+    .filter((item) => readAssetKind(item as unknown as Record<string, unknown>) !== 'prop')
+    .map((item) => item.name)
+  const baseProps = params.novelData.locations
+    .filter((item) => readAssetKind(item as unknown as Record<string, unknown>) === 'prop')
+    .map((item) => item.name)
+  const baseCharacterIntroductions = params.novelData.characters.map((item) => ({
+    name: item.name,
+    introduction: item.introduction || '',
+  }))
+
+  const analyzedCharacters = readArtifactRows(params.analysisArtifacts.characters, 'characters')
+  const analyzedLocations = readArtifactRows(params.analysisArtifacts.locations, 'locations')
+  const analyzedProps = readArtifactRows(params.analysisArtifacts.props, 'props')
+
+  const analyzedCharacterNames = analyzedCharacters
+    .map((item) => asString(item.name).trim())
+    .filter(Boolean)
+  const analyzedLocationNames = analyzedLocations
+    .map((item) => asString(item.name).trim())
+    .filter(Boolean)
+  const analyzedPropNames = analyzedProps
+    .map((item) => asString(item.name).trim())
+    .filter(Boolean)
+
+  const analyzedCharacterNameSet = new Set(analyzedCharacterNames)
+  const analyzedPropNameSet = new Set(analyzedPropNames)
+
+  const charactersLibName = (analyzedCharacterNames.length > 0
+    ? [...analyzedCharacterNames, ...baseCharacters.filter((name) => !analyzedCharacterNameSet.has(name))]
+    : baseCharacters).join('、') || '无'
+  const locationsLibName = (analyzedLocationNames.length > 0 ? analyzedLocationNames : baseLocations).join('、') || '无'
+  const propsLibName = (analyzedPropNames.length > 0
+    ? [...analyzedPropNames, ...baseProps.filter((name) => !analyzedPropNameSet.has(name))]
+    : baseProps).join('、') || '无'
+
+  const mergedCharacterIntroductions = analyzedCharacters.length > 0
+    ? [
+      ...analyzedCharacters.map((item) => ({
+        name: asString(item.name),
+        introduction: asString(item.introduction),
+      })),
+      ...baseCharacterIntroductions.filter((item) => !analyzedCharacterNameSet.has(item.name)),
+    ]
+    : baseCharacterIntroductions
+
+  return {
+    charactersLibName,
+    locationsLibName,
+    propsLibName,
+    charactersIntroduction: buildCharactersIntroduction(mergedCharacterIntroductions),
+  }
 }
 
 function buildWorkflowWorkerId(job: Job<TaskJobData>, label: string) {
@@ -148,7 +254,7 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
     throw new Error('runId is required for story_to_script pipeline')
   }
   const retryClipId = resolveRetryClipId(retryStepKey)
-  if (retryStepKey && !retryClipId) {
+  if (retryStepKey && retryStepKey !== 'split_clips' && !retryClipId) {
     throw new Error(`unsupported retry step for story_to_script: ${retryStepKey}`)
   }
   const workerId = buildWorkflowWorkerId(job, 'story_to_script')
@@ -245,6 +351,108 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
     }
   }
 
+  const reportStepError: NonNullable<StoryToScriptOrchestratorInput['onStepError']> = async (meta, message) => {
+    await reportTaskProgress(job, computeStepProgress(meta), {
+      stage: 'error',
+      displayMode: 'detail',
+      message,
+      stepId: meta.stepId,
+      stepKey: meta.stepId,
+      stepAttempt: meta.stepAttempt || (retryStepKey && meta.stepId === retryStepKey ? retryStepAttempt : 1),
+      stepTitle: meta.stepTitle,
+      stepIndex: meta.stepIndex,
+      stepTotal: meta.stepTotal,
+      dependsOn: Array.isArray(meta.dependsOn) ? meta.dependsOn : [],
+      groupId: meta.groupId || null,
+      parallelKey: meta.parallelKey || null,
+      retryable: meta.retryable !== false,
+      blockedBy: Array.isArray(meta.blockedBy) ? meta.blockedBy : [],
+      error: {
+        message,
+      },
+    })
+  }
+
+  const runScreenplayStep = async (params: {
+    stepMeta: StoryToScriptStepMeta
+    clipId: string
+    clipContent: string
+    startText?: string | null
+    endText?: string | null
+    summary?: string | null
+    location?: string | null
+    characters?: string[]
+    props?: string[]
+    libraries: {
+      locationsLibName: string
+      charactersLibName: string
+      propsLibName: string
+      charactersIntroduction: string
+    }
+  }) => {
+    const screenplayPrompt = screenplayPromptTemplate
+      .replace('{clip_content}', params.clipContent)
+      .replace('{locations_lib_name}', params.libraries.locationsLibName || '无')
+      .replace('{characters_lib_name}', params.libraries.charactersLibName || '无')
+      .replace('{props_lib_name}', params.libraries.propsLibName || '无')
+      .replace('{characters_introduction}', params.libraries.charactersIntroduction || '暂无角色介绍')
+      .replace('{clip_id}', params.clipId)
+
+    let screenplay: AnyObj | null = null
+    try {
+      const stepOutput = await (async () => {
+        try {
+          return await withInternalLLMStreamCallbacks(
+            callbacks,
+            async () => await runStep(params.stepMeta, screenplayPrompt, 'screenplay_conversion', 2200),
+          )
+        } finally {
+          await callbacks.flush()
+        }
+      })()
+      screenplay = parseScreenplayPayload(stepOutput.text)
+      if (!screenplay) {
+        throw new Error('retry screenplay output is empty')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await reportStepError(params.stepMeta, message)
+      await createArtifact({
+        runId,
+        stepKey: params.stepMeta.stepId,
+        artifactType: 'screenplay.clip',
+        refId: params.clipId,
+        payload: {
+          clipId: params.clipId,
+          success: false,
+          error: message,
+        },
+      })
+      throw error
+    }
+
+    await createArtifact({
+      runId,
+      stepKey: params.stepMeta.stepId,
+      artifactType: 'screenplay.clip',
+      refId: params.clipId,
+      payload: {
+        clipId: params.clipId,
+        success: true,
+        sceneCount: Array.isArray(screenplay.scenes) ? screenplay.scenes.length : 0,
+        screenplay,
+        startText: params.startText || null,
+        endText: params.endText || null,
+        summary: params.summary || null,
+        location: params.location || null,
+        characters: params.characters || [],
+        props: params.props || [],
+      },
+    })
+
+    return screenplay
+  }
+
   const leaseResult = await withWorkflowRunLease({
     runId,
     userId: job.data.userId,
@@ -255,6 +463,267 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
         stageLabel: 'progress.stage.storyToScriptPrepare',
         displayMode: 'detail',
       })
+
+      if (retryStepKey === 'split_clips') {
+        const [characterArtifacts, locationArtifacts, propArtifacts] = await Promise.all([
+          listArtifacts({
+            runId,
+            artifactType: 'analysis.characters',
+            refId: episodeId,
+            limit: 1,
+          }),
+          listArtifacts({
+            runId,
+            artifactType: 'analysis.locations',
+            refId: episodeId,
+            limit: 1,
+          }),
+          listArtifacts({
+            runId,
+            artifactType: 'analysis.props',
+            refId: episodeId,
+            limit: 1,
+          }),
+        ])
+        const libraries = resolveStoryToScriptLibraries({
+          novelData: {
+            characters: novelData.characters || [],
+            locations: (novelData.locations || []).map((item) => ({
+              name: item.name,
+              summary: item.summary || null,
+              assetKind: readAssetKind(item as unknown as Record<string, unknown>),
+            })),
+          },
+          analysisArtifacts: {
+            characters: readArtifactPayload(characterArtifacts[0]?.payload),
+            locations: readArtifactPayload(locationArtifacts[0]?.payload),
+            props: readArtifactPayload(propArtifacts[0]?.payload),
+          },
+        })
+
+        const splitPrompt = `${clipPromptTemplate
+          .replace('{input}', content)
+          .replace('{locations_lib_name}', libraries.locationsLibName || '无')
+          .replace('{characters_lib_name}', libraries.charactersLibName || '无')
+          .replace('{props_lib_name}', libraries.propsLibName || '无')
+          .replace('{characters_introduction}', libraries.charactersIntroduction || '暂无角色介绍')}${CLIP_BOUNDARY_SUFFIX}`
+
+        let splitStep: StoryToScriptStepOutput | null = null
+        let clipList: StoryToScriptClipCandidate[] = []
+        let lastBoundaryError: Error | null = null
+
+        for (let attempt = 1; attempt <= MAX_SPLIT_BOUNDARY_ATTEMPTS; attempt += 1) {
+          const splitMeta: StoryToScriptStepMeta = {
+            stepId: 'split_clips',
+            stepAttempt: retryStepAttempt + attempt - 1,
+            stepTitle: 'progress.streamStep.splitClips',
+            stepIndex: 1,
+            stepTotal: 1,
+            dependsOn: ['analyze_characters', 'analyze_locations'],
+            retryable: true,
+          }
+          const stepOutput = await (async () => {
+            try {
+              return await withInternalLLMStreamCallbacks(
+                callbacks,
+                async () => await runStep(splitMeta, splitPrompt, 'split_clips', 2600),
+              )
+            } finally {
+              await callbacks.flush()
+            }
+          })()
+          const rawClipList = parseClipArrayResponse(stepOutput.text)
+          if (rawClipList.length === 0) {
+            lastBoundaryError = new Error('split_clips returned empty clips')
+            continue
+          }
+
+          const matcher = createClipContentMatcher(content)
+          const nextClipList: StoryToScriptClipCandidate[] = []
+          let searchFrom = 0
+          let failedAt: { clipId: string; startText: string; endText: string } | null = null
+
+          for (let index = 0; index < rawClipList.length; index += 1) {
+            const item = rawClipList[index]
+            const startText = asString(item.start)
+            const endText = asString(item.end)
+            const clipId = `clip_${index + 1}`
+            const match = matcher.matchBoundary(startText, endText, searchFrom)
+            if (!match) {
+              failedAt = { clipId, startText, endText }
+              break
+            }
+
+            nextClipList.push({
+              id: clipId,
+              startText,
+              endText,
+              summary: asString(item.summary),
+              location: asString(item.location) || null,
+              characters: toStringArray(item.characters),
+              props: toStringArray(item.props),
+              content: content.slice(match.startIndex, match.endIndex),
+              matchLevel: match.level,
+              matchConfidence: match.confidence,
+            })
+            searchFrom = match.endIndex
+          }
+
+          if (!failedAt) {
+            splitStep = stepOutput
+            clipList = nextClipList
+            break
+          }
+
+          lastBoundaryError = new Error(
+            `split_clips boundary matching failed at ${failedAt.clipId}: start="${failedAt.startText}" end="${failedAt.endText}"`,
+          )
+        }
+
+        if (!splitStep) {
+          const errorMessage = (lastBoundaryError || new Error('split_clips boundary matching failed')).message
+          await reportStepError({
+            stepId: 'split_clips',
+            stepAttempt: retryStepAttempt,
+            stepTitle: 'progress.streamStep.splitClips',
+            stepIndex: 1,
+            stepTotal: 1,
+            dependsOn: ['analyze_characters', 'analyze_locations'],
+            retryable: true,
+          }, errorMessage)
+          throw lastBoundaryError || new Error('split_clips boundary matching failed')
+        }
+
+        await createArtifact({
+          runId,
+          stepKey: 'split_clips',
+          artifactType: 'clips.split',
+          refId: episodeId,
+          payload: {
+            clipList,
+            charactersLibName: libraries.charactersLibName,
+            locationsLibName: libraries.locationsLibName,
+            propsLibName: libraries.propsLibName,
+            charactersIntroduction: libraries.charactersIntroduction,
+          },
+        })
+
+        const screenplayResults: Array<{
+          clipId: string
+          success: boolean
+          sceneCount: number
+          screenplay?: AnyObj
+          error?: string
+        }> = []
+
+        for (let index = 0; index < clipList.length; index += 1) {
+          const clip = clipList[index]
+          const stepMeta: StoryToScriptStepMeta = {
+            stepId: `screenplay_${clip.id}`,
+            stepTitle: 'progress.streamStep.screenplayConversion',
+            stepIndex: index + 1,
+            stepTotal: clipList.length || 1,
+            dependsOn: ['split_clips'],
+            groupId: 'screenplay_conversion',
+            parallelKey: clip.id,
+            retryable: true,
+          }
+
+          try {
+            const screenplay = await runScreenplayStep({
+              stepMeta,
+              clipId: clip.id,
+              clipContent: clip.content,
+              startText: clip.startText,
+              endText: clip.endText,
+              summary: clip.summary,
+              location: clip.location,
+              characters: clip.characters,
+              props: clip.props,
+              libraries,
+            })
+            screenplayResults.push({
+              clipId: clip.id,
+              success: true,
+              sceneCount: Array.isArray(screenplay.scenes) ? screenplay.scenes.length : 0,
+              screenplay,
+            })
+          } catch (error) {
+            screenplayResults.push({
+              clipId: clip.id,
+              success: false,
+              sceneCount: 0,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        await reportTaskProgress(job, 80, {
+          stage: 'story_to_script_persist',
+          stageLabel: 'progress.stage.storyToScriptPersist',
+          displayMode: 'detail',
+        })
+        await assertRunActive('story_to_script_persist')
+
+        const persistedClipRows = await prisma.$transaction(async (tx) => {
+          const createdClipRows = await persistClips({
+            episodeId,
+            clipList,
+            db: tx,
+          })
+          const clipIdMap = new Map(createdClipRows.map((item) => [item.clipKey, item.id]))
+
+          for (const screenplayResult of screenplayResults) {
+            if (!screenplayResult.success || !screenplayResult.screenplay) continue
+            const clipRecordId = resolveClipRecordId(clipIdMap, screenplayResult.clipId)
+            if (!clipRecordId) continue
+            await tx.novelPromotionClip.update({
+              where: { id: clipRecordId },
+              data: {
+                screenplay: JSON.stringify(screenplayResult.screenplay),
+              },
+            })
+          }
+
+          return createdClipRows
+        })
+
+        const screenplayFailedCount = screenplayResults.filter((item) => !item.success).length
+        if (screenplayFailedCount > 0) {
+          const preview = screenplayResults
+            .filter((item) => !item.success)
+            .slice(0, 3)
+            .map((item) => `${item.clipId}:${item.error || 'unknown error'}`)
+            .join(' | ')
+          throw new Error(
+            `STORY_TO_SCRIPT_PARTIAL_FAILED: ${screenplayFailedCount}/${clipList.length} screenplay steps failed. ${preview}`,
+          )
+        }
+
+        await reportTaskProgress(job, 96, {
+          stage: 'story_to_script_persist_done',
+          stageLabel: 'progress.stage.storyToScriptPersistDone',
+          displayMode: 'detail',
+          message: 'retry step completed',
+          stepId: 'split_clips',
+          stepAttempt: retryStepAttempt,
+          stepTitle: 'progress.streamStep.splitClips',
+          stepIndex: 1,
+          stepTotal: 1,
+        })
+
+        return {
+          episodeId,
+          clipCount: clipList.length,
+          screenplaySuccessCount: screenplayResults.length,
+          screenplayFailedCount: 0,
+          persistedCharacters: 0,
+          persistedLocations: 0,
+          persistedProps: 0,
+          persistedClips: persistedClipRows.length,
+          retryStepKey,
+        }
+      }
 
       if (retryClipId) {
         const splitArtifacts = await listArtifacts({
@@ -284,14 +753,6 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
           throw new Error(`retry clip content is empty: ${retryClipId}`)
         }
 
-        const screenplayPrompt = screenplayPromptTemplate
-          .replace('{clip_content}', clipContent)
-          .replace('{locations_lib_name}', asString(splitPayload.locationsLibName) || '无')
-          .replace('{characters_lib_name}', asString(splitPayload.charactersLibName) || '无')
-          .replace('{props_lib_name}', asString(splitPayload.propsLibName) || '无')
-          .replace('{characters_introduction}', asString(splitPayload.charactersIntroduction) || '暂无角色介绍')
-          .replace('{clip_id}', retryClipId)
-
         const stepMeta: StoryToScriptStepMeta = {
           stepId: retryStepKey,
           stepAttempt: retryStepAttempt,
@@ -301,46 +762,21 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
           dependsOn: ['split_clips'],
           retryable: true,
         }
-        let screenplay: AnyObj | null = null
-        try {
-          const stepOutput = await (async () => {
-            try {
-              return await withInternalLLMStreamCallbacks(
-                callbacks,
-                async () => await runStep(stepMeta, screenplayPrompt, 'screenplay_conversion', 2200),
-              )
-            } finally {
-              await callbacks.flush()
-            }
-          })()
-          screenplay = parseScreenplayPayload(stepOutput.text)
-        } catch (error) {
-          await createArtifact({
-            runId,
-            stepKey: retryStepKey,
-            artifactType: 'screenplay.clip',
-            refId: retryClipId,
-            payload: {
-              clipId: retryClipId,
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          })
-          throw error
-        }
-        if (!screenplay) {
-          throw new Error('retry screenplay output is empty')
-        }
-        await createArtifact({
-          runId,
-          stepKey: retryStepKey,
-          artifactType: 'screenplay.clip',
-          refId: retryClipId,
-          payload: {
-            clipId: retryClipId,
-            success: true,
-            sceneCount: Array.isArray(screenplay.scenes) ? screenplay.scenes.length : 0,
-            screenplay,
+        const screenplay = await runScreenplayStep({
+          stepMeta,
+          clipId: retryClipId,
+          clipContent,
+          startText: asString(retryClip.startText) || null,
+          endText: asString(retryClip.endText) || null,
+          summary: asString(retryClip.summary) || null,
+          location: asString(retryClip.location) || null,
+          characters: toStringArray(retryClip.characters),
+          props: toStringArray(retryClip.props),
+          libraries: {
+            locationsLibName: asString(splitPayload.locationsLibName) || '无',
+            charactersLibName: asString(splitPayload.charactersLibName) || '无',
+            propsLibName: asString(splitPayload.propsLibName) || '无',
+            charactersIntroduction: asString(splitPayload.charactersIntroduction) || '暂无角色介绍',
           },
         })
 
@@ -429,6 +865,7 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
                 screenplayPromptTemplate,
               },
               runStep,
+              onStepError: reportStepError,
             }),
           )
         } finally {

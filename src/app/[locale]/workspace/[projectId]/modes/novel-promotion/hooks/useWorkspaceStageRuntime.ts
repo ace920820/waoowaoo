@@ -5,6 +5,7 @@ import type { WorkspaceStageRuntimeValue } from '../WorkspaceStageRuntimeContext
 import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config-contract'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from '../components/video'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface UseWorkspaceStageRuntimeParams {
   assetsLoading: boolean
@@ -15,6 +16,8 @@ interface UseWorkspaceStageRuntimeParams {
   isStartingScriptToStoryboard: boolean
   videoRatio: string | undefined
   artStyle: string | undefined
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  storyboardDefaultMoodPresetId: string | null | undefined
   videoModel: string | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: Array<{
@@ -65,6 +68,8 @@ export function useWorkspaceStageRuntime({
   isStartingScriptToStoryboard,
   videoRatio,
   artStyle,
+  storyboardMoodPresets,
+  storyboardDefaultMoodPresetId,
   videoModel,
   capabilityOverrides,
   userVideoModels,
@@ -95,10 +100,13 @@ export function useWorkspaceStageRuntime({
     isStartingScriptToStoryboard,
     videoRatio,
     artStyle,
+    storyboardMoodPresets,
+    storyboardDefaultMoodPresetId,
     videoModel,
     capabilityOverrides,
     userVideoModels: resolvedUserVideoModels,
     onNovelTextChange: (value) => handleUpdateEpisode('novelText', value),
+    onEpisodeDefaultMoodPresetChange: (value) => handleUpdateEpisode('storyboardDefaultMoodPresetId', value),
     onVideoRatioChange: (value) => handleUpdateConfig('videoRatio', value),
     onArtStyleChange: (value) => handleUpdateConfig('artStyle', value),
     onRunStoryToScript: () => runWithRebuildConfirm('storyToScript', runStoryToScriptFlow),
@@ -140,5 +148,7 @@ export function useWorkspaceStageRuntime({
     capabilityOverrides,
     videoModel,
     videoRatio,
+    storyboardMoodPresets,
+    storyboardDefaultMoodPresetId,
   ])
 }

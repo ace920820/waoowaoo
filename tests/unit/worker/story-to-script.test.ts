@@ -7,7 +7,11 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionProject: { findUnique: vi.fn() },
   novelPromotionEpisode: { findUnique: vi.fn() },
   $transaction: vi.fn(),
-  novelPromotionClip: { update: vi.fn(async () => ({})) },
+  novelPromotionClip: {
+    update: vi.fn(async () => ({})),
+    findFirst: vi.fn(async () => ({ id: 'clip-row-1' })),
+    create: vi.fn(async () => ({ id: 'clip-row-1' })),
+  },
   locationImage: { createMany: vi.fn(async () => ({ count: 0 })) },
 }))
 
@@ -28,11 +32,18 @@ const configMock = vi.hoisted(() => ({
 const orchestratorMock = vi.hoisted(() => ({
   runStoryToScriptOrchestrator: vi.fn(),
 }))
+const aiRuntimeMock = vi.hoisted(() => ({
+  executeAiTextStep: vi.fn(),
+}))
 const helperMock = vi.hoisted(() => ({
   persistAnalyzedCharacters: vi.fn(async () => [{ id: 'character-new-1' }]),
   persistAnalyzedLocations: vi.fn(async () => [{ id: 'location-new-1' }]),
   persistAnalyzedProps: vi.fn(async () => [{ id: 'prop-new-1' }]),
   persistClips: vi.fn(async () => [{ clipKey: 'clip-1', id: 'clip-row-1' }]),
+}))
+const runRuntimeServiceMock = vi.hoisted(() => ({
+  createArtifact: vi.fn(async () => undefined),
+  listArtifacts: vi.fn(async () => []),
 }))
 const workflowLeaseMock = vi.hoisted(() => ({
   assertWorkflowRunActive: vi.fn(async () => undefined),
@@ -43,6 +54,7 @@ const workflowLeaseMock = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/lib/ai-runtime', () => aiRuntimeMock)
 vi.mock('@/lib/llm-client', () => ({
   chatCompletion: vi.fn(),
   getCompletionParts: vi.fn(() => ({ text: '', reasoning: '' })),
@@ -87,6 +99,7 @@ vi.mock('@/lib/workers/handlers/story-to-script-helpers', () => ({
   persistClips: helperMock.persistClips,
   resolveClipRecordId: (clipIdMap: Map<string, string>, clipId: string) => clipIdMap.get(clipId) ?? null,
 }))
+vi.mock('@/lib/run-runtime/service', () => runRuntimeServiceMock)
 vi.mock('@/lib/run-runtime/workflow-lease', () => workflowLeaseMock)
 
 import { handleStoryToScriptTask } from '@/lib/workers/handlers/story-to-script'
@@ -123,6 +136,7 @@ describe('worker story-to-script behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => Promise<unknown>) => await fn(prismaMock))
+    aiRuntimeMock.executeAiTextStep.mockResolvedValue({ text: '', reasoning: '' })
 
     prismaMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
@@ -220,5 +234,50 @@ describe('worker story-to-script behavior', () => {
 
     const job = buildJob({ episodeId: 'episode-1', content: 'input content' })
     await expect(handleStoryToScriptTask(job)).rejects.toThrow('STORY_TO_SCRIPT_PARTIAL_FAILED')
+  })
+
+  it('accepts split_clips retry and falls back when prior analysis artifacts are missing', async () => {
+    orchestratorMock.runStoryToScriptOrchestrator.mockReset()
+    runRuntimeServiceMock.listArtifacts.mockResolvedValue([])
+    aiRuntimeMock.executeAiTextStep
+      .mockResolvedValueOnce({
+        text: JSON.stringify([
+          {
+            start: 'episode',
+            end: 'text',
+            summary: 'clip summary',
+            location: 'Old Town',
+            characters: ['Hero'],
+            props: ['Knife'],
+          },
+        ]),
+        reasoning: '',
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ scenes: [{ shot: 'close-up' }] }),
+        reasoning: '',
+      })
+
+    const job = buildJob({
+      episodeId: 'episode-1',
+      content: 'episode text',
+      retryStepKey: 'split_clips',
+      retryStepAttempt: 2,
+    })
+    const result = await handleStoryToScriptTask(job)
+
+    expect(result).toMatchObject({
+      episodeId: 'episode-1',
+      clipCount: 1,
+      screenplaySuccessCount: 1,
+      screenplayFailedCount: 0,
+      persistedClips: 1,
+      retryStepKey: 'split_clips',
+    })
+    expect(orchestratorMock.runStoryToScriptOrchestrator).not.toHaveBeenCalled()
+    expect(helperMock.persistClips).toHaveBeenCalledWith(expect.objectContaining({
+      episodeId: 'episode-1',
+      clipList: [expect.objectContaining({ id: 'clip_1' })],
+    }))
   })
 })
