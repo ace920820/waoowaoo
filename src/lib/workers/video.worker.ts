@@ -18,7 +18,11 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
-import { buildPanelVideoGenerationPrompt, derivePanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import {
+  buildPanelVideoGenerationPrompt,
+  derivePanelSpeechPlan,
+  resolveEffectivePanelDialogueText,
+} from '@/lib/novel-promotion/panel-speech-plan'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
@@ -26,6 +30,10 @@ type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
 type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
 type VideoPanelRecord = NonNullable<Awaited<ReturnType<typeof fetchPanelByStoryboardIndex>>>
+
+function readPanelDialogueOverride(panel: VideoPanelRecord): string | null | undefined {
+  return (panel as VideoPanelRecord & { dialogueOverride?: string | null }).dialogueOverride
+}
 
 function toDurationMs(value: number | null | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -179,6 +187,7 @@ async function generateVideoForPanel(
       storyboardId: panel.storyboardId,
       panelIndex: panel.panelIndex,
       srtSegment: panel.srtSegment,
+      dialogueOverride: readPanelDialogueOverride(panel),
     },
     clip: panel.storyboard?.clip || null,
     clips: panel.storyboard?.episode?.clips || [],
@@ -195,7 +204,8 @@ async function generateVideoForPanel(
       cameraMove: panel.cameraMove,
       description: panel.description,
       duration: panel.duration,
-      srtSegment: panel.srtSegment,
+      srtSegment: resolveEffectivePanelDialogueText(panel),
+      dialogueOverride: readPanelDialogueOverride(panel),
     },
     speechPlan,
     generateAudio: effectiveGenerateAudio,

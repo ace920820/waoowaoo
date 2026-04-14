@@ -194,6 +194,7 @@ model NovelPromotionPanel {
   location          String?
   characters        String?
   srtSegment        String?
+  dialogueOverride  String?
   srtStart          Float?
   srtEnd            Float?
   duration          Float?

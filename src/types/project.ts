@@ -175,6 +175,7 @@ export interface NovelPromotionPanel {
   characters: string | null
   props: string | null
   srtSegment: string | null
+  dialogueOverride?: string | null
   srtStart: number | null
   srtEnd: number | null
   duration: number | null

@@ -200,6 +200,7 @@ model NovelPromotionPanel {
   characters        String?                   @db.Text
   props             String?                   @db.Text
   srtSegment        String?                   @db.Text
+  dialogueOverride  String?                   @db.Text
   srtStart          Float?
   srtEnd            Float?
   duration          Float?

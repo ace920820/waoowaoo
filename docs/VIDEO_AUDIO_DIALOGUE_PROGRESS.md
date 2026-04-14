@@ -320,6 +320,33 @@ P1.1 当前有效分支提交：
   - 这次补丁优先解决“对白文本改了但 lineIndex 结构未重排”的真实回归问题。
   - 若用户对 screenplay 做了更激进的结构改动（例如对白条数整体变化），当前后续链路仍建议重新跑 voice analyze / storyboard 以拿到新的稳定映射。
 
+### P3 第二阶段补丁：视频阶段 panel 级对白覆盖（本次）
+目标：让用户在 `stage=videos` 直接修正当前 panel 的对白文本，并确保 UI 预览与视频 worker 执行消费同一份有效文本。
+
+- 本次能力：
+  - `stage=videos` 单镜头卡片新增轻量 `对白覆盖` 编辑入口
+  - panel 持久化新增 `dialogueOverride`
+  - speech plan 明确增加优先级：
+    - `panel.dialogueOverride`
+    - `matched voice lines / screenplay mapping`
+    - `panel.srtSegment` 回落匹配
+  - video worker 构造 prompt 时，`Speech Direction` 与 `Panel text reference` 都改为消费同一个 effective dialogue，避免“预览是新对白、执行还是旧对白”
+
+- 本次收口点：
+  - `panel_dialogue_override` 成为显式 speech source
+  - 当 override 存在时，不再静默消费旧 `matchedVoiceLines.content` 或旧 `panel.srtSegment`
+  - screenplay 仍是无 override 时的默认 truth source；本次不扩成完整 script editor
+
+- 本次最小验证：
+  - 新增 `panel speech plan` 回归断言：
+    - override 会压过旧 voice line / 旧 panel text
+    - prompt 中只出现新对白，不再出现旧 `Panel text reference`
+  - 新增 video card UI 断言：
+    - 卡片能显示视频阶段对白覆盖状态
+    - speech contract badge/summary 能明确显示 manual override
+  - 新增 panel route 合同断言：
+    - `PATCH /api/novel-promotion/[projectId]/panel` 可直接持久化 `dialogueOverride`
+
 ### Art Style 扩展与兼容修复（本次）
 本次补做了当前风格系统的正式扩容，目标是让新增风格直接复用现有 `ART_STYLES -> isArtStyleValue -> getArtStylePrompt -> worker prompt 注入` 链路，不引入新 schema，不扩成复杂风格引擎。
 
@@ -627,5 +654,5 @@ P1.1 当前有效分支提交：
 - `stage=videos` 首尾帧与多轮回归已完成
 - P1 + P1.1（对白真相源统一与风险收口）已完成
 - P2（speech plan 接线、worker prompt contract、guardrails）已完成主要收口
-- 当前已完成 **P3 第一阶段**：在 `stage=videos` panel 卡片内落地只读 speech contract 可见性层
-- 下一步进入 **P3 第二阶段的小步增强**：继续提升可验证性，但不扩成 editor / 大配置面板
+- 当前已完成 **P3 第二阶段的小步增强**：在 `stage=videos` panel 卡片内支持轻量对白覆盖，并让 preview / worker execution 对齐同一 effective dialogue
+- 下一步继续做更细的 stale 音频提示与 provider 验证，但仍不扩成 editor / 大配置面板

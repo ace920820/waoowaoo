@@ -9,6 +9,7 @@ type PanelRow = {
   storyboardId: string
   panelIndex: number
   srtSegment: string | null
+  dialogueOverride?: string | null
   videoUrl: string | null
   imageUrl: string | null
   videoPrompt: string | null
@@ -352,6 +353,57 @@ describe('worker video processor behavior', () => {
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.not.objectContaining({
         bgm: expect.anything(),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 优先使用视频阶段手动对白覆盖，避免预览与执行文本不一致', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '旧对白',
+      dialogueOverride: '视频阶段改后的对白',
+      matchedVoiceLines: [
+        {
+          lineIndex: 1,
+          speaker: 'Hero',
+          content: '旧对白',
+          matchedPanelId: 'panel-1',
+          matchedStoryboardId: 'storyboard-1',
+          matchedPanelIndex: 0,
+        },
+      ],
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Panel text reference: 视频阶段改后的对白'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('content="视频阶段改后的对白"'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        prompt: expect.stringContaining('Panel text reference: 旧对白'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        prompt: expect.stringContaining('content="旧对白"'),
       }),
     })
   })

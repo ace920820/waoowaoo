@@ -54,7 +54,7 @@ interface UseWorkspaceStageRuntimeParams {
     storyboardId: string,
     panelIndex: number,
     value: string,
-    field?: 'videoPrompt' | 'firstLastFramePrompt',
+    field?: 'videoPrompt' | 'firstLastFramePrompt' | 'dialogueOverride',
   ) => Promise<void>
   handleUpdatePanelVideoModel: (storyboardId: string, panelIndex: number, model: string) => Promise<void>
 }

@@ -35,6 +35,13 @@
     "regenerateLipSync": "重新生成口型同步",
     "editPrompt": "编辑提示词",
     "clickToEditPrompt": "点击编辑提示词...",
+    "dialogueOverride": {
+      "title": "对白覆盖",
+      "placeholder": "输入该镜头在视频生成时要说的对白...",
+      "empty": "点击添加视频阶段对白覆盖；留空则继续使用剧本/分镜对白。",
+      "fallbackHint": "仅覆盖这个镜头下次视频生成时使用的对白，不会回写剧本或重跑分镜。",
+      "overrideActive": "已启用视频阶段手动对白覆盖；下次生成会优先使用这里的文本。"
+    },
     "shot": "镜头 {number}",
     "unknownShotType": "未知景别",
     "correspondingText": "对应原文",
@@ -55,6 +62,7 @@
     "speechContract": {
       "title": "Speech 约束预览",
       "match": {
+        "override": "手动覆盖",
         "matched": "已命中",
         "fallback": "回落命中",
         "none": "未命中"
@@ -69,11 +77,14 @@
         "voiceover": "旁白"
       },
       "source": {
+        "panel_dialogue_override": "视频阶段手动对白覆盖",
         "screenplay_voice_lines": "剧本对白映射",
         "screenplay_panel_match": "面板文本回落匹配",
         "none": "未命中 speech contract"
       },
       "summary": {
+        "override": "这是当前生成配置下的 speech 约束预览；下次生成会优先使用你在视频阶段手动编辑的对白。",
+        "overrideAudioDisabled": "这是当前生成配置下的 speech 约束预览；虽然已设置视频阶段手动对白覆盖，但这次关闭音频，所以下次生成会按静音约束执行。",
         "matched": "这是当前生成配置下的 speech 约束预览；下次生成会按这组剧本台词约束执行。",
         "matchedAudioDisabled": "这是当前生成配置下的 speech 约束预览；虽然命中了剧本台词，但这次关闭音频，所以下次生成会按静音约束执行。",
         "fallback": "这是当前生成配置下的 speech 约束预览；当前没有命中显式对白映射，下次生成会按面板文本回落匹配的结果约束。",

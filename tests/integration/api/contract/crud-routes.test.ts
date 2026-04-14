@@ -373,6 +373,28 @@ describe('api contract - crud routes (behavior)', () => {
     }))
   })
 
+  it('PATCH /novel-promotion/[projectId]/panel persists dialogueOverride without requiring storyboard regeneration', async () => {
+    authState.authenticated = true
+    const mod = await import('@/app/api/novel-promotion/[projectId]/panel/route')
+    const req = buildMockRequest({
+      path: '/api/novel-promotion/project-1/panel',
+      method: 'PATCH',
+      body: {
+        panelId: 'panel-1',
+        dialogueOverride: '视频阶段手动改写对白',
+      },
+    })
+
+    const res = await mod.PATCH(req, { params: Promise.resolve({ projectId: 'project-1' }) })
+    expect(res.status).toBe(200)
+    expect(prismaMock.novelPromotionPanel.update).toHaveBeenCalledWith({
+      where: { id: 'panel-1' },
+      data: {
+        dialogueOverride: '视频阶段手动改写对白',
+      },
+    })
+  })
+
   it('DELETE /asset-hub/characters/[characterId] deletes owned character and blocks non-owner', async () => {
     authState.authenticated = true
     const mod = await import('@/app/api/asset-hub/characters/[characterId]/route')

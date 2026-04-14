@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
-import { invalidateQueryTemplates, requestJsonWithError } from './mutation-shared'
+import { requestJsonWithError } from './mutation-shared'
 
 /**
  * 获取剧集可下载视频列表（项目）
@@ -61,7 +61,7 @@ export function useUpdateProjectPanelVideoPrompt(projectId: string) {
       storyboardId: string
       panelIndex: number
       value: string
-      field?: 'videoPrompt' | 'firstLastFramePrompt'
+      field?: 'videoPrompt' | 'firstLastFramePrompt' | 'dialogueOverride'
     }) =>
       await requestJsonWithError(
         `/api/novel-promotion/${projectId}/panel`,
@@ -73,13 +73,19 @@ export function useUpdateProjectPanelVideoPrompt(projectId: string) {
             panelIndex,
             ...(field === 'firstLastFramePrompt'
               ? { firstLastFramePrompt: value }
+              : field === 'dialogueOverride'
+                ? { dialogueOverride: value }
               : { videoPrompt: value }),
           }),
         },
         'update failed',
       ),
-    onSettled: () => {
-      invalidateQueryTemplates(queryClient, [queryKeys.projectData(projectId)])
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.projectData(projectId) }),
+        queryClient.invalidateQueries({ queryKey: ['storyboards'] }),
+        queryClient.invalidateQueries({ queryKey: ['episode-data', projectId] }),
+      ])
     },
   })
 }

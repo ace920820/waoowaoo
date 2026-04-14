@@ -37,6 +37,10 @@ export interface VideoPanelCardShellProps {
   isSavingPrompt: boolean
   onUpdateLocalPrompt: (value: string) => void
   onSavePrompt: (value: string) => Promise<void>
+  localDialogueOverride: string
+  isSavingDialogueOverride: boolean
+  onUpdateLocalDialogueOverride: (value: string) => void
+  onSaveDialogueOverride: (value: string) => Promise<void>
   onGenerateVideo: (
     storyboardId: string,
     panelIndex: number,

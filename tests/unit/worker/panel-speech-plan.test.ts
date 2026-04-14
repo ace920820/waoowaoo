@@ -49,6 +49,52 @@ describe('panel speech plan helpers', () => {
     })
   })
 
+  it('prefers video-stage dialogue override over matched voice-line content', () => {
+    const speechPlan = derivePanelSpeechPlan({
+      panel: {
+        id: 'panel-1',
+        storyboardId: 'storyboard-1',
+        panelIndex: 0,
+        srtSegment: '旧对白',
+        dialogueOverride: '新对白',
+      },
+      clip: {
+        id: 'clip-1',
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '旧对白' },
+              ],
+            },
+          ],
+        }),
+      },
+      voiceLines: [
+        {
+          lineIndex: 1,
+          speaker: 'Hero',
+          content: '旧对白',
+          matchedPanelId: 'panel-1',
+          matchedStoryboardId: 'storyboard-1',
+          matchedPanelIndex: 0,
+        },
+      ],
+    })
+
+    expect(speechPlan).toMatchObject({
+      mode: 'dialogue',
+      source: 'panel_dialogue_override',
+      primaryText: '新对白',
+      speakers: ['Hero'],
+    })
+    expect(speechPlan.lines[0]).toMatchObject({
+      speaker: 'Hero',
+      content: '新对白',
+    })
+  })
+
   it('derives voiceover mode from screenplay text when panel mapping exists without voice lines', () => {
     const speechPlan = derivePanelSpeechPlan({
       panel: {
@@ -547,6 +593,37 @@ describe('panel speech plan helpers', () => {
     expect(prompt).toContain('content="新对白"')
   })
 
+  it('uses dialogue override as the panel text reference to keep preview and execution aligned', () => {
+    const prompt = buildPanelVideoGenerationPrompt({
+      basePrompt: 'Keep the hero in frame.',
+      panel: {
+        shotType: '近景',
+        srtSegment: '旧对白',
+        dialogueOverride: '视频阶段新对白',
+      },
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'panel_dialogue_override',
+        generatedAudioRequired: true,
+        primaryText: '视频阶段新对白',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 1,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '视频阶段新对白',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(prompt).toContain('Panel text reference: 视频阶段新对白')
+    expect(prompt).not.toContain('Panel text reference: 旧对白')
+    expect(prompt).toContain('content="视频阶段新对白"')
+  })
+
   it('builds matched dialogue contract view-model for audio-enabled generation', () => {
     const viewModel = buildPanelSpeechContractViewModel({
       generateAudio: true,
@@ -575,6 +652,36 @@ describe('panel speech plan helpers', () => {
       matchKind: 'matched',
       source: 'screenplay_voice_lines',
       guardrails: ['verbatim_only', 'no_extra_lines', 'align_visible_speech'],
+    })
+  })
+
+  it('builds override contract view-model when video-stage manual dialogue is active', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: true,
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'panel_dialogue_override',
+        generatedAudioRequired: true,
+        primaryText: '手动改写对白',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 7,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '手动改写对白',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: true,
+      effectiveMode: 'dialogue',
+      matchKind: 'override',
+      source: 'panel_dialogue_override',
+      primaryText: '手动改写对白',
     })
   })
 

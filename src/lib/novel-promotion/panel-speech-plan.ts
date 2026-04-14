@@ -17,14 +17,14 @@ export type PanelSpeechLine = {
 
 export type PanelSpeechPlan = {
   mode: PanelSpeechMode
-  source: 'screenplay_voice_lines' | 'screenplay_panel_match' | 'none'
+  source: 'panel_dialogue_override' | 'screenplay_voice_lines' | 'screenplay_panel_match' | 'none'
   generatedAudioRequired: boolean
   primaryText: string | null
   speakers: string[]
   lines: PanelSpeechLine[]
 }
 
-export type PanelSpeechContractMatchKind = 'matched' | 'fallback' | 'none'
+export type PanelSpeechContractMatchKind = 'override' | 'matched' | 'fallback' | 'none'
 
 export type PanelSpeechContractGuardrail =
   | 'non_verbal_only'
@@ -55,6 +55,7 @@ type PanelSpeechPlanPanel = {
   storyboardId?: string | null
   panelIndex?: number | null
   srtSegment?: string | null
+  dialogueOverride?: string | null
 }
 
 type PanelSpeechPlanClip = ClipDialogueSource
@@ -86,6 +87,7 @@ type VideoPromptPanelContext = {
   description?: string | null
   duration?: number | null
   srtSegment?: string | null
+  dialogueOverride?: string | null
 }
 
 function normalizeText(value: unknown): string {
@@ -98,6 +100,22 @@ function normalizeText(value: unknown): string {
 
 function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
+}
+
+function trimNullableText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+export function resolvePanelDialogueOverride(panel?: Pick<PanelSpeechPlanPanel, 'dialogueOverride'> | null): string | null {
+  return trimNullableText(panel?.dialogueOverride)
+}
+
+export function resolveEffectivePanelDialogueText(
+  panel?: Pick<PanelSpeechPlanPanel, 'srtSegment' | 'dialogueOverride'> | null,
+): string | null {
+  return resolvePanelDialogueOverride(panel) ?? trimNullableText(panel?.srtSegment)
 }
 
 function resolveScreenplayItems(params: Pick<PanelSpeechPlanParams, 'clip' | 'clips'>): {
@@ -182,6 +200,31 @@ function toSpeechLineFromVoiceLine(
   }
 }
 
+function toSpeechLineWithOverriddenContent(
+  line: PanelSpeechLine,
+  content: string,
+): PanelSpeechLine {
+  return {
+    ...line,
+    content,
+  }
+}
+
+function toSpeechLineFromOverride(
+  content: string,
+  metadata?: Partial<PanelSpeechLine> | null,
+): PanelSpeechLine {
+  return {
+    lineIndex: typeof metadata?.lineIndex === 'number' ? metadata.lineIndex : null,
+    type: metadata?.type === 'voiceover' ? 'voiceover' : 'dialogue',
+    speaker: typeof metadata?.speaker === 'string' && metadata.speaker.trim() ? metadata.speaker.trim() : '旁白',
+    content,
+    parenthetical: typeof metadata?.parenthetical === 'string' && metadata.parenthetical.trim()
+      ? metadata.parenthetical.trim()
+      : null,
+  }
+}
+
 type PanelSpeechTextMatch = {
   item: ScreenplayDialogueItem
   quality: 'exact' | 'narrow_fuzzy'
@@ -191,7 +234,7 @@ function pickSinglePanelSpeechMatch(
   panel: PanelSpeechPlanPanel,
   screenplayItems: ScreenplayDialogueItem[],
 ): PanelSpeechTextMatch[] {
-  const panelText = normalizeText(panel.srtSegment)
+  const panelText = normalizeText(resolveEffectivePanelDialogueText(panel))
   if (!panelText) return []
 
   const exactMatches = screenplayItems.filter((item) => {
@@ -233,6 +276,7 @@ function pickSinglePanelSpeechMatch(
 
 export function derivePanelSpeechPlan(params: PanelSpeechPlanParams): PanelSpeechPlan {
   const { allItems: screenplayItems, clipItems: clipScreenplayItems } = resolveScreenplayItems(params)
+  const dialogueOverride = resolvePanelDialogueOverride(params.panel)
 
   const screenplayItemByLineIndex = new Map<number, ScreenplayDialogueItem>()
   for (const item of screenplayItems) {
@@ -265,13 +309,27 @@ export function derivePanelSpeechPlan(params: PanelSpeechPlanParams): PanelSpeec
     })
     .filter((line): line is PanelSpeechLine => !!line)
 
+  const fallbackPanelTextMatches = pickSinglePanelSpeechMatch(params.panel, clipScreenplayItems)
+
+  if (dialogueOverride) {
+    const overrideMetadata = fallbackPanelTextMatches[0]?.item
+      ? toSpeechLineFromScreenplay(fallbackPanelTextMatches[0].item)
+      : matchedVoiceLines[0] || null
+    const overrideLines = overrideMetadata
+      ? [toSpeechLineWithOverriddenContent(overrideMetadata, dialogueOverride)]
+      : [toSpeechLineFromOverride(dialogueOverride)]
+    return buildSpeechPlan(overrideLines, 'panel_dialogue_override')
+  }
+
   if (matchedVoiceLines.length > 0) {
     return buildSpeechPlan(matchedVoiceLines, 'screenplay_voice_lines')
   }
 
-  const screenplayMatches = pickSinglePanelSpeechMatch(params.panel, clipScreenplayItems)
-  if (screenplayMatches.length > 0) {
-    return buildSpeechPlan(screenplayMatches.map((match) => toSpeechLineFromScreenplay(match.item)), 'screenplay_panel_match')
+  if (fallbackPanelTextMatches.length > 0) {
+    return buildSpeechPlan(
+      fallbackPanelTextMatches.map((match) => toSpeechLineFromScreenplay(match.item)),
+      'screenplay_panel_match',
+    )
   }
 
   return buildSpeechPlan([], 'none')
@@ -413,9 +471,11 @@ export function buildPanelSpeechContractViewModel(params: {
     : params.speechPlan.generatedAudioRequired
   const matchKind: PanelSpeechContractMatchKind = params.speechPlan.source === 'screenplay_voice_lines'
     ? 'matched'
-    : params.speechPlan.source === 'screenplay_panel_match'
-      ? 'fallback'
-      : 'none'
+    : params.speechPlan.source === 'panel_dialogue_override'
+      ? 'override'
+      : params.speechPlan.source === 'screenplay_panel_match'
+        ? 'fallback'
+        : 'none'
 
   return {
     audioEnabled,
@@ -564,8 +624,9 @@ function buildPanelVisualContextBlock(params: {
     lines.push(`Target duration seconds: ${panel.duration}`)
   }
   const shouldIncludePanelTextReference = params.speechPlan?.source !== 'screenplay_voice_lines'
-  if (shouldIncludePanelTextReference && typeof panel.srtSegment === 'string' && panel.srtSegment.trim()) {
-    lines.push(`Panel text reference: ${panel.srtSegment.trim()}`)
+  const effectivePanelText = resolveEffectivePanelDialogueText(panel)
+  if (shouldIncludePanelTextReference && effectivePanelText) {
+    lines.push(`Panel text reference: ${effectivePanelText}`)
   }
 
   if (lines.length === 0) return null

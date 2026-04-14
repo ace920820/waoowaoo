@@ -40,6 +40,10 @@ export function useVideoPanelActions({
   isSavingPrompt,
   onUpdateLocalPrompt,
   onSavePrompt,
+  localDialogueOverride,
+  isSavingDialogueOverride,
+  onUpdateLocalDialogueOverride,
+  onSaveDialogueOverride,
   onGenerateVideo,
   onUpdatePanelVideoModel,
   onToggleLink,
@@ -87,6 +91,11 @@ export function useVideoPanelActions({
     onUpdateLocalPrompt,
     onSavePrompt,
   })
+  const dialogueEditor = usePanelPromptEditor({
+    localPrompt: localDialogueOverride,
+    onUpdateLocalPrompt: onUpdateLocalDialogueOverride,
+    onSavePrompt: onSaveDialogueOverride,
+  })
 
   const voiceManager = usePanelVoiceManager({
     projectId,
@@ -125,6 +134,11 @@ export function useVideoPanelActions({
       ...promptEditor,
       localPrompt,
       isSavingPrompt,
+    },
+    dialogueEditor: {
+      ...dialogueEditor,
+      localPrompt: localDialogueOverride,
+      isSavingPrompt: isSavingDialogueOverride,
     },
     voiceManager,
     lipSync,

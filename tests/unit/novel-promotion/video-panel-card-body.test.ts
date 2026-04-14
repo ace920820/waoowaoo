@@ -55,13 +55,20 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     if (key === 'promptModal.promptLabel') return '视频提示词'
     if (key === 'promptModal.placeholder') return '输入首尾帧视频提示词...'
     if (key === 'panelCard.clickToEditPrompt') return '点击编辑提示词...'
+    if (key === 'panelCard.dialogueOverride.title') return '对白覆盖'
+    if (key === 'panelCard.dialogueOverride.placeholder') return '输入该镜头在视频生成时要说的对白...'
+    if (key === 'panelCard.dialogueOverride.empty') return '点击添加视频阶段对白覆盖；留空则继续使用剧本/分镜对白。'
+    if (key === 'panelCard.dialogueOverride.fallbackHint') return '仅覆盖这个镜头下次视频生成时使用的对白，不会回写剧本或重跑分镜。'
+    if (key === 'panelCard.dialogueOverride.overrideActive') return '已启用视频阶段手动对白覆盖；下次生成会优先使用这里的文本。'
     if (key === 'panelCard.selectModel') return '选择模型'
     if (key === 'panelCard.generateVideo') return '生成视频'
     if (key === 'panelCard.unknownShotType') return '未知镜头'
     if (key === 'panelCard.speechContract.title') return 'Speech 约束预览'
+    if (key === 'panelCard.speechContract.match.override') return '手动覆盖'
     if (key === 'panelCard.speechContract.mode.silent') return '静音'
     if (key === 'panelCard.speechContract.mode.dialogue') return '对白'
     if (key === 'panelCard.speechContract.mode.voiceover') return '旁白'
+    if (key === 'panelCard.speechContract.source.panel_dialogue_override') return '视频阶段手动对白覆盖'
     if (key === 'panelCard.speechContract.source.screenplay_voice_lines') return '剧本对白映射'
     if (key === 'panelCard.speechContract.source.screenplay_panel_match') return '面板文本回落匹配'
     if (key === 'panelCard.speechContract.source.none') return '未命中 speech contract'
@@ -70,6 +77,8 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
     if (key === 'panelCard.speechContract.match.none') return '未命中'
     if (key === 'panelCard.speechContract.audio.enabled') return '本次生成含音频'
     if (key === 'panelCard.speechContract.audio.disabled') return '本次生成禁用音频'
+    if (key === 'panelCard.speechContract.summary.override') return '这是当前生成配置下的 speech 约束预览；下次生成会优先使用你在视频阶段手动编辑的对白。'
+    if (key === 'panelCard.speechContract.summary.overrideAudioDisabled') return '这是当前生成配置下的 speech 约束预览；虽然已设置视频阶段手动对白覆盖，但这次关闭音频，所以下次生成会按静音约束执行。'
     if (key === 'panelCard.speechContract.summary.matched') return '这是当前生成配置下的 speech 约束预览；下次生成会按这组剧本台词约束执行。'
     if (key === 'panelCard.speechContract.summary.matchedAudioDisabled') return '这是当前生成配置下的 speech 约束预览；虽然命中了剧本台词，但这次关闭音频，所以下次生成会按静音约束执行。'
     if (key === 'panelCard.speechContract.summary.fallback') return '这是当前生成配置下的 speech 约束预览；当前没有命中显式对白映射，下次生成会按面板文本回落匹配的结果约束。'
@@ -160,6 +169,16 @@ function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRu
       handleCancelEdit: () => undefined,
       isSavingPrompt: false,
       localPrompt: '人物从席间回身，接到下一镜头',
+    },
+    dialogueEditor: {
+      isEditing: false,
+      editingPrompt: '',
+      setEditingPrompt: () => undefined,
+      handleStartEdit: () => undefined,
+      handleSave: () => undefined,
+      handleCancelEdit: () => undefined,
+      isSavingPrompt: false,
+      localPrompt: '',
     },
     voiceManager: {
       hasMatchedAudio: false,
@@ -305,6 +324,45 @@ describe('VideoPanelCardBody', () => {
     expect(markup).toContain('Hero (压低声音)')
     expect(markup).toContain('把门关上。')
     expect(markup).toContain('只使用命中的结构化台词，不要改写。')
+  })
+
+  it('renders video-stage dialogue override state from the same speech plan used for execution', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoPanelCardBody, {
+        runtime: createRuntime({
+          panel: {
+            ...createRuntime().panel,
+            dialogueOverride: '把门轻轻关上。',
+            speechPlan: {
+              mode: 'dialogue',
+              source: 'panel_dialogue_override',
+              generatedAudioRequired: true,
+              primaryText: '把门轻轻关上。',
+              speakers: ['Hero'],
+              lines: [
+                {
+                  lineIndex: 7,
+                  type: 'dialogue',
+                  speaker: 'Hero',
+                  content: '把门轻轻关上。',
+                  parenthetical: null,
+                },
+              ],
+            },
+          },
+          dialogueEditor: {
+            ...createRuntime().dialogueEditor,
+            localPrompt: '把门轻轻关上。',
+          },
+        }),
+      }),
+    )
+
+    expect(markup).toContain('对白覆盖')
+    expect(markup).toContain('把门轻轻关上。')
+    expect(markup).toContain('已启用视频阶段手动对白覆盖；下次生成会优先使用这里的文本。')
+    expect(markup).toContain('视频阶段手动对白覆盖')
+    expect(markup).toContain('手动覆盖')
   })
 
   it('renders fallback speech contract as silent when generateAudio is disabled', () => {

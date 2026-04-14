@@ -35,6 +35,13 @@
     "regenerateLipSync": "Regenerate Lip Sync",
     "editPrompt": "Edit Prompt",
     "clickToEditPrompt": "Click to edit prompt...",
+    "dialogueOverride": {
+      "title": "Dialogue Override",
+      "placeholder": "Enter the dialogue this panel should use during video generation...",
+      "empty": "Click to add a video-stage dialogue override. Leave empty to keep using screenplay/storyboard dialogue.",
+      "fallbackHint": "This only overrides the next video generation for this panel. It does not rewrite the screenplay or rerun storyboards.",
+      "overrideActive": "Video-stage manual dialogue override is active. The next generation will use this text first."
+    },
     "shot": "Shot {number}",
     "unknownShotType": "Unknown",
     "correspondingText": "Corresponding Text",
@@ -55,6 +62,7 @@
     "speechContract": {
       "title": "Speech Contract Preview",
       "match": {
+        "override": "Manual Override",
         "matched": "Matched",
         "fallback": "Fallback",
         "none": "No Match"
@@ -69,11 +77,14 @@
         "voiceover": "Voiceover"
       },
       "source": {
+        "panel_dialogue_override": "Video-stage manual dialogue override",
         "screenplay_voice_lines": "Screenplay speech mapping",
         "screenplay_panel_match": "Panel text fallback match",
         "none": "No speech contract match"
       },
       "summary": {
+        "override": "This is a preview of the speech constraints for the current generation settings; the next generation will use your video-stage manual dialogue override first.",
+        "overrideAudioDisabled": "This is a preview of the speech constraints for the current generation settings; a video-stage manual dialogue override is set, but audio is disabled, so the next generation will follow silent constraints.",
         "matched": "This is a preview of the speech constraints for the current generation settings; the next generation will follow these screenplay lines.",
         "matchedAudioDisabled": "This is a preview of the speech constraints for the current generation settings; the panel matched screenplay lines, but audio is disabled, so the next generation will follow silent constraints.",
         "fallback": "This is a preview of the speech constraints for the current generation settings; no explicit speech-line mapping matched, so the next generation will use the panel-text fallback match.",

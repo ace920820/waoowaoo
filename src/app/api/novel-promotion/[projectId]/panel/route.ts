@@ -31,6 +31,13 @@ function parseMoodPresetId(value: unknown): string | null {
   return trimmed || null
 }
 
+function normalizeNullableTextField(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') throw new ApiError('INVALID_PARAMS')
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
 /**
  * POST /api/novel-promotion/[projectId]/panel
  * 新增一个 Panel
@@ -241,7 +248,7 @@ export const PATCH = apiHandler(async (
   const panelModel = prisma.novelPromotionPanel as unknown as {
     create: (args: { data: Record<string, unknown> }) => Promise<unknown>
   }
-  const { panelId, storyboardId, panelIndex, videoPrompt, firstLastFramePrompt } = body
+  const { panelId, storyboardId, panelIndex, videoPrompt, firstLastFramePrompt, dialogueOverride } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
   if (panelId) {
@@ -257,11 +264,13 @@ export const PATCH = apiHandler(async (
     const updateData: {
       videoPrompt?: string | null
       firstLastFramePrompt?: string | null
+      dialogueOverride?: string | null
       storyboardMoodPresetId?: string | null
       customMood?: string | null
     } = {}
     if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
     if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
+    if (dialogueOverride !== undefined) updateData.dialogueOverride = normalizeNullableTextField(dialogueOverride)
     if (body.storyboardMoodPresetId !== undefined) updateData.storyboardMoodPresetId = parseMoodPresetId(body.storyboardMoodPresetId)
     if (body.customMood !== undefined) updateData.customMood = normalizeStoryboardMoodText(body.customMood)
 
@@ -291,6 +300,7 @@ export const PATCH = apiHandler(async (
   const updateData: {
     videoPrompt?: string | null
     firstLastFramePrompt?: string | null
+    dialogueOverride?: string | null
     storyboardMoodPresetId?: string | null
     customMood?: string | null
   } = {}
@@ -299,6 +309,9 @@ export const PATCH = apiHandler(async (
   }
   if (firstLastFramePrompt !== undefined) {
     updateData.firstLastFramePrompt = firstLastFramePrompt
+  }
+  if (dialogueOverride !== undefined) {
+    updateData.dialogueOverride = normalizeNullableTextField(dialogueOverride)
   }
   if (body.storyboardMoodPresetId !== undefined) {
     updateData.storyboardMoodPresetId = parseMoodPresetId(body.storyboardMoodPresetId)
@@ -327,6 +340,7 @@ export const PATCH = apiHandler(async (
         imageUrl: null,
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
+        dialogueOverride: dialogueOverride ?? null,
         storyboardMoodPresetId: body.storyboardMoodPresetId !== undefined ? parseMoodPresetId(body.storyboardMoodPresetId) : null,
         customMood: body.customMood !== undefined ? normalizeStoryboardMoodText(body.customMood) : null,
       }
@@ -369,6 +383,7 @@ export const PUT = apiHandler(async (
     duration,
     videoPrompt,
     firstLastFramePrompt,
+    dialogueOverride,
     actingNotes,  // 演技指导数据
     photographyRules,  // 单镜头摄影规则
     storyboardMoodPresetId,
@@ -402,6 +417,7 @@ export const PUT = apiHandler(async (
     duration?: number | null
     videoPrompt?: string | null
     firstLastFramePrompt?: string | null
+    dialogueOverride?: string | null
     actingNotes?: string | null
     photographyRules?: string | null
     storyboardMoodPresetId?: string | null
@@ -419,6 +435,7 @@ export const PUT = apiHandler(async (
   if (duration !== undefined) updateData.duration = parseNullableNumberField(duration)
   if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
   if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
+  if (dialogueOverride !== undefined) updateData.dialogueOverride = dialogueOverride
   if (storyboardMoodPresetId !== undefined) updateData.storyboardMoodPresetId = parseMoodPresetId(storyboardMoodPresetId)
   if (customMood !== undefined) updateData.customMood = normalizeStoryboardMoodText(customMood)
   // JSON 字段存为规范化 JSON 字符串
@@ -463,6 +480,7 @@ export const PUT = apiHandler(async (
         duration: duration ?? null,
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
+        dialogueOverride: dialogueOverride ?? null,
         storyboardMoodPresetId: storyboardMoodPresetId !== undefined ? parseMoodPresetId(storyboardMoodPresetId) : null,
         customMood: customMood !== undefined ? normalizeStoryboardMoodText(customMood) : null,
         actingNotes: actingNotes !== undefined ? toStructuredJsonField(actingNotes, 'actingNotes') : null,

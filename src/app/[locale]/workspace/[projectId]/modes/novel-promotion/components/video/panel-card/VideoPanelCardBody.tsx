@@ -23,6 +23,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
     taskStatus,
     videoModel,
     promptEditor,
+    dialogueEditor,
     voiceManager,
     lipSync,
     computed,
@@ -120,6 +121,12 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
 
   const speechSummary = (() => {
     if (!speechContract) return null
+    if (!speechContract.audioEnabled && speechContract.matchKind === 'override') {
+      return t('panelCard.speechContract.summary.overrideAudioDisabled')
+    }
+    if (speechContract.matchKind === 'override') {
+      return t('panelCard.speechContract.summary.override')
+    }
     if (!speechContract.audioEnabled && speechContract.matchKind === 'matched') {
       return t('panelCard.speechContract.summary.matchedAudioDisabled')
     }
@@ -159,6 +166,65 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
       </div>
 
       <p className="text-sm text-[var(--glass-text-secondary)] line-clamp-2">{panel.textPanel?.description}</p>
+
+      <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-[var(--glass-text-primary)]">{t('panelCard.dialogueOverride.title')}</div>
+            <div className="mt-1 text-[11px] text-[var(--glass-text-tertiary)]">
+              {panel.dialogueOverride
+                ? t('panelCard.dialogueOverride.overrideActive')
+                : t('panelCard.dialogueOverride.fallbackHint')}
+            </div>
+          </div>
+          {!dialogueEditor.isEditing && (
+            <button
+              onClick={dialogueEditor.handleStartEdit}
+              className="text-[var(--glass-text-tertiary)] hover:text-[var(--glass-tone-info-fg)] transition-colors p-0.5"
+            >
+              <AppIcon name="edit" className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {dialogueEditor.isEditing ? (
+          <div className="relative">
+            <textarea
+              value={dialogueEditor.editingPrompt}
+              onChange={(event) => dialogueEditor.setEditingPrompt(event.target.value)}
+              autoFocus
+              className="w-full text-xs p-2 pr-16 border border-[var(--glass-stroke-focus)] rounded-lg bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--glass-tone-info-fg)] resize-none"
+              rows={3}
+              placeholder={t('panelCard.dialogueOverride.placeholder')}
+            />
+            <div className="absolute right-1 top-1 flex flex-col gap-1">
+              <button
+                onClick={dialogueEditor.handleSave}
+                disabled={dialogueEditor.isSavingPrompt}
+                className="px-2 py-1 text-[10px] bg-[var(--glass-accent-from)] text-white rounded"
+              >
+                {dialogueEditor.isSavingPrompt ? '...' : t('panelCard.save')}
+              </button>
+              <button
+                onClick={dialogueEditor.handleCancelEdit}
+                disabled={dialogueEditor.isSavingPrompt}
+                className="px-2 py-1 text-[10px] bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] rounded"
+              >
+                {t('panelCard.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={dialogueEditor.handleStartEdit}
+            className="text-xs p-2 border border-[var(--glass-stroke-base)] rounded-lg bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] cursor-pointer"
+          >
+            {dialogueEditor.localPrompt || (
+              <span className="text-[var(--glass-text-tertiary)] italic">{t('panelCard.dialogueOverride.empty')}</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {speechContract && speechModeLabel && speechSourceLabel && speechSummary && (
         <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
