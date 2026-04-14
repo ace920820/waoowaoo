@@ -6,7 +6,10 @@ import type {
   Storyboard,
   VideoPanel,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
-import { resolveEffectivePanelDialogueText } from '@/lib/novel-promotion/panel-speech-plan'
+import {
+  resolveEffectivePanelDialogueText,
+  resolvePanelDialogueOverride,
+} from '@/lib/novel-promotion/panel-speech-plan'
 
 interface TaskStateLike {
   phase?: string | null
@@ -56,6 +59,7 @@ export function useVideoPanelsProjection({
 
         const panelId = panel.id
         const effectiveDialogueText = resolveEffectivePanelDialogueText(panel)
+        const dialogueOverride = resolvePanelDialogueOverride(panel)
         const panelVideoState = panelId ? panelVideoStates.getTaskState(`panel-video:${panelId}`) : null
         const panelLipState = panelId ? panelLipStates.getTaskState(`panel-lip:${panelId}`) : null
 
@@ -77,7 +81,7 @@ export function useVideoPanelsProjection({
             video_prompt: panel.videoPrompt ?? undefined,
             videoModel: panel.videoModel || undefined,
           },
-          dialogueOverride: panel.dialogueOverride ?? undefined,
+          dialogueOverride: dialogueOverride ?? undefined,
           imageUrl: panel.imageUrl || undefined,
           firstLastFramePrompt: panel.firstLastFramePrompt ?? undefined,
           videoUrl: panel.videoUrl || undefined,

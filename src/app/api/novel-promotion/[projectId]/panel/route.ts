@@ -340,7 +340,7 @@ export const PATCH = apiHandler(async (
         imageUrl: null,
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
-        dialogueOverride: dialogueOverride ?? null,
+        dialogueOverride: normalizeNullableTextField(dialogueOverride),
         storyboardMoodPresetId: body.storyboardMoodPresetId !== undefined ? parseMoodPresetId(body.storyboardMoodPresetId) : null,
         customMood: body.customMood !== undefined ? normalizeStoryboardMoodText(body.customMood) : null,
       }
@@ -435,7 +435,7 @@ export const PUT = apiHandler(async (
   if (duration !== undefined) updateData.duration = parseNullableNumberField(duration)
   if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
   if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
-  if (dialogueOverride !== undefined) updateData.dialogueOverride = dialogueOverride
+  if (dialogueOverride !== undefined) updateData.dialogueOverride = normalizeNullableTextField(dialogueOverride)
   if (storyboardMoodPresetId !== undefined) updateData.storyboardMoodPresetId = parseMoodPresetId(storyboardMoodPresetId)
   if (customMood !== undefined) updateData.customMood = normalizeStoryboardMoodText(customMood)
   // JSON 字段存为规范化 JSON 字符串
@@ -480,7 +480,7 @@ export const PUT = apiHandler(async (
         duration: duration ?? null,
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
-        dialogueOverride: dialogueOverride ?? null,
+        dialogueOverride: normalizeNullableTextField(dialogueOverride),
         storyboardMoodPresetId: storyboardMoodPresetId !== undefined ? parseMoodPresetId(storyboardMoodPresetId) : null,
         customMood: customMood !== undefined ? normalizeStoryboardMoodText(customMood) : null,
         actingNotes: actingNotes !== undefined ? toStructuredJsonField(actingNotes, 'actingNotes') : null,
