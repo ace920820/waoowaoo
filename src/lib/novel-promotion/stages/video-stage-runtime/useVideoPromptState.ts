@@ -16,6 +16,15 @@ interface UseVideoPromptStateParams {
   ) => Promise<void>
 }
 
+interface PersistVideoPromptUpdateParams {
+  onUpdateVideoPrompt: UseVideoPromptStateParams['onUpdateVideoPrompt']
+  storyboardId: string
+  panelIndex: number
+  value: string
+  field: PromptField
+  logError?: typeof _ulogError
+}
+
 function buildPromptStateKey(panelKey: string, field: PromptField): string {
   return `${field}:${panelKey}`
 }
@@ -43,6 +52,22 @@ export function resolveLocalPromptValue({
     }
   }
   return externalPrompt || ''
+}
+
+export async function persistVideoPromptUpdate({
+  onUpdateVideoPrompt,
+  storyboardId,
+  panelIndex,
+  value,
+  field,
+  logError = _ulogError,
+}: PersistVideoPromptUpdateParams): Promise<void> {
+  try {
+    await onUpdateVideoPrompt(storyboardId, panelIndex, value, field)
+  } catch (error) {
+    logError('保存视频提示词失败:', error)
+    throw error
+  }
 }
 
 export function useVideoPromptState({
@@ -165,9 +190,13 @@ export function useVideoPromptState({
     const stateKey = buildPromptStateKey(panelKey, field)
     setSavingPrompts((prev) => new Set(prev).add(stateKey))
     try {
-      await onUpdateVideoPrompt(storyboardId, panelIndex, value, field)
-    } catch (error) {
-      _ulogError('保存视频提示词失败:', error)
+      await persistVideoPromptUpdate({
+        onUpdateVideoPrompt,
+        storyboardId,
+        panelIndex,
+        value,
+        field,
+      })
     } finally {
       setSavingPrompts((prev) => {
         const next = new Set(prev)
