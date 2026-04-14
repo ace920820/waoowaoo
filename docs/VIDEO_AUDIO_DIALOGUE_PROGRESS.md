@@ -1,6 +1,6 @@
 # VIDEO AUDIO / DIALOGUE 当前开发进展
 
-> 更新时间：2026-04-12 18:40 Asia/Shanghai
+> 更新时间：2026-04-14 11:56 Asia/Shanghai
 > 项目：`waoowaoo`
 > 当前工作分支：`feat/p1-1-screenplay-dialogue-guard`
 
@@ -88,7 +88,7 @@ P1.1 当前有效分支提交：
 
 ## 三、当前阶段
 
-## 当前阶段：P2 基础链路已收口，已进入 P3 第一阶段（speech contract 可见性与可验证性收口）
+## 当前阶段：P3 第一阶段已完成，并补上了 P3-4 的最小必要能力（videos 阶段单 panel 轻量台词覆盖）
 
 ### P3 第一阶段总目标
 在不扩 editor / 不扩复杂配置的前提下，把 P2 已经建立好的 panel 级 speech contract 做成 `stage=videos` 页面里用户和团队都能直接看见、看懂、验得快的轻量展示层。
@@ -140,7 +140,46 @@ P1.1 当前有效分支提交：
 
 ---
 
-## 四、当前最新进度（P3 第一阶段：speech contract 可见性与可验证性收口）
+## 四、当前最新进度（已进入 P3 小步增强：保持轻量，不扩成完整 editor）
+
+### P3-4 最小必要实现：videos 阶段单 panel 台词可直接覆盖（本次）
+本次按 **最小必要实现** 补上了一条明确的用户纠偏能力，但仍然刻意不扩成完整剧本编辑器或重型配置面板。
+
+本次落地口径：
+- 编辑入口直接放在 `stage=videos` 的单个 panel 卡片里
+- 只允许编辑当前 panel 这次视频生成要说的台词，不回写 screenplay，也不要求重跑 storyboard
+- 新增 panel 级字段 `dialogueOverride` 作为轻量人工覆盖层
+- 实际执行优先级明确为：
+  - `panel.dialogueOverride`
+  - `matchedVoiceLines / screenplay voice lines`
+  - `panel.srtSegment` 的回落匹配
+- `useVideoPanelsProjection`、speech contract 预览、worker prompt 构造，统一消费同一个 effective dialogue，避免出现“页面显示新台词、实际生成仍吃旧台词”的回归
+
+本次具体收口：
+- Prisma schema / migration 增加 `novel_promotion_panels.dialogueOverride`
+- `PATCH/PUT /api/novel-promotion/[projectId]/panel` 支持持久化 `dialogueOverride`，并在写入时做 `trim/null` 归一化
+- `stage=videos` panel 卡片新增“对白覆盖”轻量编辑区
+- speech contract UI 新增 `override` source / match 语义，明确告诉用户“下次生成会优先使用这里的文本”
+- video worker 与 `buildPanelVideoGenerationPrompt(...)` 都改为优先读取 override 后的 effective dialogue
+- panel 投影层同步改为优先展示 effective dialogue，减少显示值与执行值分叉
+
+本次验证：
+- `tests/unit/worker/panel-speech-plan.test.ts`
+  - 覆盖 `dialogueOverride` 优先于旧 voice line 内容
+  - 覆盖 prompt 中 panel text reference / speech contract line 都使用 override
+  - 覆盖 override contract view-model
+- `tests/unit/worker/video-worker.test.ts`
+  - 覆盖 video worker 最终提交给 provider 的 prompt 使用 override，而不是旧 `srtSegment` / 旧 `matchedVoiceLines`
+- `tests/unit/novel-promotion/video-panel-card-body.test.ts`
+  - 覆盖 videos 卡片显示的对白覆盖状态与 speech contract 预览一致
+- `tests/integration/api/contract/crud-routes.test.ts`
+  - 覆盖 panel route 持久化 `dialogueOverride`
+
+边界保持：
+- 只做单 panel、单次视频生成前的轻量对白覆盖
+- 不支持批量多 panel 编辑
+- 不把 `dialogueOverride` 扩成与 screenplay 永久并行打架的第二套重型真相源
+- 没有顺手引入完整 stale snapshot / 历史执行回执体系
 
 ### 分镜前置条件拆分修复（本次）
 本次对 `script → storyboard text → panel image` 之间的前置条件做了最小拆分，只处理 gate 落点，不重构整体 workflow。
@@ -624,7 +663,7 @@ P1.1 当前有效分支提交：
 2. 如果用户仍需要更强可验证性，可补最小颗粒度的上游透传（例如 storyboard/detail 的只读摘要），但不要直接扩成 editor
 3. 若后续发现某些 provider 确有稳定 speech 参数面，再进入 provider-specific mapping；仍需先补合同测试
 
-当前状态：**P3 第一阶段已完成；下一步应继续做小步可验证增强，而不是扩大型配置面板。**
+当前状态：**P3 第一阶段已完成，且已补上 videos 阶段的最小台词覆盖能力；下一步仍应继续做小步可验证增强，而不是扩大型配置面板。**
 
 ---
 
