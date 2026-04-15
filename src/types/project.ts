@@ -242,9 +242,13 @@ export interface NovelPromotionShotGroup {
   groupPrompt?: string | null
   referenceImageUrl?: string | null
   referenceImageMedia?: MediaRef | null
+  compositeImageUrl?: string | null
+  compositeImageMedia?: MediaRef | null
   createdAt: Date | string
   updatedAt: Date | string
   items?: NovelPromotionShotGroupItem[]
+  imageTaskRunning?: boolean
+  lastError?: { code: string; message: string } | null
 }
 
 export interface NovelPromotionShot {

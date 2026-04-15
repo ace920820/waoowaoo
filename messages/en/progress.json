@@ -44,6 +44,7 @@
   "taskType": {
     "generic": "Task",
     "imagePanel": "Storyboard image",
+    "imageShotGroup": "Shot group storyboard",
     "imageCharacter": "Character image",
     "imageLocation": "Location image",
     "videoPanel": "Video generation",
@@ -89,6 +90,8 @@
     "generateCharacterImage": "Generate character image",
     "generateLocationImage": "Generate location image",
     "generatePanelCandidate": "Generate panel candidate",
+    "generateShotGroupComposite": "Generate shot group composite",
+    "persistShotGroupComposite": "Persist shot group composite",
     "generatePanelVideo": "Generate panel video",
     "generateVoiceSubmit": "Submit voice task",
     "generateVoicePersist": "Persist voice result",

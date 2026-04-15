@@ -347,6 +347,7 @@ model NovelPromotionShotGroup {
   templateKey      String                        @default("grid-4")
   groupPrompt      String?                       @db.Text
   referenceImageUrl String?                      @db.Text
+  compositeImageUrl String?                      @db.Text
   referenceImageMediaId String?
   createdAt        DateTime                      @default(now())
   updatedAt        DateTime                      @default(now()) @updatedAt

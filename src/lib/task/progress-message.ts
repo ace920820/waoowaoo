@@ -2,6 +2,7 @@ import { TASK_EVENT_TYPE, TASK_TYPE } from './types'
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   [TASK_TYPE.IMAGE_PANEL]: 'progress.taskType.imagePanel',
+  [TASK_TYPE.IMAGE_SHOT_GROUP]: 'progress.taskType.imageShotGroup',
   [TASK_TYPE.IMAGE_CHARACTER]: 'progress.taskType.imageCharacter',
   [TASK_TYPE.IMAGE_LOCATION]: 'progress.taskType.imageLocation',
   [TASK_TYPE.VIDEO_PANEL]: 'progress.taskType.videoPanel',
@@ -48,6 +49,8 @@ const STAGE_LABELS: Record<string, string> = {
   generate_character_image: 'progress.stage.generateCharacterImage',
   generate_location_image: 'progress.stage.generateLocationImage',
   generate_panel_candidate: 'progress.stage.generatePanelCandidate',
+  generate_shot_group_composite: 'progress.stage.generateShotGroupComposite',
+  persist_shot_group_composite: 'progress.stage.persistShotGroupComposite',
   generate_panel_video: 'progress.stage.generatePanelVideo',
   generate_voice_submit: 'progress.stage.generateVoiceSubmit',
   generate_voice_persist: 'progress.stage.generateVoicePersist',

@@ -36,6 +36,10 @@ interface UploadAssetImageDb {
     update(args: Record<string, unknown>): Promise<{ id: string }>
     create(args: Record<string, unknown>): Promise<{ id: string }>
   }
+  novelPromotionShotGroup: {
+    findUnique(args: Record<string, unknown>): Promise<{ id: string } | null>
+    update(args: Record<string, unknown>): Promise<unknown>
+  }
 }
 
 /**
@@ -59,13 +63,13 @@ export const POST = apiHandler(async (
   // 解析表单数据
   const formData = await request.formData()
   const file = formData.get('file') as File
-  const type = formData.get('type') as string // 'character' | 'location'
-  const id = formData.get('id') as string // characterId 或 locationId
+  const type = formData.get('type') as string // 'character' | 'location' | 'shot-group'
+  const id = formData.get('id') as string // characterId / locationId / shotGroupId
   const appearanceId = formData.get('appearanceId') as string | null  // UUID
   const imageIndex = formData.get('imageIndex') as string | null
   const labelText = formData.get('labelText') as string // 文字标识符
 
-  if (!file || !type || !id || !labelText) {
+  if (!file || !type || !id || (!labelText && type !== 'shot-group')) {
     throw new ApiError('INVALID_PARAMS')
   }
 
@@ -94,6 +98,8 @@ export const POST = apiHandler(async (
   // 生成唯一key并上传
   const keyPrefix = type === 'character'
     ? `char-${id}-${appearanceId}-upload`
+    : type === 'shot-group'
+      ? `shot-group-${id}-reference-upload`
     : `loc-${id}-upload`
   const key = generateUniqueKey(keyPrefix, 'jpg')
   await uploadObject(processed, key)
@@ -225,6 +231,27 @@ export const POST = apiHandler(async (
         imageIndex: maxIndex
       })
     }
+  } else if (type === 'shot-group') {
+    const shotGroup = await db.novelPromotionShotGroup.findUnique({
+      where: { id },
+      select: { id: true },
+    })
+
+    if (!shotGroup) {
+      throw new ApiError('NOT_FOUND')
+    }
+
+    await db.novelPromotionShotGroup.update({
+      where: { id },
+      data: {
+        referenceImageUrl: key,
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      imageKey: key,
+    })
   }
 
   throw new ApiError('INVALID_PARAMS')

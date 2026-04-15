@@ -104,6 +104,18 @@ export async function hasPanelImageOutput(panelId: string | null | undefined) {
   return isNonEmptyString(panel.imageUrl) || !!panel.imageMediaId
 }
 
+export async function hasShotGroupImageOutput(shotGroupId: string | null | undefined) {
+  if (!isNonEmptyString(shotGroupId)) return false
+  const shotGroup = await prisma.novelPromotionShotGroup.findUnique({
+    where: { id: shotGroupId },
+    select: {
+      compositeImageUrl: true,
+    },
+  })
+  if (!shotGroup) return false
+  return isNonEmptyString(shotGroup.compositeImageUrl)
+}
+
 export async function hasPanelVideoOutput(panelId: string | null | undefined) {
   if (!isNonEmptyString(panelId)) return false
   const panel = await prisma.novelPromotionPanel.findUnique({

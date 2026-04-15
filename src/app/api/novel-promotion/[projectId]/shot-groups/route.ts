@@ -163,6 +163,9 @@ export const PATCH = apiHandler(async (
         groupPrompt: body.groupPrompt === undefined
           ? current.groupPrompt
           : (typeof body.groupPrompt === 'string' && body.groupPrompt.trim() ? body.groupPrompt.trim() : null),
+        referenceImageUrl: body.referenceImageUrl === undefined
+          ? current.referenceImageUrl
+          : (typeof body.referenceImageUrl === 'string' && body.referenceImageUrl.trim() ? body.referenceImageUrl.trim() : null),
       },
     })
 
