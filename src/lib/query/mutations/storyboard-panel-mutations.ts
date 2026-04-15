@@ -323,18 +323,19 @@ export function useCreateProjectShotGroup(projectId: string, episodeId: string) 
 }
 
 export function useUpdateProjectShotGroup(projectId: string, episodeId: string) {
-    const queryClient = useQueryClient()
-    return useMutation({
-        mutationFn: async (payload: {
-            shotGroupId: string
-            title?: string
-            templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
-            groupPrompt?: string | null
-        }) => {
-            return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      shotGroupId: string
+      title?: string
+      templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
+      groupPrompt?: string | null
+      referenceImageUrl?: string | null
+    }) => {
+      return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
             }, '更新镜头组失败')
         },
         onSettled: () => {
@@ -352,6 +353,44 @@ export function useDeleteProjectShotGroup(projectId: string, episodeId: string) 
                 { method: 'DELETE' },
                 '删除镜头组失败',
             )
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useGenerateProjectShotGroupImage(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ shotGroupId }: { shotGroupId: string }) => {
+            const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shotGroupId, async: true }),
+            }, '生成镜头组分镜稿失败')
+            return resolveTaskResponse(response)
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useUploadProjectShotGroupReferenceImage(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ file, shotGroupId, labelText }: { file: File; shotGroupId: string; labelText?: string }) => {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('type', 'shot-group')
+            formData.append('id', shotGroupId)
+            if (labelText) formData.append('labelText', labelText)
+
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/upload-asset-image`, {
+                method: 'POST',
+                body: formData,
+            }, '上传镜头组参考图失败')
         },
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })

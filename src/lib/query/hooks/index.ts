@@ -130,6 +130,8 @@ export {
     useCreateProjectShotGroup,
     useUpdateProjectShotGroup,
     useDeleteProjectShotGroup,
+    useGenerateProjectShotGroupImage,
+    useUploadProjectShotGroupReferenceImage,
     useInsertProjectPanel,
     useConfirmProjectCharacterSelection,
     useConfirmProjectLocationSelection,
@@ -230,6 +232,10 @@ export {
     useRefreshAll,
     type Episode,
 } from './useProjectData'
+
+export {
+    useTaskTargetStateMap,
+} from './useTaskTargetStateMap'
 
 export {
     useUserModels,
