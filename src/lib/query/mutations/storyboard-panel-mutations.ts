@@ -300,6 +300,65 @@ export function useMoveProjectStoryboardGroup(projectId: string) {
     })
 }
 
+export function useCreateProjectShotGroup(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            episodeId: string
+            insertIndex?: number
+            title?: string
+            templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
+            groupPrompt?: string | null
+        }) => {
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }, '创建镜头组失败')
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useUpdateProjectShotGroup(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            shotGroupId: string
+            title?: string
+            templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
+            groupPrompt?: string | null
+        }) => {
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }, '更新镜头组失败')
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useDeleteProjectShotGroup(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ shotGroupId }: { shotGroupId: string }) => {
+            return await requestJsonWithError(
+                `/api/novel-promotion/${projectId}/shot-groups?shotGroupId=${shotGroupId}`,
+                { method: 'DELETE' },
+                '删除镜头组失败',
+            )
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
 /**
  * 插入 panel（异步）
  */

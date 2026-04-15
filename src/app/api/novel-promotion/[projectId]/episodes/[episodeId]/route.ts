@@ -35,6 +35,12 @@ export const GET = apiHandler(async (
         },
         orderBy: { createdAt: 'asc' }
       },
+      shotGroups: {
+        include: {
+          items: { orderBy: { itemIndex: 'asc' } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
       shots: {
         orderBy: { shotId: 'asc' }
       },

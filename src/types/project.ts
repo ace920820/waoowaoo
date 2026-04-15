@@ -221,6 +221,32 @@ export interface NovelPromotionStoryboard {
   panels?: NovelPromotionPanel[]
 }
 
+export type NovelPromotionShotGroupTemplateKey = 'grid-4' | 'grid-6' | 'grid-9'
+
+export interface NovelPromotionShotGroupItem {
+  id: string
+  shotGroupId: string
+  itemIndex: number
+  title?: string | null
+  prompt?: string | null
+  imageUrl?: string | null
+  media?: MediaRef | null
+  sourcePanelId?: string | null
+}
+
+export interface NovelPromotionShotGroup {
+  id: string
+  episodeId: string
+  title: string
+  templateKey: NovelPromotionShotGroupTemplateKey | string
+  groupPrompt?: string | null
+  referenceImageUrl?: string | null
+  referenceImageMedia?: MediaRef | null
+  createdAt: Date | string
+  updatedAt: Date | string
+  items?: NovelPromotionShotGroupItem[]
+}
+
 export interface NovelPromotionShot {
   id: string
   shotId: string
@@ -288,6 +314,7 @@ export interface NovelPromotionProject {
   }>
   clips?: NovelPromotionClip[]
   storyboards?: NovelPromotionStoryboard[]
+  shotGroups?: NovelPromotionShotGroup[]
   shots?: NovelPromotionShot[]
 }
 
