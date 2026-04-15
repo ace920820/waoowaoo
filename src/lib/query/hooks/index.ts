@@ -131,6 +131,7 @@ export {
     useUpdateProjectShotGroup,
     useDeleteProjectShotGroup,
     useGenerateProjectShotGroupImage,
+    useGenerateProjectShotGroupVideo,
     useUploadProjectShotGroupReferenceImage,
     useInsertProjectPanel,
     useConfirmProjectCharacterSelection,

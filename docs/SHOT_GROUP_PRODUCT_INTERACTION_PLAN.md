@@ -19,7 +19,7 @@
 
 ## 一、最新结论
 
-> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环：支持在 shot group 上上传参考图、填写模板与组提示词、提交真实 `IMAGE_SHOT_GROUP` 任务、生成 composite group image 并回写到 shot group。组内 ordered items 仍以占位槽位为主，item 级图像拆分与 shot group video run 仍在后续阶段。
+> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
 
 
 ### 1.1 一句话结论
@@ -113,6 +113,22 @@
 
 1. 在 `storyboard` 阶段，手动插入 / 合并出一个 **镜头组**，并生成其 4 宫格 / 6 宫格 / 9 宫格分镜稿
 2. 在 `videos` 阶段，将该镜头组作为一个整体，生成一段较长视频
+
+### 3.3 当前已落地 MVP 边界（2026-04-15）
+
+当前 Phase 3 实际落地口径：
+
+- videos 页 `ShotGroupVideoSection` 已从占位升级为真实可操作区块
+- 当 shot group 已具备 `compositeImageUrl` 时，用户可直接发起组视频生成
+- 当前输入优先使用 shot group 的 composite image，确保“真实可生成、可回写、UI 可见、状态可追踪”
+- 任务状态与 panel 视频任务分离，独立使用 `VIDEO_SHOT_GROUP` + `NovelPromotionShotGroup` target
+- 结果独立回写到 shot group，自身展示结果视频，不污染 `panel.videoUrl`
+
+当前仍明确不做：
+
+- ordered references 多图真实输入编排
+- item 级时长 / 转场控制
+- 独立 run 历史版本树与多版本回看
 
 ### 3.2 非目标
 

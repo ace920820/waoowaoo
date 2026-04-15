@@ -377,6 +377,27 @@ export function useGenerateProjectShotGroupImage(projectId: string, episodeId: s
     })
 }
 
+export function useGenerateProjectShotGroupVideo(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            shotGroupId: string
+            videoModel?: string
+            generationOptions?: Record<string, string | number | boolean>
+        }) => {
+            const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, async: true }),
+            }, '生成镜头组视频失败')
+            return resolveTaskResponse(response)
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
 export function useUploadProjectShotGroupReferenceImage(projectId: string, episodeId: string) {
     const queryClient = useQueryClient()
     return useMutation({

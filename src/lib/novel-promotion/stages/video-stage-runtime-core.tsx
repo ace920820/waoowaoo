@@ -536,7 +536,13 @@ export function useVideoStageRuntime({
         onOpenAssetLibraryForCharacter={onOpenAssetLibraryForCharacter}
       />
 
-      <ShotGroupVideoSection shotGroups={shotGroups} />
+      <ShotGroupVideoSection
+        projectId={projectId}
+        episodeId={episodeId}
+        shotGroups={shotGroups}
+        defaultVideoModel={defaultVideoModel}
+        videoModelOptions={normalVideoModelOptions}
+      />
 
       <VideoRenderPanel
         allPanels={projectedPanels}

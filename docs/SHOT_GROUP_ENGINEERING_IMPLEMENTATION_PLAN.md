@@ -318,6 +318,31 @@ MVP 可以先不单独建表，优先走：
 ## 5.2 videos 侧 API
 
 ### A. `POST /api/novel-promotion/[projectId]/generate-shot-group-video`
+
+> 实现状态更新（2026-04-15）：该接口 MVP 已落地，当前提交 `VIDEO_SHOT_GROUP` 任务，输入优先使用 shot group 当前 `compositeImageUrl`，并将结果回写到 `NovelPromotionShotGroup.videoUrl`。这保证了 Phase 3 的真实闭环，但仍是单 composite image 输入版本，ordered references 仅保存在 snapshot 字段中供后续扩展。
+
+当前最小实现要点：
+
+- 新任务类型：`VIDEO_SHOT_GROUP`
+- 新入口：`POST /api/novel-promotion/[projectId]/generate-shot-group-video`
+- 新 worker handler：shot group video 走 `video.worker.ts` 同一真实视频生成链路
+- 最小数据承接：`NovelPromotionShotGroup` 新增 `videoPrompt` / `videoModel` / `videoSourceType` / `videoReferencesJson` / `videoUrl`
+- videos 页新增真实状态展示：未接通 / 生成中 / 已生成 / 失败
+
+### A.1 当前与最终态差异
+
+当前已完成：
+
+- composite image → 视频模型 → COS 回写 → videos 页播放预览
+- 任务态与 panel 视频任务隔离
+- 为后续多图 ordered references 预留 `videoReferencesJson`
+
+下一步仍需补齐：
+
+- 独立 `NovelPromotionShotGroupVideoRun` 表，保存历史 run snapshot
+- provider 真正消费 ordered references 多图输入，而不是只消费 composite image
+- item 级 prompt / image 与 provider 参数的精细映射
+- 更完整的失败恢复 / run 对比 / 版本回看
 用于：
 - 为某个 shot group 提交一条长视频生成任务
 
