@@ -68,6 +68,7 @@
 - 已将结果回写为 `shotGroup.compositeImageUrl`，并在 storyboard `ShotGroupSection` 直接展示
 - 已支持 shot group 参考图上传（复用 `upload-asset-image`，新增 `type=shot-group`）
 - 已补 project 归属校验：`shot-groups` / `generate-shot-group-image` / `generate-shot-group-video` / worker 执行链均要求 `episodeId / shotGroupId` 真实归属当前 `projectId`
+- 已修正 shot group 参考图上传语义：`type=shot-group` 直接上传原图，不再追加顶部黑色 label bar，也不影响角色 / 场景原有上传处理
 - 当前仍未实现：item 级切图回写、ordered items 独立生成、shot group video run
 
 ---

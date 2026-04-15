@@ -19,7 +19,7 @@
 
 ## 一、最新结论
 
-> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前已补齐 shot-group 相关接口的 project 归属校验，要求 `episodeId / shotGroupId` 必须沿 `episode -> novelPromotionProject.projectId` 归属到当前项目后才允许读取、更新或提交任务；仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
+> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前已补齐 shot-group 相关接口的 project 归属校验，要求 `episodeId / shotGroupId` 必须沿 `episode -> novelPromotionProject.projectId` 归属到当前项目后才允许读取、更新或提交任务；shot-group 参考图上传也已改为保留原图，不再复用角色/场景资产图的顶部黑色 label bar；仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
 
 
 ### 1.1 一句话结论
@@ -395,6 +395,8 @@ AI 自动生成 storyboard 时，不自动插入镜头组。
 - 生成四宫格 / 六宫格 / 九宫格分镜稿
 - 重新生成
 - 显示生成状态
+
+其中 shot-group 参考图上传应优先保留原图构图本身，不额外叠加角色/场景资产上传所用的黑色文字条。
 
 ### 重要说明
 虽然视觉上会产生一张：

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { uploadObject, generateUniqueKey } from '@/lib/storage'
@@ -6,6 +7,7 @@ import { initializeFonts, createLabelSVG } from '@/lib/fonts'
 import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 
 interface CharacterAppearanceRecord {
   id: string
@@ -42,6 +44,24 @@ interface UploadAssetImageDb {
   }
 }
 
+function inferFileExtension(file: File): string {
+  const fromName = path.extname(file.name || '').replace(/^\./, '').toLowerCase()
+  if (fromName) return fromName === 'jpeg' ? 'jpg' : fromName
+
+  switch (file.type) {
+    case 'image/jpeg':
+      return 'jpg'
+    case 'image/png':
+      return 'png'
+    case 'image/webp':
+      return 'webp'
+    case 'image/gif':
+      return 'gif'
+    default:
+      return 'png'
+  }
+}
+
 /**
  * POST /api/novel-promotion/[projectId]/upload-asset-image
  * 上传用户自定义图片作为角色或场景资产
@@ -52,9 +72,6 @@ export const POST = apiHandler(async (
 ) => {
   const { projectId } = await context.params
   const db = prisma as unknown as UploadAssetImageDb
-
-  // 初始化字体（在 Vercel 环境中需要）
-  await initializeFonts()
 
   // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId)
@@ -77,23 +94,40 @@ export const POST = apiHandler(async (
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  // 添加文字标识符
-  const meta = await sharp(buffer).metadata()
-  const w = meta.width || 2160
-  const h = meta.height || 2160
-  const fontSize = Math.floor(h * 0.04)
-  const pad = Math.floor(fontSize * 0.5)
-  const barH = fontSize + pad * 2
+  if (type === 'shot-group') {
+    const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+      where: buildShotGroupInProjectWhere(projectId, id),
+      select: { id: true },
+    })
+    if (!shotGroup) {
+      throw new ApiError('NOT_FOUND')
+    }
+  }
 
-  // 创建SVG文字条
-  const svg = await createLabelSVG(w, barH, fontSize, pad, labelText)
+  let uploadBuffer = buffer
+  let uploadExt = inferFileExtension(file)
+  let uploadContentType = file.type || undefined
 
-  // 添加文字条到图片顶部
-  const processed = await sharp(buffer)
-    .extend({ top: barH, bottom: 0, left: 0, right: 0, background: { r: 0, g: 0, b: 0, alpha: 1 } })
-    .composite([{ input: svg, top: 0, left: 0 }])
-    .jpeg({ quality: 90, mozjpeg: true })
-    .toBuffer()
+  if (type !== 'shot-group') {
+    await initializeFonts()
+
+    const meta = await sharp(buffer).metadata()
+    const w = meta.width || 2160
+    const h = meta.height || 2160
+    const fontSize = Math.floor(h * 0.04)
+    const pad = Math.floor(fontSize * 0.5)
+    const barH = fontSize + pad * 2
+
+    const svg = await createLabelSVG(w, barH, fontSize, pad, labelText)
+
+    uploadBuffer = await sharp(buffer)
+      .extend({ top: barH, bottom: 0, left: 0, right: 0, background: { r: 0, g: 0, b: 0, alpha: 1 } })
+      .composite([{ input: svg, top: 0, left: 0 }])
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toBuffer()
+    uploadExt = 'jpg'
+    uploadContentType = 'image/jpeg'
+  }
 
   // 生成唯一key并上传
   const keyPrefix = type === 'character'
@@ -101,8 +135,8 @@ export const POST = apiHandler(async (
     : type === 'shot-group'
       ? `shot-group-${id}-reference-upload`
     : `loc-${id}-upload`
-  const key = generateUniqueKey(keyPrefix, 'jpg')
-  await uploadObject(processed, key)
+  const key = generateUniqueKey(keyPrefix, uploadExt)
+  await uploadObject(uploadBuffer, key, 3, uploadContentType)
 
   // 更新数据库
   if (type === 'character' && appearanceId !== null) {
@@ -232,15 +266,6 @@ export const POST = apiHandler(async (
       })
     }
   } else if (type === 'shot-group') {
-    const shotGroup = await db.novelPromotionShotGroup.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-
-    if (!shotGroup) {
-      throw new ApiError('NOT_FOUND')
-    }
-
     await db.novelPromotionShotGroup.update({
       where: { id },
       data: {
