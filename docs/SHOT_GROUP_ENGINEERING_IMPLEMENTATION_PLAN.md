@@ -69,7 +69,8 @@
 - 已支持 shot group 参考图上传（复用 `upload-asset-image`，新增 `type=shot-group`）
 - 已补 project 归属校验：`shot-groups` / `generate-shot-group-image` / `generate-shot-group-video` / worker 执行链均要求 `episodeId / shotGroupId` 真实归属当前 `projectId`
 - 已修正 shot group 参考图上传语义：`type=shot-group` 直接上传原图，不再追加顶部黑色 label bar，也不影响角色 / 场景原有上传处理
-- 当前仍未实现：item 级切图回写、ordered items 独立生成、shot group video run
+- 已补最小 video run 历史读取：`GET /api/novel-promotion/[projectId]/shot-group-video-runs` 基于现有 `tasks` 表返回 shot group video 历史提交记录
+- 当前仍未实现：item 级切图回写、ordered items 独立生成、独立 `NovelPromotionShotGroupVideoRun` 表
 
 ---
 
@@ -338,6 +339,7 @@ MVP 可以先不单独建表，优先走：
 - composite image → 视频模型 → COS 回写 → videos 页播放预览
 - 任务态与 panel 视频任务隔离
 - 为后续多图 ordered references 预留 `videoReferencesJson`
+- 基于 `tasks` 表提供最小 shot group video run 历史读取接口
 
 下一步仍需补齐：
 
@@ -349,6 +351,8 @@ MVP 可以先不单独建表，优先走：
 - 为某个 shot group 提交一条长视频生成任务
 
 ### B. `GET /api/novel-promotion/[projectId]/shot-group-video-runs`
+> 实现状态更新（2026-04-15）：该接口已提供最小可用版本，按 `shotGroupId` 从现有 `tasks` 表返回 `VIDEO_SHOT_GROUP` 历史任务记录，作为独立 run 表落地前的低成本过渡层。
+
 用于：
 - 拉取 shot group 视频运行结果
 

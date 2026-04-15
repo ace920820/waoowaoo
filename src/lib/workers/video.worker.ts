@@ -461,6 +461,10 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
   return {
     shotGroupId: shotGroup.id,
     videoUrl: cosKey,
+    videoPrompt: prompt,
+    videoModel: modelId,
+    videoSourceType: 'composite_image_mvp',
+    videoReferences: referencesSnapshot,
     ...(typeof actualVideoTokens === 'number' ? { actualVideoTokens } : {}),
   }
 }

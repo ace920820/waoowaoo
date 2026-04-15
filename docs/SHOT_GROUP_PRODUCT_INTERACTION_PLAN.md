@@ -19,7 +19,7 @@
 
 ## 一、最新结论
 
-> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前已补齐 shot-group 相关接口的 project 归属校验，要求 `episodeId / shotGroupId` 必须沿 `episode -> novelPromotionProject.projectId` 归属到当前项目后才允许读取、更新或提交任务；shot-group 参考图上传也已改为保留原图，不再复用角色/场景资产图的顶部黑色 label bar；仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
+> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前已补齐 shot-group 相关接口的 project 归属校验，要求 `episodeId / shotGroupId` 必须沿 `episode -> novelPromotionProject.projectId` 归属到当前项目后才允许读取、更新或提交任务；shot-group 参考图上传也已改为保留原图，不再复用角色/场景资产图的顶部黑色 label bar；并新增基于现有 `tasks` 表的最小 run 历史读取能力，但仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
 
 
 ### 1.1 一句话结论
@@ -670,7 +670,7 @@ videos 页只负责：
 - 任意非连续镜头跨段拼组
 - 每个子镜头独立配时
 - 每个子镜头独立视频 prompt 编辑器
-- 复杂多版本镜头组历史
+- 独立表驱动的复杂多版本镜头组历史
 - 自动把 AI 生成 storyboard 批量改写成镜头组
 - 在 videos 页反向编辑镜头组结构
 
