@@ -244,6 +244,12 @@ export interface NovelPromotionShotGroup {
   referenceImageMedia?: MediaRef | null
   compositeImageUrl?: string | null
   compositeImageMedia?: MediaRef | null
+  videoPrompt?: string | null
+  videoModel?: string | null
+  videoSourceType?: string | null
+  videoReferencesJson?: string | null
+  videoUrl?: string | null
+  videoMedia?: MediaRef | null
   createdAt: Date | string
   updatedAt: Date | string
   items?: NovelPromotionShotGroupItem[]

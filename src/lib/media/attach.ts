@@ -206,6 +206,7 @@ async function attachMediaFieldsToShotGroupItem<T extends Record<string, unknown
 async function attachMediaFieldsToShotGroup<T extends Record<string, unknown>>(shotGroup: T) {
   const referenceImageMedia = await resolveMediaRef(shotGroup.referenceImageMediaId, shotGroup.referenceImageUrl)
   const compositeImageMedia = await resolveMediaRefFromLegacyValue(shotGroup.compositeImageUrl)
+  const videoMedia = await resolveMediaRefFromLegacyValue(shotGroup.videoUrl)
   const items = await Promise.all(
     ((shotGroup.items as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToShotGroupItem),
   )
@@ -213,6 +214,8 @@ async function attachMediaFieldsToShotGroup<T extends Record<string, unknown>>(s
     ...shotGroup,
     compositeImageMedia,
     compositeImageUrl: compositeImageMedia?.url || shotGroup.compositeImageUrl || null,
+    videoMedia,
+    videoUrl: videoMedia?.url || shotGroup.videoUrl || null,
     referenceImageMedia,
     referenceImageUrl: referenceImageMedia?.url || shotGroup.referenceImageUrl || null,
     items,

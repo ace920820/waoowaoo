@@ -348,6 +348,11 @@ model NovelPromotionShotGroup {
   groupPrompt      String?                       @db.Text
   referenceImageUrl String?                      @db.Text
   compositeImageUrl String?                      @db.Text
+  videoPrompt      String?                       @db.Text
+  videoModel       String?
+  videoSourceType  String?
+  videoReferencesJson String?                    @db.Text
+  videoUrl         String?                       @db.Text
   referenceImageMediaId String?
   createdAt        DateTime                      @default(now())
   updatedAt        DateTime                      @default(now()) @updatedAt
