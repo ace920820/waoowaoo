@@ -1,7 +1,7 @@
 'use client'
 
 import { useEpisodeData } from '@/lib/query/hooks'
-import type { NovelPromotionClip, NovelPromotionStoryboard } from '@/types/project'
+import type { NovelPromotionClip, NovelPromotionShotGroup, NovelPromotionStoryboard } from '@/types/project'
 import { useWorkspaceProvider } from '../WorkspaceProvider'
 
 interface EpisodeStagePayload {
@@ -10,6 +10,7 @@ interface EpisodeStagePayload {
   storyboardDefaultMoodPresetId?: string | null
   clips?: NovelPromotionClip[]
   storyboards?: NovelPromotionStoryboard[]
+  shotGroups?: NovelPromotionShotGroup[]
 }
 
 export function useWorkspaceEpisodeStageData() {
@@ -23,5 +24,6 @@ export function useWorkspaceEpisodeStageData() {
     storyboardDefaultMoodPresetId: payload?.storyboardDefaultMoodPresetId || null,
     clips: payload?.clips || [],
     storyboards: payload?.storyboards || [],
+    shotGroups: payload?.shotGroups || [],
   }
 }

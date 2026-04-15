@@ -8,7 +8,7 @@ import { useWorkspaceProvider } from '../WorkspaceProvider'
 export default function StoryboardStage() {
   const runtime = useWorkspaceStageRuntime()
   const { projectId, episodeId } = useWorkspaceProvider()
-  const { clips, storyboards, storyboardDefaultMoodPresetId } = useWorkspaceEpisodeStageData()
+  const { clips, storyboards, shotGroups, storyboardDefaultMoodPresetId } = useWorkspaceEpisodeStageData()
 
   if (!episodeId) return null
 
@@ -17,6 +17,7 @@ export default function StoryboardStage() {
       projectId={projectId}
       episodeId={episodeId}
       storyboards={storyboards}
+      shotGroups={shotGroups}
       clips={clips}
       videoRatio={runtime.videoRatio || '9:16'}
       storyboardMoodPresets={runtime.storyboardMoodPresets}

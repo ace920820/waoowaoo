@@ -21,6 +21,7 @@ import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import VideoTimelinePanel from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/VideoTimelinePanel'
 import VideoRenderPanel from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/VideoRenderPanel'
+import ShotGroupVideoSection from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/ShotGroupVideoSection'
 import type { VideoStageShellProps } from './video-stage-runtime/types'
 import {
   type EffectiveVideoCapabilityDefinition,
@@ -68,6 +69,7 @@ export function useVideoStageRuntime({
   episodeId,
   storyboards,
   clips,
+  shotGroups = [],
   defaultVideoModel,
   capabilityOverrides,
   videoRatio = '16:9',
@@ -533,6 +535,8 @@ export function useVideoStageRuntime({
         onLocateVoiceLine={locateVoiceLinePanel}
         onOpenAssetLibraryForCharacter={onOpenAssetLibraryForCharacter}
       />
+
+      <ShotGroupVideoSection shotGroups={shotGroups} />
 
       <VideoRenderPanel
         allPanels={projectedPanels}

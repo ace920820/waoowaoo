@@ -8,6 +8,7 @@ import type {
   Storyboard,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
 import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config-contract'
+import type { NovelPromotionShotGroup } from '@/types/project'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 
 export interface VoiceLine {
@@ -39,6 +40,7 @@ export interface VideoStageShellProps {
   episodeId: string
   storyboards: Storyboard[]
   clips: Clip[]
+  shotGroups?: NovelPromotionShotGroup[]
   defaultVideoModel: string
   capabilityOverrides: CapabilitySelections
   videoRatio?: string

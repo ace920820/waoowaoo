@@ -1,6 +1,6 @@
 'use client'
 
-import { NovelPromotionStoryboard, NovelPromotionClip } from '@/types/project'
+import { NovelPromotionShotGroup, NovelPromotionStoryboard, NovelPromotionClip } from '@/types/project'
 import { CharacterPickerModal, LocationPickerModal } from '../PanelEditForm'
 import ImageEditModal from './ImageEditModal'
 import AIDataModal from './AIDataModal'
@@ -8,6 +8,7 @@ import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
 import StoryboardStageShell from './StoryboardStageShell'
 import StoryboardToolbar from './StoryboardToolbar'
 import StoryboardCanvas from './StoryboardCanvas'
+import ShotGroupSection from './ShotGroupSection'
 import { useStoryboardStageController } from './hooks/useStoryboardStageController'
 import { useStoryboardModalRuntime } from './hooks/useStoryboardModalRuntime'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
@@ -16,6 +17,7 @@ interface StoryboardStageProps {
   projectId: string
   episodeId: string
   storyboards: NovelPromotionStoryboard[]
+  shotGroups: NovelPromotionShotGroup[]
   clips: NovelPromotionClip[]
   videoRatio: string
   storyboardMoodPresets: StoryboardMoodPreset[]
@@ -31,6 +33,7 @@ export default function StoryboardStage({
   projectId,
   episodeId,
   storyboards: initialStoryboards,
+  shotGroups,
   clips,
   videoRatio,
   storyboardMoodPresets,
@@ -182,6 +185,12 @@ export default function StoryboardStage({
           onGenerateAllPanels={handleGenerateAllPanels}
           onAddStoryboardGroupAtStart={() => addStoryboardGroup(0)}
           onBack={onBack}
+        />
+
+        <ShotGroupSection
+          projectId={projectId}
+          episodeId={episodeId}
+          shotGroups={shotGroups}
         />
 
         <StoryboardCanvas
