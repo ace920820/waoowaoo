@@ -3,6 +3,7 @@ import { getArtStylePrompt } from '@/lib/constants'
 import { normalizeReferenceImagesForGeneration } from '@/lib/media/outbound-image'
 import { buildShotGroupCompositePrompt } from '@/lib/shot-group/prompt'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
+import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '@/lib/workers/shared'
@@ -17,8 +18,8 @@ import {
 
 export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
   const shotGroupId = job.data.targetId
-  const shotGroup = await prisma.novelPromotionShotGroup.findUnique({
-    where: { id: shotGroupId },
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(job.data.projectId, shotGroupId),
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },

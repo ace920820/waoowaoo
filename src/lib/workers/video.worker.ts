@@ -1,6 +1,7 @@
 import { Worker, type Job } from 'bullmq'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import { queueRedis } from '@/lib/redis'
 import { QUEUE_NAME } from '@/lib/task/queues'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
@@ -422,8 +423,8 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
   const modelId = typeof payload.videoModel === 'string' ? payload.videoModel.trim() : ''
   if (!modelId) throw new Error('VIDEO_MODEL_REQUIRED: payload.videoModel is required')
 
-  const shotGroup = await prisma.novelPromotionShotGroup.findUnique({
-    where: { id: job.data.targetId },
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(job.data.projectId, job.data.targetId),
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },

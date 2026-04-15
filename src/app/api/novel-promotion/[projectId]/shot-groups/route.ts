@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
+import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 
 const TEMPLATE_ITEM_COUNT: Record<string, number> = {
   'grid-4': 4,
@@ -32,9 +33,16 @@ function buildDefaultItems(templateKey: string) {
   }))
 }
 
-async function listShotGroups(episodeId: string) {
+async function listShotGroups(projectId: string, episodeId: string) {
   const shotGroups = await prisma.novelPromotionShotGroup.findMany({
-    where: { episodeId },
+    where: {
+      episodeId,
+      episode: {
+        novelPromotionProject: {
+          projectId,
+        },
+      },
+    },
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },
@@ -59,7 +67,15 @@ export const GET = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  const shotGroups = await listShotGroups(episodeId)
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: buildEpisodeInProjectWhere(projectId, episodeId),
+    select: { id: true },
+  })
+  if (!episode) {
+    throw new ApiError('NOT_FOUND')
+  }
+
+  const shotGroups = await listShotGroups(projectId, episodeId)
   return NextResponse.json({ shotGroups })
 })
 
@@ -81,8 +97,8 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
   }
 
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: buildEpisodeInProjectWhere(projectId, episodeId),
     include: {
       shotGroups: { orderBy: { createdAt: 'asc' } },
     },
@@ -141,8 +157,8 @@ export const PATCH = apiHandler(async (
     throw new ApiError('INVALID_PARAMS', { field: 'shotGroupId' })
   }
 
-  const current = await prisma.novelPromotionShotGroup.findUnique({
-    where: { id: shotGroupId },
+  const current = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(projectId, shotGroupId),
     include: { items: { orderBy: { itemIndex: 'asc' } } },
   })
   if (!current) {
@@ -189,8 +205,8 @@ export const PATCH = apiHandler(async (
     }
   })
 
-  const shotGroup = await prisma.novelPromotionShotGroup.findUnique({
-    where: { id: shotGroupId },
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(projectId, shotGroupId),
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },
@@ -217,9 +233,15 @@ export const DELETE = apiHandler(async (
     throw new ApiError('INVALID_PARAMS', { field: 'shotGroupId' })
   }
 
-  await prisma.novelPromotionShotGroup.delete({
-    where: { id: shotGroupId },
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(projectId, shotGroupId),
+    select: { id: true },
   })
+  if (!shotGroup) {
+    throw new ApiError('NOT_FOUND')
+  }
+
+  await prisma.novelPromotionShotGroup.delete({ where: { id: shotGroup.id } })
 
   return NextResponse.json({ success: true })
 })

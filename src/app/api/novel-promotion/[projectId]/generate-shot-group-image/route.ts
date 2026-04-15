@@ -5,6 +5,7 @@ import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig, resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
 import { prisma } from '@/lib/prisma'
+import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import { hasShotGroupImageOutput } from '@/lib/task/has-output'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { submitTask } from '@/lib/task/submitter'
@@ -28,8 +29,8 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS', { field: 'shotGroupId' })
   }
 
-  const shotGroup = await prisma.novelPromotionShotGroup.findUnique({
-    where: { id: shotGroupId },
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(projectId, shotGroupId),
     select: {
       id: true,
       title: true,
