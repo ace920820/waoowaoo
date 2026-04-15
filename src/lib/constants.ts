@@ -220,7 +220,7 @@ export const ART_STYLES: Array<{
     value: 'japanese-anime',
     label: '日系动漫风',
     preview: '日',
-    promptZh: '现代日系动漫风格，赛璐璐上色，清晰干净的线条，视觉小说CG感。高质量2D风格',
+    promptZh: '90 年代忧郁氛围，复古质感，80-90 年代经典动漫美学，柔和漫射光影，低饱和色调，内敛忧郁。',
     promptEn: 'Modern Japanese anime style, cel shading, clean line art, visual-novel CG look, high-quality 2D style.'
   },
   {
