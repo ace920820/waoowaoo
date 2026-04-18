@@ -32,6 +32,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
 
   const hasVisibleBaseVideo = !!media.baseVideoUrl
   const showFirstLastFrameSwitch = layout.hasNext
+  const canDownloadCurrentVideo = Boolean(media.currentVideoUrl)
 
   return (
     <div className="bg-[var(--glass-bg-muted)] flex items-center justify-center relative" style={{ aspectRatio: player.cssAspectRatio }}>
@@ -153,6 +154,19 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
           <AppIcon name="refresh" className="w-4 h-4" />
         </button>
       )}
+
+      {canDownloadCurrentVideo && actions.onDownloadVideo ? (
+        <button
+          onClick={(event) => {
+            event.stopPropagation()
+            void actions.onDownloadVideo?.(panel, media.currentVideoUrl!)
+          }}
+          className="absolute bottom-2 left-2 bg-[var(--glass-overlay)] hover:bg-[var(--glass-overlay-strong)] text-white p-2 rounded-full transition-all z-20"
+          title={t('panelCard.download')}
+        >
+          <AppIcon name="download" className="w-4 h-4" />
+        </button>
+      ) : null}
 
       {/* 任务进度遮罩 */}
       {(taskStatus.isVideoTaskRunning || taskStatus.isLipSyncTaskRunning) && (

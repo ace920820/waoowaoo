@@ -65,4 +65,5 @@ export interface VideoPanelCardShellProps {
     firstPanelId?: string,
   ) => void
   onPreviewImage?: (imageUrl: string) => void
+  onDownloadVideo?: (panel: VideoPanel, videoUrl: string) => Promise<void>
 }

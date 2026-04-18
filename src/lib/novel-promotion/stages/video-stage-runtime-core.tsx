@@ -7,9 +7,11 @@ import {
   VideoToolbar,
   type VideoGenerationOptionValue,
   type VideoGenerationOptions,
+  type VideoPanel,
   type VideoModelOption,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
 import { AppIcon } from '@/components/ui/icons'
+import { saveBlobAsFile } from '@/lib/download/saveBlobAsFile'
 import {
   useDownloadRemoteBlob,
   useListProjectEpisodeVideoUrls,
@@ -62,6 +64,17 @@ interface BatchCapabilityField {
 
 function toFieldLabel(field: string): string {
   return field.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase())
+}
+
+function sanitizeFileSegment(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim()
+  if (!trimmed) return fallback
+  return trimmed.slice(0, 50).replace(/[\\/:*?"<>|]/g, '_')
+}
+
+function resolveVideoDownloadUrl(projectId: string, videoUrl: string) {
+  if (videoUrl.startsWith('/api/')) return videoUrl
+  return `/api/novel-promotion/${projectId}/video-proxy?key=${encodeURIComponent(videoUrl)}`
 }
 
 export function useVideoStageRuntime({
@@ -509,6 +522,17 @@ export function useVideoStageRuntime({
     isConfirming,
   ])
 
+  const handleDownloadVideo = useCallback(async (panel: VideoPanel, videoUrl: string) => {
+    try {
+      const blob = await downloadRemoteBlobMutation.mutateAsync(resolveVideoDownloadUrl(projectId, videoUrl))
+      const fileName = `${String(panel.panelIndex + 1).padStart(3, '0')}_${sanitizeFileSegment(panel.textPanel?.description, 'shot')}.mp4`
+      saveBlobAsFile(blob, fileName)
+    } catch (error) {
+      _ulogError('[下载单个视频] 错误:', error)
+      alert(`${t('stage.downloadFailed')}: ${error instanceof Error ? error.message : t('stage.unknownError')}`)
+    }
+  }, [downloadRemoteBlobMutation, projectId, t])
+
   return (
     <div className="space-y-6 pb-20">
       <VideoToolbar
@@ -577,6 +601,7 @@ export function useVideoStageRuntime({
         onGenerateFirstLastFrame={handleGenerateFirstLastFrame}
         onPreviewImage={setPreviewImage}
         onToggleLipSyncVideo={toggleLipSyncVideo}
+        onDownloadVideo={handleDownloadVideo}
         getNextPanel={getNextPanel}
         isLinkedAsLastFrame={isLinkedAsLastFrame}
         getDefaultFlPrompt={getDefaultFlPrompt}

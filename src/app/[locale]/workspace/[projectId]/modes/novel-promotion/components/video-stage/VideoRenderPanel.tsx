@@ -57,6 +57,7 @@ interface VideoRenderPanelProps {
   ) => Promise<void>
   onPreviewImage: (imageUrl: string | null) => void
   onToggleLipSyncVideo: (key: string, value: boolean) => void
+  onDownloadVideo: (panel: VideoPanel, videoUrl: string) => Promise<void>
   getNextPanel: (currentIndex: number) => VideoPanel | null
   isLinkedAsLastFrame: (currentIndex: number) => boolean
   getDefaultFlPrompt: (firstPrompt?: string, lastPrompt?: string) => string
@@ -103,6 +104,7 @@ export default function VideoRenderPanel({
   onGenerateFirstLastFrame,
   onPreviewImage,
   onToggleLipSyncVideo,
+  onDownloadVideo,
   getNextPanel,
   isLinkedAsLastFrame,
   getDefaultFlPrompt,
@@ -194,6 +196,7 @@ export default function VideoRenderPanel({
                 onResetFlPrompt={onResetFlPrompt}
                 onGenerateFirstLastFrame={onGenerateFirstLastFrame}
                 onPreviewImage={onPreviewImage}
+                onDownloadVideo={onDownloadVideo}
               />
             </div>
           )

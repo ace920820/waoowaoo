@@ -21,6 +21,7 @@ import {
 } from '@/lib/shot-group/video-config'
 import {
   useCreateProjectShotGroup,
+  useDownloadRemoteBlob,
   useGenerateProjectShotGroupVideo,
   useSaveProjectVideoTailFrame,
   useTaskTargetStateMap,
@@ -39,6 +40,7 @@ import {
   downloadFileFromUrl,
   extractVideoTailFrame,
 } from './video-tail-frame-utils'
+import { saveBlobAsFile } from '@/lib/download/saveBlobAsFile'
 
 interface ShotGroupVideoSectionProps {
   projectId: string
@@ -131,6 +133,17 @@ function parseGenerationOptionValue(rawValue: string, sample: CapabilityValue): 
 
 function toCapabilityFieldLabel(field: string) {
   return field.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase())
+}
+
+function sanitizeFileSegment(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim()
+  if (!trimmed) return fallback
+  return trimmed.slice(0, 50).replace(/[\\/:*?"<>|]/g, '_')
+}
+
+function resolveVideoDownloadUrl(projectId: string, videoUrl: string) {
+  if (videoUrl.startsWith('/api/')) return videoUrl
+  return `/api/novel-promotion/${projectId}/video-proxy?key=${encodeURIComponent(videoUrl)}`
 }
 
 function toDraft(
@@ -432,6 +445,7 @@ export default function ShotGroupVideoSection({
   const uploadMutation = useUploadProjectShotGroupReferenceImage(projectId, episodeId)
   const generateMutation = useGenerateProjectShotGroupVideo(projectId, episodeId)
   const saveTailFrameMutation = useSaveProjectVideoTailFrame(projectId, episodeId)
+  const downloadRemoteBlobMutation = useDownloadRemoteBlob()
 
   const [drafts, setDrafts] = useState<Record<string, VideoDraftState>>({})
   const [createDraft, setCreateDraft] = useState<VideoDraftState>({
@@ -731,6 +745,25 @@ export default function ShotGroupVideoSection({
       }))
     } finally {
       setSavingTailFrameGroupId(null)
+    }
+  }
+
+  const handleDownloadVideo = async (group: NovelPromotionShotGroup, segmentNumber: number) => {
+    if (!group.videoUrl) {
+      setGroupErrors((previous) => ({ ...previous, [group.id]: '当前没有可下载的多镜头视频。' }))
+      return
+    }
+
+    setGroupErrors((previous) => ({ ...previous, [group.id]: null }))
+    try {
+      const blob = await downloadRemoteBlobMutation.mutateAsync(resolveVideoDownloadUrl(projectId, group.videoUrl))
+      const fileName = `${String(segmentNumber).padStart(3, '0')}_${sanitizeFileSegment(group.title, 'shot-group')}.mp4`
+      saveBlobAsFile(blob, fileName)
+    } catch (error) {
+      setGroupErrors((previous) => ({
+        ...previous,
+        [group.id]: resolveMutationError(error, '下载多镜头视频失败'),
+      }))
     }
   }
 
@@ -1113,6 +1146,14 @@ export default function ShotGroupVideoSection({
                             className="w-full rounded-2xl border border-[var(--glass-stroke-base)] bg-black/30"
                           />
                           <div className="flex flex-wrap gap-2">
+                            <GlassButton
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void handleDownloadVideo(group, segmentNumber)}
+                            >
+                              <AppIcon name="download" className="h-3.5 w-3.5" />
+                              <span>下载视频</span>
+                            </GlassButton>
                             <GlassButton
                               size="sm"
                               variant="ghost"
