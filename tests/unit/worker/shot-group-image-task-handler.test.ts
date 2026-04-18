@@ -98,7 +98,7 @@ describe('shot-group-image-task-handler', () => {
     expect(prompt).toContain('画布比例：1:1')
   })
 
-  it('omits api-level aspectRatio for Nano Banana 2 when reference image exists', async () => {
+  it('passes composite aspectRatio through to the shared generator layer', async () => {
     await handleShotGroupImageTask(buildJob())
 
     expect(utilsMock.resolveImageSourceFromGeneration).toHaveBeenCalledWith(
@@ -108,6 +108,7 @@ describe('shot-group-image-task-handler', () => {
         prompt: expect.stringContaining('画布比例：1:1'),
         options: {
           referenceImages: ['normalized:https://signed.example/cos/ref-shot-group.png'],
+          aspectRatio: '1:1',
         },
       }),
     )
@@ -119,7 +120,7 @@ describe('shot-group-image-task-handler', () => {
     })
   })
 
-  it('keeps api-level aspectRatio for other storyboard models', async () => {
+  it('keeps the same options shape for other storyboard models', async () => {
     utilsMock.getProjectModels.mockResolvedValueOnce({
       storyboardModel: 'google::gemini-2.5-flash-image-preview',
       artStyle: 'shaw-brothers',

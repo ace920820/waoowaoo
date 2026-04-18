@@ -17,6 +17,16 @@ import { setProxy } from '../../../../lib/prompts/proxy'
 
 type ContentPart = { inlineData: { mimeType: string; data: string } } | { text: string }
 
+const NANO_BANANA_2_MODEL_ID = 'gemini-3.1-flash-image-preview'
+
+type GoogleGeminiImageOptions = {
+    aspectRatio?: string
+    resolution?: string
+    provider?: string
+    modelId?: string
+    modelKey?: string
+}
+
 interface ImagenResponse {
     generatedImages?: Array<{
         image?: {
@@ -34,6 +44,26 @@ function getErrorMessage(error: unknown): string {
     return '未知错误'
 }
 
+function isNanoBanana2Model(modelId: string, options: GoogleGeminiImageOptions): boolean {
+    return modelId === NANO_BANANA_2_MODEL_ID
+        || options.modelId === NANO_BANANA_2_MODEL_ID
+        || options.modelKey === `google::${NANO_BANANA_2_MODEL_ID}`
+}
+
+function buildImageConfig(
+    modelId: string,
+    options: GoogleGeminiImageOptions,
+    referenceImageCount: number,
+): { aspectRatio?: string; imageSize?: string } | undefined {
+    const omitAspectRatio = isNanoBanana2Model(modelId, options) && referenceImageCount > 0
+    const imageConfig = {
+        ...(options.aspectRatio && !omitAspectRatio ? { aspectRatio: options.aspectRatio } : {}),
+        ...(options.resolution ? { imageSize: options.resolution } : {}),
+    }
+
+    return Object.keys(imageConfig).length > 0 ? imageConfig : undefined
+}
+
 export class GoogleGeminiImageGenerator extends BaseImageGenerator {
     private modelId: string
 
@@ -46,17 +76,7 @@ export class GoogleGeminiImageGenerator extends BaseImageGenerator {
         const { userId, prompt, referenceImages = [], options = {} } = params
 
         const { apiKey } = await getProviderConfig(userId, 'google')
-        const {
-            aspectRatio,
-            resolution
-        } = options as {
-            aspectRatio?: string
-            resolution?: string
-            provider?: string
-            modelId?: string
-            modelKey?: string
-        }
-
+        const normalizedOptions = options as GoogleGeminiImageOptions
         const allowedOptionKeys = new Set([
             'provider',
             'modelId',
@@ -126,6 +146,7 @@ export class GoogleGeminiImageGenerator extends BaseImageGenerator {
             { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         ]
+        const imageConfig = buildImageConfig(this.modelId, normalizedOptions, referenceImages.length)
 
         // 调用 API
         const response = await ai.models.generateContent({
@@ -134,14 +155,7 @@ export class GoogleGeminiImageGenerator extends BaseImageGenerator {
             config: {
                 responseModalities: ['TEXT', 'IMAGE'],
                 safetySettings,
-                ...(aspectRatio || resolution
-                    ? {
-                        imageConfig: {
-                            ...(aspectRatio ? { aspectRatio } : {}),
-                            ...(resolution ? { imageSize: resolution } : {}),
-                        },
-                    }
-                    : {})
+                ...(imageConfig ? { imageConfig } : {})
             }
         })
 
