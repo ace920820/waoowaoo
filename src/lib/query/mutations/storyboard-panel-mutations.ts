@@ -26,6 +26,14 @@ interface StoryboardPanelImageMutationResult {
     }
 }
 
+interface VideoTailFrameMutationResult {
+    success: boolean
+    sourceType: 'panel' | 'shot-group'
+    sourceId: string
+    imageUrl: string | null
+    media?: import('@/types/project').MediaRef | null
+}
+
 export function useRegenerateProjectPanelImage(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
@@ -181,6 +189,38 @@ export function useRestoreProjectStoryboardPanelImage(projectId: string) {
     })
 }
 
+export function useSaveProjectVideoTailFrame(projectId: string, episodeId?: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({
+            sourceType,
+            sourceId,
+            file,
+        }: {
+            sourceType: 'panel' | 'shot-group'
+            sourceId: string
+            file: File
+        }) => {
+            const formData = new FormData()
+            formData.append('sourceType', sourceType)
+            formData.append('sourceId', sourceId)
+            formData.append('file', file)
+
+            return await requestJsonWithError<VideoTailFrameMutationResult>(`/api/novel-promotion/${projectId}/video-tail-frame`, {
+                method: 'POST',
+                body: formData,
+            }, '保存尾帧失败')
+        },
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+            if (episodeId) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+            }
+        },
+    })
+}
+
 /**
  * 选择/取消镜头候选图（项目）
  */
@@ -331,6 +371,8 @@ export function useUpdateProjectShotGroup(projectId: string, episodeId: string) 
       templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
       groupPrompt?: string | null
       referenceImageUrl?: string | null
+      compositeImageUrl?: string | null
+      videoModel?: string | null
     }) => {
       return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
         method: 'PATCH',
@@ -401,17 +443,28 @@ export function useGenerateProjectShotGroupVideo(projectId: string, episodeId: s
 export function useUploadProjectShotGroupReferenceImage(projectId: string, episodeId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async ({ file, shotGroupId, labelText }: { file: File; shotGroupId: string; labelText?: string }) => {
+        mutationFn: async ({
+            file,
+            shotGroupId,
+            labelText,
+            targetField = 'reference',
+        }: {
+            file: File
+            shotGroupId: string
+            labelText?: string
+            targetField?: 'reference' | 'composite'
+        }) => {
             const formData = new FormData()
             formData.append('file', file)
             formData.append('type', 'shot-group')
             formData.append('id', shotGroupId)
             if (labelText) formData.append('labelText', labelText)
+            formData.append('targetField', targetField)
 
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/upload-asset-image`, {
                 method: 'POST',
                 body: formData,
-            }, '上传镜头组参考图失败')
+            }, targetField === 'composite' ? '上传分镜参考表失败' : '上传镜头组参考图失败')
         },
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })

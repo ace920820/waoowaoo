@@ -14,6 +14,7 @@ interface EpisodeSummary {
   episodeNumber?: number
   description?: string | null
   clips?: unknown[]
+  shotGroups?: unknown[]
   storyboards?: Array<{
     panels?: NovelPromotionPanel[] | null
   }>
@@ -179,6 +180,7 @@ export default function WorkspaceHeaderShell({
                 novelText: null,
                 clips: ep.clips || [],
                 storyboards: ep.storyboards || [],
+                shotGroups: ep.shotGroups || [],
                 voiceLines: [],
               })
               return {

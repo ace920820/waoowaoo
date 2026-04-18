@@ -21,10 +21,17 @@ type StoryboardLike = {
   [key: string]: unknown
 }
 
+type ShotGroupLike = {
+  compositeImageUrl?: string | null
+  videoUrl?: string | null
+  [key: string]: unknown
+}
+
 type EpisodeLike = {
   novelText?: string | null
   clips?: unknown[] | null
   storyboards?: unknown[] | null
+  shotGroups?: unknown[] | null
   voiceLines?: unknown[] | null
 }
 
@@ -44,31 +51,45 @@ function isStoryboardLike(value: unknown): value is StoryboardLike {
   return typeof value === 'object' && value !== null
 }
 
+function isShotGroupLike(value: unknown): value is ShotGroupLike {
+  return typeof value === 'object' && value !== null
+}
+
 export function hasScriptArtifacts(clips: unknown[] | null | undefined) {
   if (!Array.isArray(clips) || clips.length === 0) return false
   return clips.some((clip) => isEpisodeClipLike(clip) && hasNonEmptyText(clip.screenplay))
 }
 
-export function hasStoryboardArtifacts(storyboards: unknown[] | null | undefined) {
-  if (!Array.isArray(storyboards) || storyboards.length === 0) return false
-  return storyboards.some((storyboard) => isStoryboardLike(storyboard)
+export function hasStoryboardArtifacts(
+  storyboards: unknown[] | null | undefined,
+  shotGroups?: unknown[] | null | undefined,
+) {
+  const hasPanels = Array.isArray(storyboards) && storyboards.some((storyboard) => isStoryboardLike(storyboard)
     && Array.isArray(storyboard.panels)
     && storyboard.panels.some((panel) => isStoryboardPanelLike(panel)))
+  if (hasPanels) return true
+  if (!Array.isArray(shotGroups) || shotGroups.length === 0) return false
+  return shotGroups.some((shotGroup) => isShotGroupLike(shotGroup) && hasNonEmptyText(shotGroup.compositeImageUrl))
 }
 
-export function hasVideoArtifacts(storyboards: unknown[] | null | undefined) {
-  if (!Array.isArray(storyboards) || storyboards.length === 0) return false
-  return storyboards.some((storyboard) => isStoryboardLike(storyboard)
+export function hasVideoArtifacts(
+  storyboards: unknown[] | null | undefined,
+  shotGroups?: unknown[] | null | undefined,
+) {
+  const hasPanelVideos = Array.isArray(storyboards) && storyboards.some((storyboard) => isStoryboardLike(storyboard)
     && Array.isArray(storyboard.panels)
     && storyboard.panels.some((panel) => isStoryboardPanelLike(panel) && hasNonEmptyText(panel.videoUrl)))
+  if (hasPanelVideos) return true
+  if (!Array.isArray(shotGroups) || shotGroups.length === 0) return false
+  return shotGroups.some((shotGroup) => isShotGroupLike(shotGroup) && hasNonEmptyText(shotGroup.videoUrl))
 }
 
 export function resolveEpisodeStageArtifacts(episode: EpisodeLike | null | undefined): StageArtifactReadiness {
   return {
     hasStory: hasNonEmptyText(episode?.novelText),
     hasScript: hasScriptArtifacts(episode?.clips),
-    hasStoryboard: hasStoryboardArtifacts(episode?.storyboards),
-    hasVideo: hasVideoArtifacts(episode?.storyboards),
+    hasStoryboard: hasStoryboardArtifacts(episode?.storyboards, episode?.shotGroups),
+    hasVideo: hasVideoArtifacts(episode?.storyboards, episode?.shotGroups),
     hasVoice: Array.isArray(episode?.voiceLines) && episode.voiceLines.length > 0,
   }
 }

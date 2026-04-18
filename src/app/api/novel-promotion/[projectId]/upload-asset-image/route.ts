@@ -85,6 +85,8 @@ export const POST = apiHandler(async (
   const appearanceId = formData.get('appearanceId') as string | null  // UUID
   const imageIndex = formData.get('imageIndex') as string | null
   const labelText = formData.get('labelText') as string // 文字标识符
+  const targetFieldRaw = formData.get('targetField')
+  const targetField = targetFieldRaw === 'composite' ? 'composite' : 'reference'
 
   if (!file || !type || !id || (!labelText && type !== 'shot-group')) {
     throw new ApiError('INVALID_PARAMS')
@@ -104,7 +106,7 @@ export const POST = apiHandler(async (
     }
   }
 
-  let uploadBuffer = buffer
+  let uploadBuffer: Buffer = buffer
   let uploadExt = inferFileExtension(file)
   let uploadContentType = file.type || undefined
 
@@ -124,7 +126,7 @@ export const POST = apiHandler(async (
       .extend({ top: barH, bottom: 0, left: 0, right: 0, background: { r: 0, g: 0, b: 0, alpha: 1 } })
       .composite([{ input: svg, top: 0, left: 0 }])
       .jpeg({ quality: 90, mozjpeg: true })
-      .toBuffer()
+      .toBuffer() as Buffer
     uploadExt = 'jpg'
     uploadContentType = 'image/jpeg'
   }
@@ -133,7 +135,7 @@ export const POST = apiHandler(async (
   const keyPrefix = type === 'character'
     ? `char-${id}-${appearanceId}-upload`
     : type === 'shot-group'
-      ? `shot-group-${id}-reference-upload`
+      ? `shot-group-${id}-${targetField}-upload`
     : `loc-${id}-upload`
   const key = generateUniqueKey(keyPrefix, uploadExt)
   await uploadObject(uploadBuffer, key, 3, uploadContentType)
@@ -269,13 +271,16 @@ export const POST = apiHandler(async (
     await db.novelPromotionShotGroup.update({
       where: { id },
       data: {
-        referenceImageUrl: key,
+        ...(targetField === 'composite'
+          ? { compositeImageUrl: key }
+          : { referenceImageUrl: key }),
       },
     })
 
     return NextResponse.json({
       success: true,
       imageKey: key,
+      targetField,
     })
   }
 

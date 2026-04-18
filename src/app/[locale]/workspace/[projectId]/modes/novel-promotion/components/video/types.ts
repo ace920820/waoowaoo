@@ -45,6 +45,7 @@ export interface Panel {
   duration?: number | null
   imagePrompt?: string | null
   imageUrl?: string | null  // 图片URL
+  savedTailFrameUrl?: string | null
   videoPrompt?: string | null
   firstLastFramePrompt?: string | null
   speechPlan?: PanelSpeechPlan | null
@@ -91,6 +92,7 @@ export interface VideoPanel {
   firstLastFramePrompt?: string
   imageUrl?: string
   videoUrl?: string
+  savedTailFrameUrl?: string
   videoGenerationMode?: VideoGenerationMode
   videoTaskRunning?: boolean
   videoErrorMessage?: string  // 视频生成错误消息

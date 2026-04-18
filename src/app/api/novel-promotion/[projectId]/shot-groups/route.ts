@@ -182,6 +182,12 @@ export const PATCH = apiHandler(async (
         referenceImageUrl: body.referenceImageUrl === undefined
           ? current.referenceImageUrl
           : (typeof body.referenceImageUrl === 'string' && body.referenceImageUrl.trim() ? body.referenceImageUrl.trim() : null),
+        compositeImageUrl: body.compositeImageUrl === undefined
+          ? current.compositeImageUrl
+          : (typeof body.compositeImageUrl === 'string' && body.compositeImageUrl.trim() ? body.compositeImageUrl.trim() : null),
+        videoModel: body.videoModel === undefined
+          ? current.videoModel
+          : (typeof body.videoModel === 'string' && body.videoModel.trim() ? body.videoModel.trim() : null),
       },
     })
 

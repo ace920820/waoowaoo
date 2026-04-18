@@ -19,7 +19,7 @@
 
 ## 一、最新结论
 
-> 实现状态更新（2026-04-15）：Phase 1 已完成；Phase 2 已新增 storyboard 内的镜头组真实组图生成最小闭环；Phase 3 已打通 videos 页镜头组长视频生成 MVP：支持在 shot group 上基于当前 `compositeImageUrl` 提交真实 `VIDEO_SHOT_GROUP` 任务，复用现有视频模型链路生成一段组视频，并将结果独立回写到 shot group 的 `videoUrl` 承接位。当前已补齐 shot-group 相关接口的 project 归属校验，要求 `episodeId / shotGroupId` 必须沿 `episode -> novelPromotionProject.projectId` 归属到当前项目后才允许读取、更新或提交任务；shot-group 参考图上传也已改为保留原图，不再复用角色/场景资产图的顶部黑色 label bar；并新增基于现有 `tasks` 表的最小 run 历史读取能力，但仍未接入 ordered references 多图精细编排，也未引入独立 `ShotGroupVideoRun` 历史版本表。
+> 实现状态更新（2026-04-18）：Phase 3 主路径已进一步调整为 videos 页直接上传 4 / 6 / 9 格分镜参考表并生成多镜头视频，后台仍复用现有 shot group 数据模型与任务链路；用户不再需要先完成单独的 shot-group 准备步骤。已有 storyboard 阶段镜头组区保留为高级合成路径，用于基于辅助参考图和模板让 AI 生成分镜参考表。project / episode / shot-group 归属校验继续保留，且 shot-group 图片上传仍保持原图，不加顶部 label bar。
 
 
 ### 1.1 一句话结论
@@ -752,3 +752,9 @@ videos 页只负责：
 - 现有短剧流程
 
 整合成一条清晰、自然、可扩展的工作流。
+
+## 实施状态补充
+
+- `2026-04-18`：videos 页已补齐两项最小闭环能力。
+- 单镜头 panel 视频与镜头组视频都支持浏览器侧提取尾帧，并通过后端上传持久化为当前对象的已保存尾帧，可继续下载。
+- videos 页中的单镜头 panel 现支持上传替换首帧，直接复用现有 `panel-image` 覆盖链路，因此后续视频生成会读取新的 `panel.imageUrl` 真源。

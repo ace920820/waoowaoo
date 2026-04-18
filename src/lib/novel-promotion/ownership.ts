@@ -25,3 +25,19 @@ export function buildShotGroupInProjectWhere(
     },
   }
 }
+
+export function buildPanelInProjectWhere(
+  projectId: string,
+  panelId: string,
+): Prisma.NovelPromotionPanelWhereInput {
+  return {
+    id: panelId,
+    storyboard: {
+      episode: {
+        novelPromotionProject: {
+          projectId,
+        },
+      },
+    },
+  }
+}

@@ -165,7 +165,7 @@ export default function StoryboardStage({
   return (
       <StoryboardStageShell
         isTransitioning={isTransitioning}
-        isNextDisabled={isTransitioning || localStoryboards.length === 0}
+        isNextDisabled={isTransitioning || (localStoryboards.length === 0 && shotGroups.length === 0)}
         transitioningState={transitioningState}
         onNext={onNext}
       >

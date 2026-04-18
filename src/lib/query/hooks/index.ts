@@ -120,6 +120,7 @@ export {
     useDownloadProjectImages,
     useUploadProjectStoryboardPanelImage,
     useRestoreProjectStoryboardPanelImage,
+    useSaveProjectVideoTailFrame,
     useUpdateProjectPanel,
     useCreateProjectPanel,
     useDeleteProjectPanel,

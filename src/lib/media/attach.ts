@@ -93,6 +93,7 @@ export async function attachMediaFieldsToGlobalVoice<T extends Record<string, un
 async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel: T) {
   const imageMedia = await resolveMediaRef(panel.imageMediaId, panel.imageUrl)
   const videoMedia = await resolveMediaRef(panel.videoMediaId, panel.videoUrl)
+  const savedTailFrameMedia = await resolveMediaRef(panel.savedTailFrameMediaId, panel.savedTailFrameUrl)
   const lipSyncVideoMedia = await resolveMediaRef(panel.lipSyncVideoMediaId, panel.lipSyncVideoUrl)
   const sketchImageMedia = await resolveMediaRef(panel.sketchImageMediaId, panel.sketchImageUrl)
   const previousImageMedia = await resolveMediaRef(panel.previousImageMediaId, panel.previousImageUrl)
@@ -113,11 +114,13 @@ async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel
     media: imageMedia,
     imageMedia,
     videoMedia,
+    savedTailFrameMedia,
     lipSyncVideoMedia,
     sketchImageMedia,
     previousImageMedia,
     imageUrl: imageMedia?.url || panel.imageUrl || null,
     videoUrl: videoMedia?.url || panel.videoUrl || null,
+    savedTailFrameUrl: savedTailFrameMedia?.url || panel.savedTailFrameUrl || null,
     lipSyncVideoUrl: lipSyncVideoMedia?.url || panel.lipSyncVideoUrl || null,
     sketchImageUrl: sketchImageMedia?.url || panel.sketchImageUrl || null,
     previousImageUrl: previousImageMedia?.url || panel.previousImageUrl || null,
@@ -207,6 +210,7 @@ async function attachMediaFieldsToShotGroup<T extends Record<string, unknown>>(s
   const referenceImageMedia = await resolveMediaRef(shotGroup.referenceImageMediaId, shotGroup.referenceImageUrl)
   const compositeImageMedia = await resolveMediaRefFromLegacyValue(shotGroup.compositeImageUrl)
   const videoMedia = await resolveMediaRefFromLegacyValue(shotGroup.videoUrl)
+  const savedTailFrameMedia = await resolveMediaRef(shotGroup.savedTailFrameMediaId, shotGroup.savedTailFrameUrl)
   const items = await Promise.all(
     ((shotGroup.items as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToShotGroupItem),
   )
@@ -218,6 +222,8 @@ async function attachMediaFieldsToShotGroup<T extends Record<string, unknown>>(s
     videoUrl: videoMedia?.url || shotGroup.videoUrl || null,
     referenceImageMedia,
     referenceImageUrl: referenceImageMedia?.url || shotGroup.referenceImageUrl || null,
+    savedTailFrameMedia,
+    savedTailFrameUrl: savedTailFrameMedia?.url || shotGroup.savedTailFrameUrl || null,
     items,
   }
 }

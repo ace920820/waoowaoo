@@ -189,6 +189,8 @@ export interface NovelPromotionPanel {
   videoUrl: string | null
   videoGenerationMode?: 'normal' | 'firstlastframe' | null
   videoMedia?: MediaRef | null
+  savedTailFrameUrl?: string | null
+  savedTailFrameMedia?: MediaRef | null
   lipSyncVideoUrl?: string | null
   lipSyncVideoMedia?: MediaRef | null
   sketchImageUrl?: string | null
@@ -250,6 +252,8 @@ export interface NovelPromotionShotGroup {
   videoReferencesJson?: string | null
   videoUrl?: string | null
   videoMedia?: MediaRef | null
+  savedTailFrameUrl?: string | null
+  savedTailFrameMedia?: MediaRef | null
   createdAt: Date | string
   updatedAt: Date | string
   items?: NovelPromotionShotGroupItem[]

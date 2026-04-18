@@ -49,7 +49,9 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
   const generateMutation = useGenerateProjectShotGroupImage(projectId, episodeId)
   const uploadMutation = useUploadProjectShotGroupReferenceImage(projectId, episodeId)
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({})
+  const [localReferencePreviewUrls, setLocalReferencePreviewUrls] = useState<Record<string, string>>({})
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const localReferencePreviewUrlsRef = useRef<Record<string, string>>({})
 
   const taskStatesQuery = useTaskTargetStateMap(projectId, shotGroups.map((group) => ({
     targetType: 'NovelPromotionShotGroup',
@@ -76,6 +78,31 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
     })
   }, [shotGroups])
 
+  useEffect(() => {
+    setLocalReferencePreviewUrls((previous) => {
+      let changed = false
+      const next = { ...previous }
+      for (const group of shotGroups) {
+        if (group.referenceImageUrl && next[group.id]) {
+          URL.revokeObjectURL(next[group.id])
+          delete next[group.id]
+          changed = true
+        }
+      }
+      return changed ? next : previous
+    })
+  }, [shotGroups])
+
+  useEffect(() => {
+    localReferencePreviewUrlsRef.current = localReferencePreviewUrls
+  }, [localReferencePreviewUrls])
+
+  useEffect(() => () => {
+    for (const url of Object.values(localReferencePreviewUrlsRef.current)) {
+      URL.revokeObjectURL(url)
+    }
+  }, [])
+
   const isEmpty = shotGroups.length === 0
   const creating = createMutation.isPending
   const deletingIds = useMemo(() => new Set<string>(), [])
@@ -89,10 +116,10 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
         <div>
           <div className="flex items-center gap-2 text-[var(--glass-text-primary)]">
             <AppIcon name="clapperboard" className="h-4 w-4 text-[var(--glass-tone-info-fg)]" />
-            <h3 className="text-sm font-semibold">镜头组（Phase 2）</h3>
+            <h3 className="text-sm font-semibold">高级：为多镜头片段生成分镜参考表</h3>
           </div>
           <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
-            已接入真实组图生成：模板 + 组提示词 + 参考图 → composite group image 回写，不影响现有单 panel 流程。
+            先上传辅助参考图，再点击 AI 生成分镜参考表。生成好的分镜参考表会在 videos 阶段作为多镜头片段的视频输入使用。
           </p>
         </div>
         <GlassButton
@@ -101,13 +128,13 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
           disabled={creating}
         >
           <AppIcon name="plusAlt" className="h-3.5 w-3.5" />
-          <span>{creating ? '创建中...' : '新建镜头组'}</span>
+          <span>{creating ? '创建中...' : '新建高级参考表草稿'}</span>
         </GlassButton>
       </div>
 
       {isEmpty ? (
         <div className="rounded-2xl border border-dashed border-[var(--glass-stroke-base)] px-4 py-8 text-center text-sm text-[var(--glass-text-tertiary)]">
-          当前还没有镜头组。点击右上角即可创建一个 4 宫格镜头组并上传参考图开始生成。
+          当前还没有高级多镜头分镜参考表草稿。点击右上角可创建一个 4 格草稿，用辅助参考图让 AI 继续合成。
         </div>
       ) : (
         <div className="space-y-4">
@@ -127,6 +154,8 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
               })
               : null
             const errorDisplay = taskState?.lastError ? resolveErrorDisplay(taskState.lastError) : null
+            const referencePreviewUrl = localReferencePreviewUrls[group.id] || group.referenceImageUrl || null
+            const needsCompositeGeneration = Boolean(referencePreviewUrl) && !group.compositeImageUrl && !inlineState?.isRunning
 
             return (
               <article key={group.id} className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-4 space-y-4">
@@ -225,8 +254,8 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                     <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/50 p-3 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考图</div>
-                          <div className="text-xs text-[var(--glass-text-tertiary)]">支持本地选择后上传，生成时会作为镜头组视觉锚点。</div>
+                          <div className="text-sm font-medium text-[var(--glass-text-primary)]">辅助参考图</div>
+                          <div className="text-xs text-[var(--glass-text-tertiary)]">上传后会立即预览。下一步点击下方按钮，让 AI 基于它生成分镜参考表。</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <input
@@ -239,10 +268,16 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                             onChange={(event) => {
                               const file = event.target.files?.[0]
                               if (!file) return
+                              setLocalReferencePreviewUrls((previous) => {
+                                const next = { ...previous }
+                                if (next[group.id]) URL.revokeObjectURL(next[group.id])
+                                next[group.id] = URL.createObjectURL(file)
+                                return next
+                              })
                               uploadMutation.mutate({
                                 file,
                                 shotGroupId: group.id,
-                                labelText: draft.title || group.title || '镜头组参考图',
+                                labelText: draft.title || group.title || '多镜头片段辅助参考图',
                               })
                               event.currentTarget.value = ''
                             }}
@@ -254,7 +289,7 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                             disabled={isUploading}
                           >
                             <AppIcon name="upload" className="h-3.5 w-3.5" />
-                            <span>{isUploading ? '上传中...' : (group.referenceImageUrl ? '更换参考图' : '上传参考图')}</span>
+                            <span>{isUploading ? '上传中...' : (group.referenceImageUrl ? '更换辅助参考图' : '上传辅助参考图')}</span>
                           </GlassButton>
                           {group.referenceImageUrl && (
                             <GlassButton
@@ -271,15 +306,15 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-2">
-                          <div className="text-xs text-[var(--glass-text-secondary)]">当前参考图</div>
+                          <div className="text-xs text-[var(--glass-text-secondary)]">当前辅助参考图</div>
                           <div className="aspect-video rounded-xl border border-dashed border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] overflow-hidden flex items-center justify-center text-xs text-[var(--glass-text-tertiary)]">
-                            {group.referenceImageUrl ? (
-                              <img src={group.referenceImageUrl} alt={`${group.title} 参考图`} className="h-full w-full object-cover" />
-                            ) : '暂无参考图'}
+                            {referencePreviewUrl ? (
+                              <img src={referencePreviewUrl} alt={`${group.title} 辅助参考图`} className="h-full w-full object-cover" />
+                            ) : '暂无辅助参考图'}
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <div className="text-xs text-[var(--glass-text-secondary)]">生成结果</div>
+                          <div className="text-xs text-[var(--glass-text-secondary)]">AI 合成结果</div>
                           <div className="aspect-video rounded-xl border border-dashed border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] overflow-hidden flex items-center justify-center text-xs text-[var(--glass-text-tertiary)]">
                             {group.compositeImageUrl ? (
                               <img src={group.compositeImageUrl} alt={`${group.title} 分镜稿总图`} className="h-full w-full object-cover" />
@@ -288,6 +323,15 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                         </div>
                       </div>
 
+                      {needsCompositeGeneration ? (
+                        <div className="rounded-2xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-3">
+                          <div className="text-sm font-medium text-[var(--glass-tone-warning-fg)]">下一步：生成分镜参考表</div>
+                          <div className="mt-1 text-xs text-[var(--glass-text-secondary)]">
+                            辅助参考图已就绪。点击“AI 生成分镜参考表”，系统会基于当前模板、标题和提示词生成可用于 videos 阶段的视频参考表。
+                          </div>
+                        </div>
+                      ) : null}
+
                       <div className="flex flex-wrap items-center gap-2">
                         <GlassButton
                           size="sm"
@@ -295,10 +339,10 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
                           disabled={isGenerating || isUploading}
                         >
                           <AppIcon name="image" className="h-3.5 w-3.5" />
-                          <span>{isGenerating ? '提交中...' : (group.compositeImageUrl ? '重新生成镜头组分镜稿' : '生成镜头组分镜稿')}</span>
+                          <span>{isGenerating ? '提交中...' : (group.compositeImageUrl ? '重新生成分镜参考表' : 'AI 生成分镜参考表')}</span>
                         </GlassButton>
                         <span className="text-xs text-[var(--glass-text-tertiary)]">
-                          当前最小闭环先稳定回写 composite image；ordered items 保持接口位，后续可继续拆 item 级结果。
+                          这是补充型高级路径；生成完成后，请到 videos 阶段继续提交对应的多镜头片段视频。
                         </span>
                       </div>
 

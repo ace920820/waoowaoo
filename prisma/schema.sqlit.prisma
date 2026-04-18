@@ -209,6 +209,9 @@ model NovelPromotionPanel {
   videoGenerationMode String?                 // 视频生成方式：normal | firstlastframe
   videoMediaId      String?
   videoMedia        MediaObject?              @relation("NovelPromotionPanelVideoMedia", fields: [videoMediaId], references: [id], onDelete: SetNull)
+  savedTailFrameUrl String?
+  savedTailFrameMediaId String?
+  savedTailFrameMedia MediaObject?            @relation("NovelPromotionPanelSavedTailFrameMedia", fields: [savedTailFrameMediaId], references: [id], onDelete: SetNull)
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @default(now()) @updatedAt
   sceneType         String?
@@ -235,6 +238,7 @@ model NovelPromotionPanel {
   @@index([storyboardId])
   @@index([imageMediaId])
   @@index([videoMediaId])
+  @@index([savedTailFrameMediaId])
   @@index([lipSyncVideoMediaId])
   @@index([sketchImageMediaId])
   @@index([previousImageMediaId])
@@ -813,9 +817,12 @@ model MediaObject {
   novelPromotionEpisodeAudios           NovelPromotionEpisode[]     @relation("NovelPromotionEpisodeAudioMedia")
   novelPromotionPanelImages             NovelPromotionPanel[]       @relation("NovelPromotionPanelImageMedia")
   novelPromotionPanelVideos             NovelPromotionPanel[]       @relation("NovelPromotionPanelVideoMedia")
+  novelPromotionPanelSavedTailFrames    NovelPromotionPanel[]       @relation("NovelPromotionPanelSavedTailFrameMedia")
   novelPromotionPanelLipSyncVideos      NovelPromotionPanel[]       @relation("NovelPromotionPanelLipSyncVideoMedia")
   novelPromotionPanelSketchImages       NovelPromotionPanel[]       @relation("NovelPromotionPanelSketchMedia")
   novelPromotionPanelPreviousImages     NovelPromotionPanel[]       @relation("NovelPromotionPanelPreviousImageMedia")
+  novelPromotionShotGroupReferenceImages NovelPromotionShotGroup[]  @relation("NovelPromotionShotGroupReferenceImageMedia")
+  novelPromotionShotGroupSavedTailFrames NovelPromotionShotGroup[]  @relation("NovelPromotionShotGroupSavedTailFrameMedia")
   novelPromotionShotImages              NovelPromotionShot[]        @relation("NovelPromotionShotImageMedia")
   supplementaryPanelImages              SupplementaryPanel[]        @relation("SupplementaryPanelImageMedia")
   novelPromotionVoiceLineAudios         NovelPromotionVoiceLine[]   @relation("NovelPromotionVoiceLineAudioMedia")
