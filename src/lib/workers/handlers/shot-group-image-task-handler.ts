@@ -17,8 +17,15 @@ import {
   uploadImageSourceToCos,
 } from '@/lib/workers/utils'
 
+const SHOT_GROUP_COMPOSITE_ASPECT_RATIO = '1:1'
+const NANO_BANANA_2_MODEL_KEY = 'google::gemini-3.1-flash-image-preview'
+
 function normalizeShotGroupDialogueLanguage(value: string | null | undefined): NovelPromotionDialogueLanguage {
   return value === 'en' || value === 'ja' ? value : 'zh'
+}
+
+function shouldOmitAspectRatioForShotGroupComposite(modelKey: string, referenceImages: string[]) {
+  return modelKey === NANO_BANANA_2_MODEL_KEY && referenceImages.length > 0
 }
 
 export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
@@ -51,7 +58,9 @@ export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
     template,
     artStyle,
     locale: job.data.locale,
+    canvasAspectRatio: SHOT_GROUP_COMPOSITE_ASPECT_RATIO,
   })
+  const omitAspectRatio = shouldOmitAspectRatioForShotGroupComposite(modelKey, normalizedRefs)
 
   await reportTaskProgress(job, 18, {
     stage: 'generate_shot_group_composite',
@@ -66,7 +75,7 @@ export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
     prompt,
     options: {
       referenceImages: normalizedRefs,
-      aspectRatio: '1:1',
+      ...(omitAspectRatio ? {} : { aspectRatio: SHOT_GROUP_COMPOSITE_ASPECT_RATIO }),
     },
     allowTaskExternalIdResume: true,
     pollProgress: { start: 28, end: 90 },

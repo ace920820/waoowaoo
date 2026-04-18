@@ -61,10 +61,16 @@ export function buildShotGroupCompositePrompt(params: {
   template: ShotGroupTemplateSpec
   artStyle: string | null
   locale: string
+  canvasAspectRatio?: string | null
 }) {
   const groupPrompt = params.group.groupPrompt?.trim() || '保持同一场景与角色连续性，强调镜头调度与画面叙事。'
   const title = params.group.title?.trim() || '未命名镜头组'
   const artStyle = params.artStyle?.trim() || (params.locale === 'en' ? 'consistent cinematic storyboard style' : '统一电影感分镜风格')
+  const canvasDirective = params.canvasAspectRatio?.trim()
+    ? (params.locale === 'en'
+      ? `Canvas ratio: ${params.canvasAspectRatio}. Keep the final composite image in this ratio.`
+      : `画布比例：${params.canvasAspectRatio}。最终总图保持这个比例输出。`)
+    : null
 
   if (params.locale === 'en') {
     return [
@@ -73,6 +79,7 @@ export function buildShotGroupCompositePrompt(params: {
       'Keep all slots in one coherent scene, consistent characters, wardrobe, lighting, and art direction.',
       `User prompt: ${groupPrompt}`,
       `Style: ${artStyle}`,
+      ...(canvasDirective ? [canvasDirective] : []),
       'Return a single finished composite storyboard image with clearly separated slots and no captions or UI chrome.',
       `Ordered slots:\n${stringifyItems(params.group.items, params.template)}`,
     ].join('\n\n')
@@ -84,6 +91,7 @@ export function buildShotGroupCompositePrompt(params: {
     '要求所有格子处于同一叙事连续体内，角色、服装、空间、光线和风格保持一致。',
     `组提示词：${groupPrompt}`,
     `风格要求：${artStyle}`,
+    ...(canvasDirective ? [canvasDirective] : []),
     '只输出一张完成的 composite storyboard image，不要文字标题、字幕、界面边框或多余排版。',
     `有序镜头槽位：\n${stringifyItems(params.group.items, params.template)}`,
   ].join('\n\n')
