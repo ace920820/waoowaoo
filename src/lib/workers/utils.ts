@@ -420,7 +420,8 @@ export async function resolveVideoSourceFromGeneration(
       generateAudio?: boolean
       lastFrameImageUrl?: string
       generationMode?: 'normal' | 'firstlastframe'
-      [key: string]: string | number | boolean | undefined
+      contentItems?: Array<Record<string, unknown>>
+      [key: string]: string | number | boolean | Array<Record<string, unknown>> | undefined
     }
     pollProgress?: { start?: number; end?: number }
   },
@@ -485,7 +486,7 @@ export async function resolveVideoSourceFromGeneration(
 
   const providerCapabilityOptions: Record<string, string | number | boolean> = { ...capabilityOptions }
   delete providerCapabilityOptions.generationMode
-  const providerRequestOptions: Record<string, string | number | boolean> = {}
+  const providerRequestOptions: Record<string, string | number | boolean | Array<Record<string, unknown>>> = {}
   for (const [key, value] of Object.entries(params.options || {})) {
     if (key === 'generationMode' || value === undefined) continue
     providerRequestOptions[key] = value

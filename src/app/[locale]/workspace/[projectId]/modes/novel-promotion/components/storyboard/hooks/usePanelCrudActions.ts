@@ -93,6 +93,8 @@ export function usePanelCrudActions({
           srtEnd: snapshot.srtEnd,
           duration: snapshot.duration,
           videoPrompt: snapshot.videoPrompt,
+          storyboardMoodPresetId: snapshot.storyboardMoodPresetId,
+          customMood: snapshot.customMood,
           photographyRules: snapshot.photographyRules,
           actingNotes: snapshot.actingNotes,
         })
@@ -132,6 +134,8 @@ export function usePanelCrudActions({
         srtEnd: snapshot.srtEnd,
         duration: snapshot.duration,
         videoPrompt: snapshot.videoPrompt,
+        storyboardMoodPresetId: snapshot.storyboardMoodPresetId,
+        customMood: snapshot.customMood,
         photographyRules: snapshot.photographyRules,
         actingNotes: snapshot.actingNotes,
       })

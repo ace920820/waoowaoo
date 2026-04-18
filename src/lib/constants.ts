@@ -139,6 +139,7 @@ export type ArtStyleValue =
   | 'shaw-brothers'
   | 'hk-wuxia-90s'
   | 'anime-80s-handdrawn'
+  | 'cel-90s-hand-drawn'
   | 'wuxia-2000s-cg'
   | 'chinese-xianxia'
   | 'chinese-comic'
@@ -188,6 +189,13 @@ export const ART_STYLES: Array<{
     promptEn: 'Japanese 1990s traditional hand-drawn cel animation style (referencing City Hunter, Vampire Hunter D, Golden Boy), hand-inked lines with visible brush pressure variation (not digitally uniform), matte flat color fills with slight faded film-print desaturation, hard-edge flat shadow blocks without gradients, era-specific character design (sharp high nose bridge, angular jawlines, elongated proportions), hand-painted realistic backgrounds, subtle color misalignment from cel layer stacking, raw handcrafted warmth throughout — distinctly separate from any modern digital animation.'
   },
   {
+    value: 'cel-90s-hand-drawn',
+    label: '90s赛璐璐手绘风格',
+    preview: '赛',
+    promptZh: '90年代传统手绘赛璐璐动画风格，手工描线带自然粗细变化，哑光平涂色块，硬边阴影，无现代数码渐变，角色造型带时代感，背景为手绘上色，整体保留胶片时代的轻微颗粒、色偏与手工温度。',
+    promptEn: '1990s traditional hand-drawn cel animation style, naturally varied hand-inked line weight, matte flat color blocks, hard-edge shadows, no modern digital gradients, era-specific character styling, hand-painted backgrounds, with subtle film-era grain, color drift, and handcrafted warmth.'
+  },
+  {
     value: 'wuxia-2000s-cg',
     label: '00年代武侠CG',
     preview: '00',
@@ -212,7 +220,7 @@ export const ART_STYLES: Array<{
     value: 'japanese-anime',
     label: '日系动漫风',
     preview: '日',
-    promptZh: '现代日系动漫风格，赛璐璐上色，清晰干净的线条，视觉小说CG感。高质量2D风格',
+    promptZh: '90 年代忧郁氛围，复古质感，80-90 年代经典动漫美学，柔和漫射光影，低饱和色调，内敛忧郁。',
     promptEn: 'Modern Japanese anime style, cel shading, clean line art, visual-novel CG look, high-quality 2D style.'
   },
   {

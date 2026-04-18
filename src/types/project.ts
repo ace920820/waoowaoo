@@ -1,6 +1,7 @@
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
 import type { PanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 // ============================================
 // 基础项目类型
@@ -158,6 +159,8 @@ export interface NovelPromotionClip {
   props: string | null
   content: string
   screenplay?: string | null  // 剧本JSON（Phase 0输出）
+  storyboardMoodPresetId?: string | null
+  customMood?: string | null
 }
 
 export interface NovelPromotionPanel {
@@ -172,6 +175,7 @@ export interface NovelPromotionPanel {
   characters: string | null
   props: string | null
   srtSegment: string | null
+  dialogueOverride?: string | null
   srtStart: number | null
   srtEnd: number | null
   duration: number | null
@@ -185,6 +189,8 @@ export interface NovelPromotionPanel {
   videoUrl: string | null
   videoGenerationMode?: 'normal' | 'firstlastframe' | null
   videoMedia?: MediaRef | null
+  savedTailFrameUrl?: string | null
+  savedTailFrameMedia?: MediaRef | null
   lipSyncVideoUrl?: string | null
   lipSyncVideoMedia?: MediaRef | null
   sketchImageUrl?: string | null
@@ -193,6 +199,8 @@ export interface NovelPromotionPanel {
   previousImageMedia?: MediaRef | null
   photographyRules: string | null  // 单镜头摄影规则JSON
   actingNotes: string | null        // 演技指导数据JSON
+  storyboardMoodPresetId?: string | null
+  customMood?: string | null
   speechPlan?: PanelSpeechPlan | null
   // 任务态字段（由 tasks + hook 派生，不再依赖数据库持久化）
   imageTaskRunning?: boolean
@@ -213,6 +221,53 @@ export interface NovelPromotionStoryboard {
   lastError?: string | null  // 最后一次生成失败的错误信息
   photographyPlan?: string | null  // 摄影方案JSON
   panels?: NovelPromotionPanel[]
+}
+
+export type NovelPromotionShotGroupTemplateKey = 'grid-4' | 'grid-6' | 'grid-9'
+export type NovelPromotionDialogueLanguage = 'zh' | 'en' | 'ja'
+export type NovelPromotionShotGroupVideoMode = 'omni-reference' | 'smart-multi-frame'
+
+export interface NovelPromotionShotGroupItem {
+  id: string
+  shotGroupId: string
+  itemIndex: number
+  title?: string | null
+  prompt?: string | null
+  imageUrl?: string | null
+  media?: MediaRef | null
+  sourcePanelId?: string | null
+}
+
+export interface NovelPromotionShotGroup {
+  id: string
+  episodeId: string
+  title: string
+  templateKey: NovelPromotionShotGroupTemplateKey | string
+  groupPrompt?: string | null
+  referenceImageUrl?: string | null
+  referenceImageMedia?: MediaRef | null
+  compositeImageUrl?: string | null
+  compositeImageMedia?: MediaRef | null
+  videoPrompt?: string | null
+  generateAudio?: boolean
+  bgmEnabled?: boolean
+  includeDialogue?: boolean
+  dialogueLanguage?: NovelPromotionDialogueLanguage
+  videoMode?: NovelPromotionShotGroupVideoMode
+  omniReferenceEnabled?: boolean
+  smartMultiFrameEnabled?: boolean
+  videoModel?: string | null
+  videoSourceType?: string | null
+  videoReferencesJson?: string | null
+  videoUrl?: string | null
+  videoMedia?: MediaRef | null
+  savedTailFrameUrl?: string | null
+  savedTailFrameMedia?: MediaRef | null
+  createdAt: Date | string
+  updatedAt: Date | string
+  items?: NovelPromotionShotGroupItem[]
+  imageTaskRunning?: boolean
+  lastError?: { code: string; message: string } | null
 }
 
 export interface NovelPromotionShot {
@@ -259,6 +314,9 @@ export interface NovelPromotionProject {
   workflowMode: WorkflowMode  // 新增：工作流模式
   artStyle: string
   artStylePrompt: string | null
+  storyboardMoodPresets?: StoryboardMoodPreset[] | string | null
+  storyboardDefaultMoodPresetId?: string | null
+  episodeSplitPreference?: 'auto' | 'scene_group_2' | 'scene_group_3'
   audioUrl: string | null
   media?: MediaRef | null
   srtContent: string | null
@@ -271,6 +329,7 @@ export interface NovelPromotionProject {
     name: string
     description: string | null
     novelText: string | null
+    storyboardDefaultMoodPresetId?: string | null
     audioUrl: string | null
     srtContent: string | null
     createdAt: Date
@@ -278,6 +337,7 @@ export interface NovelPromotionProject {
   }>
   clips?: NovelPromotionClip[]
   storyboards?: NovelPromotionStoryboard[]
+  shotGroups?: NovelPromotionShotGroup[]
   shots?: NovelPromotionShot[]
 }
 

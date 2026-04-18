@@ -131,4 +131,58 @@ describe('api contract - run step retry route', () => {
       }),
     }))
   })
+
+  it('allows split_clips retry submissions for story-to-script runs', async () => {
+    retryFailedStepMock.mockResolvedValueOnce({
+      run: { id: 'run-1' },
+      step: { stepKey: 'split_clips' },
+      retryAttempt: 3,
+    })
+    const route = await import('@/app/api/runs/[runId]/steps/[stepKey]/retry/route')
+
+    const req = buildMockRequest({
+      path: '/api/runs/run-1/steps/split_clips/retry',
+      method: 'POST',
+      body: { reason: 'retry split validation failure' },
+    })
+    const res = await route.POST(req, {
+      params: Promise.resolve({ runId: 'run-1', stepKey: 'split_clips' }),
+    } as RouteContext)
+
+    expect(res.status).toBe(200)
+    expect(submitTaskMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        runId: 'run-1',
+        retryStepKey: 'split_clips',
+        retryStepAttempt: 3,
+      }),
+    }))
+  })
+
+  it('allows analysis-step retry submissions for story-to-script runs', async () => {
+    retryFailedStepMock.mockResolvedValueOnce({
+      run: { id: 'run-1' },
+      step: { stepKey: 'analyze_props' },
+      retryAttempt: 2,
+    })
+    const route = await import('@/app/api/runs/[runId]/steps/[stepKey]/retry/route')
+
+    const req = buildMockRequest({
+      path: '/api/runs/run-1/steps/analyze_props/retry',
+      method: 'POST',
+      body: { reason: 'retry analysis failure' },
+    })
+    const res = await route.POST(req, {
+      params: Promise.resolve({ runId: 'run-1', stepKey: 'analyze_props' }),
+    } as RouteContext)
+
+    expect(res.status).toBe(200)
+    expect(submitTaskMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        runId: 'run-1',
+        retryStepKey: 'analyze_props',
+        retryStepAttempt: 2,
+      }),
+    }))
+  })
 })

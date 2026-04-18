@@ -1,5 +1,7 @@
 import { Worker, type Job } from 'bullmq'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import { queueRedis } from '@/lib/redis'
 import { QUEUE_NAME } from '@/lib/task/queues'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
@@ -18,14 +20,47 @@ import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
-import { buildPanelVideoGenerationPrompt, derivePanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import {
+  buildPanelVideoGenerationPrompt,
+  derivePanelSpeechPlan,
+  resolveEffectivePanelDialogueText,
+} from '@/lib/novel-promotion/panel-speech-plan'
+import { buildShotGroupVideoPrompt } from '@/lib/shot-group/prompt'
+import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
+import {
+  deriveShotGroupModeFlags,
+  resolveShotGroupModeForModel,
+  resolveShotGroupReferenceMode,
+  supportsShotGroupMultiReferenceModes,
+} from '@/lib/shot-group/video-config'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
 type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
+type ShotGroupAdvancedFields = {
+  generateAudio: boolean
+  bgmEnabled: boolean
+  includeDialogue: boolean
+  dialogueLanguage: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled: boolean
+  smartMultiFrameEnabled: boolean
+}
+type ShotGroupDialogueLanguage = 'zh' | 'en' | 'ja'
+type ArkReferenceContentItem =
+  | { type: 'image_url'; image_url: { url: string }; role?: 'reference_image' }
+  | { type: 'video_url'; video_url: { url: string }; role: 'reference_video' }
 type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
 type VideoPanelRecord = NonNullable<Awaited<ReturnType<typeof fetchPanelByStoryboardIndex>>>
+type ShotGroupRecord = Prisma.NovelPromotionShotGroupGetPayload<{
+  include: {
+    items: true
+  }
+}> & ShotGroupAdvancedFields
+
+function readPanelDialogueOverride(panel: VideoPanelRecord): string | null | undefined {
+  return (panel as VideoPanelRecord & { dialogueOverride?: string | null }).dialogueOverride
+}
 
 function toDurationMs(value: number | null | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -179,6 +214,7 @@ async function generateVideoForPanel(
       storyboardId: panel.storyboardId,
       panelIndex: panel.panelIndex,
       srtSegment: panel.srtSegment,
+      dialogueOverride: readPanelDialogueOverride(panel),
     },
     clip: panel.storyboard?.clip || null,
     clips: panel.storyboard?.episode?.clips || [],
@@ -195,7 +231,8 @@ async function generateVideoForPanel(
       cameraMove: panel.cameraMove,
       description: panel.description,
       duration: panel.duration,
-      srtSegment: panel.srtSegment,
+      srtSegment: resolveEffectivePanelDialogueText(panel),
+      dialogueOverride: readPanelDialogueOverride(panel),
     },
     speechPlan,
     generateAudio: effectiveGenerateAudio,
@@ -277,6 +314,173 @@ async function generateVideoForPanel(
   }
 }
 
+function buildShotGroupReferenceSnapshot(input: {
+  shotGroup: ShotGroupRecord
+  modelId: string
+  generationOptions: VideoOptionMap
+}) {
+  const { shotGroup, modelId, generationOptions } = input
+  const mode = resolveShotGroupModeForModel({
+    ...shotGroup,
+    modelKey: modelId,
+  })
+  return {
+    mode,
+    referenceMode: resolveShotGroupReferenceMode({
+      mode,
+      omniReferenceEnabled: shotGroup.omniReferenceEnabled,
+      smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+      modelKey: modelId,
+    }),
+    videoModel: modelId,
+    compositeImageUrl: shotGroup.compositeImageUrl,
+    generateAudio: typeof generationOptions.generateAudio === 'boolean'
+      ? generationOptions.generateAudio
+      : shotGroup.generateAudio,
+    bgmEnabled: false,
+    includeDialogue: shotGroup.includeDialogue,
+    dialogueLanguage: shotGroup.dialogueLanguage,
+    ...deriveShotGroupModeFlags(mode),
+    generationOptions,
+    orderedReferences: (shotGroup.items || []).map((item) => ({
+      itemIndex: item.itemIndex,
+      title: item.title,
+      prompt: item.prompt,
+      imageUrl: item.imageUrl,
+      sourcePanelId: item.sourcePanelId,
+    })),
+  }
+}
+
+function normalizeDialogueLanguage(value: string | null | undefined): ShotGroupDialogueLanguage {
+  return value === 'en' || value === 'ja' ? value : 'zh'
+}
+
+function buildShotGroupVideoSourceType(shotGroup: ShotGroupRecord, modelId: string) {
+  return resolveShotGroupReferenceMode({
+    ...shotGroup,
+    modelKey: modelId,
+  })
+}
+
+function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReferenceContentItem[] | undefined {
+  if (!shotGroup.compositeImageUrl) return undefined
+
+  const uniqueUrls = new Set<string>()
+  const contentItems: ArkReferenceContentItem[] = []
+  const mode = resolveShotGroupModeForModel({
+    ...shotGroup,
+    modelKey: shotGroup.videoModel,
+  })
+  const pushImage = (url: string | null | undefined, role?: 'reference_image') => {
+    const signed = toSignedUrlIfCos(url, 3600)
+    if (!signed || uniqueUrls.has(signed)) return
+    uniqueUrls.add(signed)
+    contentItems.push({
+      type: 'image_url',
+      image_url: { url: signed },
+      ...(role ? { role } : {}),
+    })
+  }
+
+  pushImage(shotGroup.compositeImageUrl)
+  if (mode === 'smart-multi-frame') {
+    for (const item of shotGroup.items || []) {
+      pushImage(item.imageUrl, 'reference_image')
+    }
+  }
+
+  return contentItems
+}
+
+async function generateVideoForShotGroup(
+  job: Job<TaskJobData>,
+  shotGroup: ShotGroupRecord,
+  modelId: string,
+  projectVideoRatio: string | null | undefined,
+  generationOptions: VideoOptionMap,
+) {
+  if (!shotGroup.compositeImageUrl) {
+    throw new Error(`Shot group ${shotGroup.id} has no compositeImageUrl`)
+  }
+
+  const template = getShotGroupTemplateSpec(shotGroup.templateKey)
+  const prompt = buildShotGroupVideoPrompt({
+    group: {
+      ...shotGroup,
+      videoMode: resolveShotGroupModeForModel({
+        ...shotGroup,
+        modelKey: modelId,
+      }),
+      bgmEnabled: false,
+      dialogueLanguage: normalizeDialogueLanguage(shotGroup.dialogueLanguage),
+      items: shotGroup.items,
+    },
+    template,
+    locale: job.data.locale,
+  })
+
+  const sourceImageUrl = toSignedUrlIfCos(shotGroup.compositeImageUrl, 3600)
+  if (!sourceImageUrl) {
+    throw new Error('Shot group composite image url invalid')
+  }
+  const sourceImageBase64 = await normalizeToBase64ForGeneration(sourceImageUrl)
+  const effectiveGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
+    ? generationOptions.generateAudio
+    : shotGroup.generateAudio
+  const sourceType = buildShotGroupVideoSourceType(shotGroup, modelId)
+  const contentItems = supportsShotGroupMultiReferenceModes(modelId)
+    ? buildShotGroupArkContentItems(shotGroup)
+    : undefined
+
+  const generatedVideo = await resolveVideoSourceFromGeneration(job, {
+    userId: job.data.userId,
+    modelId,
+    imageUrl: sourceImageBase64,
+    options: {
+      prompt,
+      ...(projectVideoRatio ? { aspectRatio: projectVideoRatio } : {}),
+      ...generationOptions,
+      generationMode: 'normal',
+      generateAudio: effectiveGenerateAudio,
+      ...(contentItems ? { contentItems } : {}),
+    },
+  })
+
+  let downloadHeaders: Record<string, string> | undefined
+  const videoSource = generatedVideo.url
+  if (generatedVideo.downloadHeaders) {
+    downloadHeaders = generatedVideo.downloadHeaders
+  } else if (typeof videoSource === 'string') {
+    const parsedModel = parseModelKeyStrict(modelId)
+    const isGoogleDownloadUrl = videoSource.includes('generativelanguage.googleapis.com/')
+      && videoSource.includes('/files/')
+      && videoSource.includes(':download')
+    if (parsedModel?.provider === 'google' && isGoogleDownloadUrl) {
+      const { apiKey } = await getProviderConfig(job.data.userId, 'google')
+      downloadHeaders = { 'x-goog-api-key': apiKey }
+    }
+  }
+
+  const cosKey = await uploadVideoSourceToCos(videoSource, 'shot-group-video', shotGroup.id, downloadHeaders)
+  return {
+    cosKey,
+    prompt,
+    sourceType,
+    referencesSnapshot: buildShotGroupReferenceSnapshot({
+      shotGroup,
+      modelId,
+      generationOptions: {
+        ...generationOptions,
+        generateAudio: effectiveGenerateAudio,
+      },
+    }),
+    ...(typeof generatedVideo.actualVideoTokens === 'number'
+      ? { actualVideoTokens: generatedVideo.actualVideoTokens }
+      : {}),
+  }
+}
+
 async function handleVideoPanelTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const projectModels = await getProjectModels(job.data.projectId, job.data.userId)
@@ -314,6 +518,58 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
   return {
     panelId: panel.id,
     videoUrl: cosKey,
+    ...(typeof actualVideoTokens === 'number' ? { actualVideoTokens } : {}),
+  }
+}
+
+async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
+  const payload = (job.data.payload || {}) as AnyObj
+  const projectModels = await getProjectModels(job.data.projectId, job.data.userId)
+
+  const modelId = typeof payload.videoModel === 'string' ? payload.videoModel.trim() : ''
+  if (!modelId) throw new Error('VIDEO_MODEL_REQUIRED: payload.videoModel is required')
+
+  const shotGroup = await prisma.novelPromotionShotGroup.findFirst({
+    where: buildShotGroupInProjectWhere(job.data.projectId, job.data.targetId),
+    include: {
+      items: { orderBy: { itemIndex: 'asc' } },
+    },
+  }) as ShotGroupRecord | null
+  if (!shotGroup) throw new Error('Shot group not found')
+
+  const generationOptions = extractGenerationOptions(payload)
+
+  await reportTaskProgress(job, 10, {
+    stage: 'generate_shot_group_video',
+    shotGroupId: shotGroup.id,
+  })
+
+  const { cosKey, prompt, sourceType, referencesSnapshot, actualVideoTokens } = await generateVideoForShotGroup(
+    job,
+    shotGroup,
+    modelId,
+    projectModels.videoRatio,
+    generationOptions,
+  )
+
+  await assertTaskActive(job, 'persist_shot_group_video')
+  await prisma.novelPromotionShotGroup.update({
+    where: { id: shotGroup.id },
+    data: {
+      videoUrl: cosKey,
+      videoModel: modelId,
+      videoSourceType: sourceType,
+      videoReferencesJson: JSON.stringify(referencesSnapshot),
+    },
+  })
+
+  return {
+    shotGroupId: shotGroup.id,
+    videoUrl: cosKey,
+    videoPrompt: prompt,
+    videoModel: modelId,
+    videoSourceType: sourceType,
+    videoReferences: referencesSnapshot,
     ...(typeof actualVideoTokens === 'number' ? { actualVideoTokens } : {}),
   }
 }
@@ -393,6 +649,8 @@ async function processVideoTask(job: Job<TaskJobData>) {
   switch (job.data.type) {
     case TASK_TYPE.VIDEO_PANEL:
       return await handleVideoPanelTask(job)
+    case TASK_TYPE.VIDEO_SHOT_GROUP:
+      return await handleShotGroupVideoTask(job)
     case TASK_TYPE.LIP_SYNC:
       return await handleLipSyncTask(job)
     default:

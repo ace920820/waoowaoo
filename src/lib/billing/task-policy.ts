@@ -15,9 +15,11 @@ type AnyPayload = Record<string, unknown> | null | undefined
 
 const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.IMAGE_PANEL,
+  TASK_TYPE.IMAGE_SHOT_GROUP,
   TASK_TYPE.IMAGE_CHARACTER,
   TASK_TYPE.IMAGE_LOCATION,
   TASK_TYPE.VIDEO_PANEL,
+  TASK_TYPE.VIDEO_SHOT_GROUP,
   TASK_TYPE.LIP_SYNC,
   TASK_TYPE.VOICE_LINE,
   TASK_TYPE.VOICE_DESIGN,
@@ -244,6 +246,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
 
   switch (taskType) {
     case TASK_TYPE.IMAGE_PANEL:
+    case TASK_TYPE.IMAGE_SHOT_GROUP:
     case TASK_TYPE.IMAGE_CHARACTER:
     case TASK_TYPE.IMAGE_LOCATION:
     case TASK_TYPE.MODIFY_ASSET_IMAGE:
@@ -252,6 +255,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
     case TASK_TYPE.ASSET_HUB_MODIFY:
       return buildImageTaskInfo(taskType, payload)
     case TASK_TYPE.VIDEO_PANEL:
+    case TASK_TYPE.VIDEO_SHOT_GROUP:
       return buildVideoTaskInfo(taskType, payload)
     case TASK_TYPE.LIP_SYNC: {
       const lipSyncModel = pickFirstString([payload?.lipSyncModel]) || 'kling'

@@ -3,6 +3,10 @@ import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import { apiFetch } from '@/lib/api-fetch'
+import type {
+    NovelPromotionDialogueLanguage,
+    NovelPromotionShotGroupVideoMode,
+} from '@/types/project'
 import {
     clearTaskTargetOverlay,
     upsertTaskTargetOverlay,
@@ -24,6 +28,14 @@ interface StoryboardPanelImageMutationResult {
         previousImageUrl?: string | null
         previousImageMedia?: import('@/types/project').MediaRef | null
     }
+}
+
+interface VideoTailFrameMutationResult {
+    success: boolean
+    sourceType: 'panel' | 'shot-group'
+    sourceId: string
+    imageUrl: string | null
+    media?: import('@/types/project').MediaRef | null
 }
 
 export function useRegenerateProjectPanelImage(projectId: string) {
@@ -181,6 +193,38 @@ export function useRestoreProjectStoryboardPanelImage(projectId: string) {
     })
 }
 
+export function useSaveProjectVideoTailFrame(projectId: string, episodeId?: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({
+            sourceType,
+            sourceId,
+            file,
+        }: {
+            sourceType: 'panel' | 'shot-group'
+            sourceId: string
+            file: File
+        }) => {
+            const formData = new FormData()
+            formData.append('sourceType', sourceType)
+            formData.append('sourceId', sourceId)
+            formData.append('file', file)
+
+            return await requestJsonWithError<VideoTailFrameMutationResult>(`/api/novel-promotion/${projectId}/video-tail-frame`, {
+                method: 'POST',
+                body: formData,
+            }, '保存尾帧失败')
+        },
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+            if (episodeId) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+            }
+        },
+    })
+}
+
 /**
  * 选择/取消镜头候选图（项目）
  */
@@ -296,6 +340,152 @@ export function useMoveProjectStoryboardGroup(projectId: string) {
         },
         onSettled: () => {
             invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+export function useCreateProjectShotGroup(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            episodeId: string
+            insertIndex?: number
+            title?: string
+            templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
+            groupPrompt?: string | null
+            videoPrompt?: string | null
+            referenceImageUrl?: string | null
+            generateAudio?: boolean
+            includeDialogue?: boolean
+            dialogueLanguage?: NovelPromotionDialogueLanguage
+            mode?: NovelPromotionShotGroupVideoMode
+            generationOptions?: Record<string, string | number | boolean>
+        }) => {
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }, '创建镜头组失败')
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useUpdateProjectShotGroup(projectId: string, episodeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      shotGroupId: string
+      title?: string
+      templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
+      groupPrompt?: string | null
+      videoPrompt?: string | null
+      referenceImageUrl?: string | null
+      compositeImageUrl?: string | null
+      generateAudio?: boolean
+      includeDialogue?: boolean
+      dialogueLanguage?: NovelPromotionDialogueLanguage
+      mode?: NovelPromotionShotGroupVideoMode
+      videoModel?: string | null
+      generationOptions?: Record<string, string | number | boolean>
+    }) => {
+      return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+            }, '更新镜头组失败')
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useDeleteProjectShotGroup(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ shotGroupId }: { shotGroupId: string }) => {
+            return await requestJsonWithError(
+                `/api/novel-promotion/${projectId}/shot-groups?shotGroupId=${shotGroupId}`,
+                { method: 'DELETE' },
+                '删除镜头组失败',
+            )
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useGenerateProjectShotGroupImage(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ shotGroupId }: { shotGroupId: string }) => {
+            const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shotGroupId, async: true }),
+            }, '生成镜头组分镜稿失败')
+            return resolveTaskResponse(response)
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useGenerateProjectShotGroupVideo(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            shotGroupId: string
+            videoModel?: string
+            mode?: NovelPromotionShotGroupVideoMode
+            generationOptions?: Record<string, string | number | boolean>
+        }) => {
+            const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, async: true }),
+            }, '生成镜头组视频失败')
+            return resolveTaskResponse(response)
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+    })
+}
+
+export function useUploadProjectShotGroupReferenceImage(projectId: string, episodeId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({
+            file,
+            shotGroupId,
+            labelText,
+            targetField = 'reference',
+        }: {
+            file: File
+            shotGroupId: string
+            labelText?: string
+            targetField?: 'reference' | 'composite'
+        }) => {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('type', 'shot-group')
+            formData.append('id', shotGroupId)
+            if (labelText) formData.append('labelText', labelText)
+            formData.append('targetField', targetField)
+
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/upload-asset-image`, {
+                method: 'POST',
+                body: formData,
+            }, targetField === 'composite' ? '上传分镜参考表失败' : '上传镜头组参考图失败')
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
         },
     })
 }

@@ -5,6 +5,7 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
 import { isArtStyleValue } from '@/lib/constants'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
+import { serializeStoryboardMoodPresets, DEFAULT_STORYBOARD_MOOD_PRESETS } from '@/lib/storyboard-mood-presets'
 import {
   formatProjectValidationIssue,
   normalizeProjectDraft,
@@ -222,7 +223,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
   // - 手动创作 → 创建第一个空白剧集
   // - 智能导入 → AI 分析后批量创建剧集
   // 🔥 artStylePrompt 通过实时查询获取，不再存储到数据库
-  await prisma.novelPromotionProject.create({
+  const novelPromotionProjectModel = prisma.novelPromotionProject as unknown as {
+    create: (args: { data: Record<string, unknown> }) => Promise<unknown>
+  }
+
+  await novelPromotionProjectModel.create({
     data: {
       projectId: project.id,
       ...(userPreference && {
@@ -236,7 +241,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
         videoRatio: userPreference.videoRatio,
         artStyle: isArtStyleValue(userPreference.artStyle) ? userPreference.artStyle : 'american-comic',
         ttsRate: userPreference.ttsRate
-      })
+      }),
+      storyboardMoodPresets: serializeStoryboardMoodPresets(DEFAULT_STORYBOARD_MOOD_PRESETS),
     }
   })
 

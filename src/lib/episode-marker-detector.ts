@@ -3,6 +3,7 @@
  * 用于检测文本中是否存在明确的分集标记，支持预分割
  */
 
+import { getSceneGroupSize, type EpisodeSplitPreference } from './episode-split-preference'
 import { countWords } from './word-count'
 
 export interface EpisodeMarkerMatch {
@@ -88,6 +89,33 @@ interface DetectionPattern {
     typeName: string
     extractNumber: (match: RegExpMatchArray) => number
     extractTitle: (match: RegExpMatchArray, content: string, nextIndex?: number) => string
+}
+
+interface DetectEpisodeMarkersOptions {
+    episodeSplitPreference?: EpisodeSplitPreference | null
+}
+
+const STRUCTURED_SCENE_HEADING_LINE_REGEX = /^[ \t]*场景 ?(\d{1,3})(?:(?:\s*([：:、.．\-—])\s*|\s+)(.*))?[ \t]*$/
+const STRUCTURED_SCENE_HEADING_MAX_LENGTH = 40
+const STRUCTURED_SCENE_HEADING_BODY_PUNCTUATION_REGEX = /[，,。！？；;]/
+
+function parseStructuredSceneHeading(line: string): number | null {
+    const trimmedLine = line.trim()
+    if (!trimmedLine || trimmedLine.length > STRUCTURED_SCENE_HEADING_MAX_LENGTH) {
+        return null
+    }
+
+    const match = trimmedLine.match(STRUCTURED_SCENE_HEADING_LINE_REGEX)
+    if (!match) {
+        return null
+    }
+
+    const suffix = match[3]?.trim() ?? ''
+    if (suffix && STRUCTURED_SCENE_HEADING_BODY_PUNCTUATION_REGEX.test(suffix)) {
+        return null
+    }
+
+    return parseInt(match[1], 10)
 }
 
 const DETECTION_PATTERNS: DetectionPattern[] = [
@@ -185,7 +213,7 @@ const DETECTION_PATTERNS: DetectionPattern[] = [
 /**
  * 检测文本中的分集标记
  */
-export function detectEpisodeMarkers(content: string): EpisodeMarkerResult {
+export function detectEpisodeMarkers(content: string, options?: DetectEpisodeMarkersOptions): EpisodeMarkerResult {
     const result: EpisodeMarkerResult = {
         hasMarkers: false,
         markerType: '',
@@ -232,10 +260,15 @@ export function detectEpisodeMarkers(content: string): EpisodeMarkerResult {
         }
     }
 
-    if (!result.hasMarkers) {
+    if (result.hasMarkers) {
+        finalizeExplicitMarkerResult(content, result)
         return result
     }
 
+    return detectSceneNumberGrouping(content, options?.episodeSplitPreference ?? null)
+}
+
+function finalizeExplicitMarkerResult(content: string, result: EpisodeMarkerResult): void {
     // 按位置排序
     result.matches.sort((a, b) => a.index - b.index)
 
@@ -308,8 +341,104 @@ export function detectEpisodeMarkers(content: string): EpisodeMarkerResult {
             preview: preview + (preview.length >= 20 ? '...' : '')
         })
     })
-
     result.previewSplits = previewSplits
+}
+
+function detectSceneNumberGrouping(
+    content: string,
+    preference: EpisodeSplitPreference | null | undefined
+): EpisodeMarkerResult {
+    const result: EpisodeMarkerResult = {
+        hasMarkers: false,
+        markerType: '',
+        markerTypeKey: '',
+        confidence: 'low',
+        matches: [],
+        previewSplits: []
+    }
+
+    const sceneGroupSize = getSceneGroupSize(preference ?? null)
+    if (!sceneGroupSize) {
+        return result
+    }
+
+    const matches: EpisodeMarkerMatch[] = []
+    let previousSceneNumber: number | null = null
+
+    let currentIndex = 0
+
+    for (const line of content.split('\n')) {
+        const sceneNumber = parseStructuredSceneHeading(line)
+        if (sceneNumber === null) {
+            currentIndex += line.length + 1
+            continue
+        }
+
+        // Conservative rule: scene-number grouping only applies to strictly consecutive headings.
+        if (previousSceneNumber !== null && sceneNumber !== previousSceneNumber + 1) {
+            return result
+        }
+
+        previousSceneNumber = sceneNumber
+        matches.push({
+            index: currentIndex,
+            text: line,
+            episodeNumber: sceneNumber
+        })
+
+        currentIndex += line.length + 1
+    }
+
+    if (matches.length < sceneGroupSize + 1) {
+        return result
+    }
+
+    const previewSplits: PreviewSplit[] = []
+
+    for (let i = 0; i < matches.length; i += sceneGroupSize) {
+        const groupMatches = matches.slice(i, i + sceneGroupSize)
+        if (groupMatches.length === 0) {
+            break
+        }
+
+        const episodeNumber = previewSplits.length + 1
+        const firstMatch = groupMatches[0]
+        const nextGroupStart = matches[i + sceneGroupSize]?.index ?? content.length
+        const startIndex = i === 0 ? 0 : firstMatch.index
+        const endIndex = nextGroupStart
+        const episodeContent = content.slice(startIndex, endIndex)
+        const previewOffset = firstMatch.index + firstMatch.text.length - startIndex
+        const preview = episodeContent.slice(previewOffset, previewOffset + 50).trim().slice(0, 20)
+
+        previewSplits.push({
+            number: episodeNumber,
+            title: `第 ${episodeNumber} 集`,
+            wordCount: countWords(episodeContent),
+            startIndex,
+            endIndex,
+            preview: preview + (preview.length >= 20 ? '...' : '')
+        })
+    }
+
+    if (previewSplits.length < 2) {
+        return result
+    }
+
+    const avgDistance = matches.length > 1
+        ? (matches[matches.length - 1].index - matches[0].index) / (matches.length - 1)
+        : 0
+
+    result.hasMarkers = true
+    result.markerType = '场景编号分组'
+    result.markerTypeKey = 'sceneNumberGrouping'
+    result.matches = matches
+    result.previewSplits = previewSplits
+
+    if (matches.length >= 3 && avgDistance >= 500 && avgDistance <= 8000) {
+        result.confidence = 'high'
+    } else if (previewSplits.length >= 2) {
+        result.confidence = 'medium'
+    }
 
     return result
 }

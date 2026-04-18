@@ -49,6 +49,52 @@ describe('panel speech plan helpers', () => {
     })
   })
 
+  it('prefers video-stage dialogue override over matched voice-line content', () => {
+    const speechPlan = derivePanelSpeechPlan({
+      panel: {
+        id: 'panel-1',
+        storyboardId: 'storyboard-1',
+        panelIndex: 0,
+        srtSegment: '旧对白',
+        dialogueOverride: '新对白',
+      },
+      clip: {
+        id: 'clip-1',
+        screenplay: JSON.stringify({
+          scenes: [
+            {
+              scene_number: 1,
+              content: [
+                { type: 'dialogue', character: 'Hero', lines: '旧对白' },
+              ],
+            },
+          ],
+        }),
+      },
+      voiceLines: [
+        {
+          lineIndex: 1,
+          speaker: 'Hero',
+          content: '旧对白',
+          matchedPanelId: 'panel-1',
+          matchedStoryboardId: 'storyboard-1',
+          matchedPanelIndex: 0,
+        },
+      ],
+    })
+
+    expect(speechPlan).toMatchObject({
+      mode: 'dialogue',
+      source: 'panel_dialogue_override',
+      primaryText: '新对白',
+      speakers: ['Hero'],
+    })
+    expect(speechPlan.lines[0]).toMatchObject({
+      speaker: 'Hero',
+      content: '新对白',
+    })
+  })
+
   it('derives voiceover mode from screenplay text when panel mapping exists without voice lines', () => {
     const speechPlan = derivePanelSpeechPlan({
       panel: {
@@ -384,8 +430,10 @@ describe('panel speech plan helpers', () => {
     expect(payload.guardrails).toEqual([
       'generated audio disabled for this request',
       'no spoken dialogue, narration, lyrics, or other verbal audio',
+      'no background music, soundtrack, score, or musical bed',
       'no mouth-sync or speech-shaped facial performance that implies unheard words',
     ])
+    expect(payload.instruction).toContain('background music, soundtrack, score, musical bed')
   })
 
   it('emits explicit voiceover execution guidance', () => {
@@ -418,9 +466,11 @@ describe('panel speech plan helpers', () => {
     const payload = JSON.parse(prompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(payload.guardrails).toEqual([
       'listed lines are voiceover or off-screen narration only',
+      'no background music, soundtrack, score, or musical bed',
       'do not present listed words as on-screen mouth speech',
       'visible characters should read as listening, acting, or silent reaction',
     ])
+    expect(payload.instruction).toContain('Do not add background music, soundtrack, score, or musical bed.')
   })
 
   it('emits stronger silent and dialogue guardrails for regression-sensitive modes', () => {
@@ -437,9 +487,11 @@ describe('panel speech plan helpers', () => {
     })
     const silentPayload = JSON.parse(silentPrompt.split('[Structured Speech Plan JSON]\n')[1])
     expect(silentPrompt).toContain('avoid lip-sync-like mouth performance or speech-shaped mouth cycles')
+    expect(silentPrompt).toContain('Do not add background music, soundtrack, score, or musical bed.')
     expect(silentPayload.guardrails).toEqual([
       'intentional non-speaking panel',
       'no spoken dialogue, narration, ad-libs, or implied verbal beats',
+      'no background music, soundtrack, score, or musical bed',
       'avoid lip-sync and speech-shaped mouth movement',
       'generated audio must stay non-verbal only',
     ])
@@ -464,10 +516,12 @@ describe('panel speech plan helpers', () => {
       },
     })
     const dialoguePayload = JSON.parse(dialoguePrompt.split('[Structured Speech Plan JSON]\n')[1])
+    expect(dialoguePrompt).toContain('Do not add background music, soundtrack, score, or musical bed.')
     expect(dialoguePrompt).toContain('Do not add extra spoken lines, narration, paraphrases, or substitute wording')
     expect(dialoguePrompt).toContain('prefer restrained or silent mouth performance over incorrect speech')
     expect(dialoguePayload.guardrails).toEqual([
       'use only the listed structured lines as spoken words',
+      'no background music, soundtrack, score, or musical bed',
       'keep spoken wording verbatim; do not paraphrase, summarize, or add new lines',
       'if a speaker is visible, mouth movement should align to the listed words only',
       'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',
@@ -539,6 +593,37 @@ describe('panel speech plan helpers', () => {
     expect(prompt).toContain('content="新对白"')
   })
 
+  it('uses dialogue override as the panel text reference to keep preview and execution aligned', () => {
+    const prompt = buildPanelVideoGenerationPrompt({
+      basePrompt: 'Keep the hero in frame.',
+      panel: {
+        shotType: '近景',
+        srtSegment: '旧对白',
+        dialogueOverride: '视频阶段新对白',
+      },
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'panel_dialogue_override',
+        generatedAudioRequired: true,
+        primaryText: '视频阶段新对白',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 1,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '视频阶段新对白',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(prompt).toContain('Panel text reference: 视频阶段新对白')
+    expect(prompt).not.toContain('Panel text reference: 旧对白')
+    expect(prompt).toContain('content="视频阶段新对白"')
+  })
+
   it('builds matched dialogue contract view-model for audio-enabled generation', () => {
     const viewModel = buildPanelSpeechContractViewModel({
       generateAudio: true,
@@ -567,6 +652,36 @@ describe('panel speech plan helpers', () => {
       matchKind: 'matched',
       source: 'screenplay_voice_lines',
       guardrails: ['verbatim_only', 'no_extra_lines', 'align_visible_speech'],
+    })
+  })
+
+  it('builds override contract view-model when video-stage manual dialogue is active', () => {
+    const viewModel = buildPanelSpeechContractViewModel({
+      generateAudio: true,
+      speechPlan: {
+        mode: 'dialogue',
+        source: 'panel_dialogue_override',
+        generatedAudioRequired: true,
+        primaryText: '手动改写对白',
+        speakers: ['Hero'],
+        lines: [
+          {
+            lineIndex: 7,
+            type: 'dialogue',
+            speaker: 'Hero',
+            content: '手动改写对白',
+            parenthetical: null,
+          },
+        ],
+      },
+    })
+
+    expect(viewModel).toMatchObject({
+      audioEnabled: true,
+      effectiveMode: 'dialogue',
+      matchKind: 'override',
+      source: 'panel_dialogue_override',
+      primaryText: '手动改写对白',
     })
   })
 

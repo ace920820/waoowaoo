@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logUserAction } from '@/lib/logging/semantic'
 import { detectEpisodeMarkers, splitByMarkers } from '@/lib/episode-marker-detector'
+import { DEFAULT_EPISODE_SPLIT_PREFERENCE, isEpisodeSplitPreference, type EpisodeSplitPreference } from '@/lib/episode-split-preference'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
@@ -26,10 +27,23 @@ export const POST = apiHandler(async (
 
     const userId = session.user.id
     const username = session.user.name || session.user.email || 'unknown'
-    const { content } = await request.json()
+    const body = await request.json()
+    const content = body?.content
+    const requestPreference = body?.episodeSplitPreference
 
     if (!content || typeof content !== 'string') {
         throw new ApiError('INVALID_PARAMS')
+    }
+
+    if (
+        requestPreference !== undefined
+        && requestPreference !== null
+        && !isEpisodeSplitPreference(requestPreference)
+    ) {
+        throw new ApiError('INVALID_PARAMS', {
+            code: 'INVALID_EPISODE_SPLIT_PREFERENCE',
+            field: 'episodeSplitPreference',
+        })
     }
 
     if (content.length < 100) {
@@ -49,7 +63,15 @@ export const POST = apiHandler(async (
     const projectName = project.project?.name || projectId
 
     // 执行分集标记检测
-    const markerResult = detectEpisodeMarkers(content)
+    const episodeSplitPreference = (
+        requestPreference
+        ?? project.episodeSplitPreference
+        ?? DEFAULT_EPISODE_SPLIT_PREFERENCE
+    ) as EpisodeSplitPreference
+
+    const markerResult = detectEpisodeMarkers(content, {
+        episodeSplitPreference,
+    })
 
     if (!markerResult.hasMarkers || markerResult.matches.length < 2) {
         throw new ApiError('INVALID_PARAMS')

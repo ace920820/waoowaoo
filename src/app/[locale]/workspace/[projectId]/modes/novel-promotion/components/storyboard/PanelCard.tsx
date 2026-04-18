@@ -8,6 +8,7 @@ import { StoryboardPanel } from './hooks/useStoryboardState'
 import { GlassSurface } from '@/components/ui/primitives'
 import { AppIcon } from '@/components/ui/icons'
 import type { PanelImageStatus } from './hooks/image-generation-runtime'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface PanelCandidateData {
   candidates: string[]
@@ -31,6 +32,7 @@ interface PanelCardProps {
   candidateData: PanelCandidateData | null
   previousImageUrl?: string | null  // 支持撤回
   imageStatus?: PanelImageStatus
+  storyboardMoodPresets: StoryboardMoodPreset[]
   onUpdate: (updates: Partial<PanelEditData>) => void
   onDelete: () => void
   onOpenCharacterPicker: () => void
@@ -71,6 +73,7 @@ export default function PanelCard({
   candidateData,
   previousImageUrl,
   imageStatus,
+  storyboardMoodPresets,
   onUpdate,
   onDelete,
   onOpenCharacterPicker,
@@ -165,6 +168,7 @@ export default function PanelCard({
           onOpenLocationPicker={onOpenLocationPicker}
           onRemoveCharacter={onRemoveCharacter}
           onRemoveLocation={onRemoveLocation}
+          storyboardMoodPresets={storyboardMoodPresets}
         />
       </div>
     </GlassSurface>

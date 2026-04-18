@@ -6,6 +6,11 @@ import { queryKeys } from '@/lib/query/keys'
 import { NovelPromotionStoryboard, NovelPromotionClip, NovelPromotionPanel } from '@/types/project'
 import { PanelEditData } from '../../PanelEditForm'
 import {
+  normalizeStoryboardMoodText,
+  resolveStoryboardMoodHierarchy,
+  type StoryboardMoodPreset,
+} from '@/lib/storyboard-mood-presets'
+import {
   computeStoryboardStartIndex,
   computeTotalPanels,
   formatClipTitle,
@@ -15,6 +20,7 @@ import {
 
 export interface StoryboardPanel {
   id: string
+  clipId: string
   panelIndex: number
   panel_number: number
   shot_type: string
@@ -31,7 +37,13 @@ export interface StoryboardPanel {
   previousImageUrl?: string | null
   photographyRules?: string | null  // 单镜头摄影规则JSON
   actingNotes?: string | null       // 演技指导数据JSON
+  storyboardMoodPresetId?: string | null
+  customMood?: string | null
+  effectiveMoodPresetId?: string | null
+  effectiveMoodPresetLabel?: string | null
   imageTaskRunning?: boolean  // 任务态运行状态（由 tasks 派生）
+  effectiveMoodSummary?: string | null
+  effectiveMoodSource?: string | null
 }
 
 interface UseStoryboardStateProps {
@@ -39,6 +51,9 @@ interface UseStoryboardStateProps {
   episodeId: string
   initialStoryboards: NovelPromotionStoryboard[]
   clips: NovelPromotionClip[]
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId: string | null
+  episodeDefaultMoodPresetId: string | null
 }
 
 export function useStoryboardState({
@@ -46,6 +61,9 @@ export function useStoryboardState({
   episodeId,
   initialStoryboards,
   clips,
+  storyboardMoodPresets,
+  projectDefaultMoodPresetId,
+  episodeDefaultMoodPresetId,
 }: UseStoryboardStateProps) {
   const queryClient = useQueryClient()
   const localStoryboards = useMemo(
@@ -97,6 +115,33 @@ export function useStoryboardState({
 
   const getClipInfo = (clipId: string) => clips.find(c => c.id === clipId)
 
+  const resolvePanelEffectiveMood = useCallback((
+    storyboardClipId: string,
+    panelMood: {
+      storyboardMoodPresetId?: string | null
+      customMood?: string | null
+    },
+  ) => {
+    const clipMood = clips.find((clip) => clip.id === storyboardClipId)
+    return resolveStoryboardMoodHierarchy({
+      projectPresets: storyboardMoodPresets,
+      projectDefault: {
+        presetId: projectDefaultMoodPresetId,
+      },
+      episodeDefault: {
+        presetId: episodeDefaultMoodPresetId,
+      },
+      clipApplied: {
+        presetId: clipMood?.storyboardMoodPresetId ?? null,
+        customMood: clipMood?.customMood ?? null,
+      },
+      panelOverride: {
+        presetId: panelMood.storyboardMoodPresetId ?? null,
+        customMood: panelMood.customMood ?? null,
+      },
+    })
+  }, [episodeDefaultMoodPresetId, projectDefaultMoodPresetId, storyboardMoodPresets, clips])
+
   const getPanelImages = (storyboard: NovelPromotionStoryboard): Array<string | null> => {
     const panels = getStoryboardPanels(storyboard)
     if (panels.length > 0) {
@@ -130,8 +175,13 @@ export function useStoryboardState({
           }]
         })
         : []
+      const effectiveMood = resolvePanelEffectiveMood(storyboard.clipId, {
+        storyboardMoodPresetId: p.storyboardMoodPresetId ?? null,
+        customMood: p.customMood ?? null,
+      })
       return {
         id: p.id,
+        clipId: storyboard.clipId,
         panelIndex: p.panelIndex,
         panel_number: p.panelNumber ?? p.panelIndex + 1,
         shot_type: p.shotType ?? '',
@@ -148,40 +198,67 @@ export function useStoryboardState({
         previousImageUrl: p.previousImageUrl,
         photographyRules: p.photographyRules,
         actingNotes: p.actingNotes,
-        imageTaskRunning: p.imageTaskRunning || false
+        storyboardMoodPresetId: p.storyboardMoodPresetId ?? null,
+        customMood: normalizeStoryboardMoodText(p.customMood),
+        effectiveMoodPresetId: effectiveMood.preset?.id ?? null,
+        effectiveMoodPresetLabel: effectiveMood.preset?.label ?? null,
+        imageTaskRunning: p.imageTaskRunning || false,
+        effectiveMoodSummary: effectiveMood.summary,
+        effectiveMoodSource: effectiveMood.source,
       }
     })
   }
 
-  const getPanelEditData = (panel: StoryboardPanel): PanelEditData => {
-    if (panelEdits[panel.id]) {
-      return panelEdits[panel.id]
-    }
+  const derivePanelEditData = useCallback((
+    panel: StoryboardPanel,
+    overrides?: Partial<PanelEditData>,
+  ): PanelEditData => {
+    const normalizedCustomMood = normalizeStoryboardMoodText(
+      overrides?.customMood ?? panel.customMood,
+    )
+    const effectiveMood = resolvePanelEffectiveMood(panel.clipId, {
+      storyboardMoodPresetId: overrides?.storyboardMoodPresetId ?? panel.storyboardMoodPresetId ?? null,
+      customMood: normalizedCustomMood,
+    })
+
     return {
       id: panel.id,
-      panelIndex: panel.panelIndex,
-      panelNumber: panel.panel_number,
-      shotType: panel.shot_type,
-      cameraMove: panel.camera_move,
-      description: panel.description,
-      location: panel.location || null,
-      characters: panel.characters || [],
-      srtStart: null,
-      srtEnd: null,
-      duration: panel.duration || null,
-      videoPrompt: panel.video_prompt || null,
-      photographyRules: panel.photographyRules ?? null,
-      actingNotes: panel.actingNotes ?? null,
-      sourceText: panel.source_text
+      panelIndex: overrides?.panelIndex ?? panel.panelIndex,
+      panelNumber: overrides?.panelNumber ?? panel.panel_number,
+      shotType: overrides?.shotType ?? panel.shot_type,
+      cameraMove: overrides?.cameraMove ?? panel.camera_move,
+      description: overrides?.description ?? panel.description,
+      location: (overrides?.location ?? panel.location) || null,
+      characters: (overrides?.characters ?? panel.characters) || [],
+      srtStart: overrides?.srtStart ?? null,
+      srtEnd: overrides?.srtEnd ?? null,
+      duration: (overrides?.duration ?? panel.duration) || null,
+      videoPrompt: (overrides?.videoPrompt ?? panel.video_prompt) || null,
+      photographyRules: overrides?.photographyRules ?? panel.photographyRules ?? null,
+      actingNotes: overrides?.actingNotes ?? panel.actingNotes ?? null,
+      sourceText: overrides?.sourceText ?? panel.source_text,
+      storyboardMoodPresetId: overrides?.storyboardMoodPresetId ?? panel.storyboardMoodPresetId ?? null,
+      customMood: normalizedCustomMood,
+      effectiveMoodPresetId: effectiveMood.preset?.id ?? null,
+      effectiveMoodPresetLabel: effectiveMood.preset?.label ?? null,
+      effectiveMoodSummary: effectiveMood.summary,
+      effectiveMoodSource: effectiveMood.source,
     }
+  }, [resolvePanelEffectiveMood])
+
+  const getPanelEditData = (panel: StoryboardPanel): PanelEditData => {
+    return derivePanelEditData(panel, panelEdits[panel.id])
   }
 
   const updatePanelEdit = (panelId: string, panel: StoryboardPanel, updates: Partial<PanelEditData>) => {
     setPanelEdits(prev => {
-      const currentData = prev[panelId] || getPanelEditData(panel)
+      const nextData = derivePanelEditData(panel, {
+        ...prev[panelId],
+        ...updates,
+      })
       return {
         ...prev,
-        [panelId]: { ...currentData, ...updates }
+        [panelId]: nextData,
       }
     })
   }

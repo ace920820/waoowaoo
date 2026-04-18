@@ -6,6 +6,7 @@ import {
     ART_STYLES,
     VIDEO_RATIOS,
 } from '@/lib/constants'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 import type {
     CapabilitySelections,
     CapabilityValue,
@@ -54,6 +55,8 @@ interface SettingsModalProps {
     videoRatio?: string
     capabilityOverrides?: CapabilitySelections
     ttsRate?: string
+    storyboardMoodPresets?: StoryboardMoodPreset[]
+    storyboardDefaultMoodPresetId?: string | null
     onArtStyleChange?: (value: string) => void
     onAnalysisModelChange?: (value: string) => void
     onCharacterModelChange?: (value: string) => void
@@ -66,6 +69,8 @@ interface SettingsModalProps {
     onVideoRatioChange?: (value: string) => void
     onCapabilityOverridesChange?: (value: CapabilitySelections) => void
     onTTSRateChange?: (value: string) => void
+    onStoryboardMoodPresetsChange?: (value: StoryboardMoodPreset[]) => void
+    onStoryboardDefaultMoodPresetIdChange?: (value: string | null) => void
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -138,6 +143,8 @@ export function SettingsModal({
     videoRatio = '9:16',
     capabilityOverrides,
     ttsRate,
+    storyboardMoodPresets = [],
+    storyboardDefaultMoodPresetId = null,
     onArtStyleChange,
     onAnalysisModelChange,
     onCharacterModelChange,
@@ -149,9 +156,16 @@ export function SettingsModal({
     onVideoRatioChange,
     onCapabilityOverridesChange,
     onTTSRateChange,
+    onStoryboardMoodPresetsChange,
+    onStoryboardDefaultMoodPresetIdChange,
 }: SettingsModalProps) {
     const t = useTranslations('configModal')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle')
+    const [localMoodPresets, setLocalMoodPresets] = useState<StoryboardMoodPreset[]>(storyboardMoodPresets)
+
+    useEffect(() => {
+        setLocalMoodPresets(storyboardMoodPresets)
+    }, [storyboardMoodPresets])
     const userModels = useMemo<UserModels>(() => ({
         llm: Array.isArray(availableModels?.llm) ? availableModels.llm : [],
         image: Array.isArray(availableModels?.image) ? availableModels.image : [],
@@ -326,6 +340,34 @@ export function SettingsModal({
         showSaved()
     }
 
+    const handleMoodPresetsChange = (nextValue: StoryboardMoodPreset[]) => {
+        setLocalMoodPresets(nextValue)
+        onStoryboardMoodPresetsChange?.(nextValue)
+        showSaved()
+    }
+
+    const updateMoodPreset = (presetId: string, field: 'label' | 'prompt', value: string) => {
+        handleMoodPresetsChange(
+            localMoodPresets.map((preset) => preset.id === presetId ? { ...preset, [field]: value } : preset),
+        )
+    }
+
+    const handleAddMoodPreset = () => {
+        const nextId = `custom-${Date.now()}`
+        handleMoodPresetsChange([
+            ...localMoodPresets,
+            {
+                id: nextId,
+                label: '新预设',
+                prompt: '',
+            },
+        ])
+    }
+
+    const handleDeleteMoodPreset = (presetId: string) => {
+        handleMoodPresetsChange(localMoodPresets.filter((preset) => preset.id !== presetId))
+    }
+
     if (!isOpen) return null
 
     return (
@@ -383,6 +425,72 @@ export function SettingsModal({
                                     onChange={(value) => { handleChange(onVideoRatioChange)(value) }}
                                     options={VIDEO_RATIOS}
                                 />
+                            </div>
+                        </div>
+                        <div className="space-y-3 rounded-2xl border border-[var(--glass-border-subtle)] bg-[var(--glass-bg-subtle)]/60 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <label className="text-sm font-medium text-[var(--glass-text-secondary)]">分镜氛围预设</label>
+                                    <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
+                                        仅影响分镜图片生成，不影响角色/场景资产图。全局画风仍由主视觉风格控制。
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleAddMoodPreset}
+                                    className="glass-btn-base glass-btn-soft px-3 py-1.5 text-xs"
+                                >
+                                    新增预设
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-[var(--glass-text-secondary)]">项目默认分镜氛围</label>
+                                <select
+                                    value={storyboardDefaultMoodPresetId || ''}
+                                    onChange={(event) => {
+                                        onStoryboardDefaultMoodPresetIdChange?.(event.target.value || null)
+                                        showSaved()
+                                    }}
+                                    className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                                >
+                                    <option value="">无默认预设</option>
+                                    {localMoodPresets.map((preset) => (
+                                        <option key={preset.id} value={preset.id}>
+                                            {preset.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-[var(--glass-text-tertiary)]">
+                                    作为项目级默认值，剧集、分镜组和单格可以继续覆盖。
+                                </p>
+                            </div>
+                            <div className="space-y-3">
+                                {localMoodPresets.map((preset) => (
+                                    <div key={preset.id} className="rounded-xl border border-[var(--glass-border-subtle)] bg-[var(--glass-bg-surface)] p-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                value={preset.label}
+                                                onChange={(event) => updateMoodPreset(preset.id, 'label', event.target.value)}
+                                                className="flex-1 rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                                                placeholder="预设名称"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteMoodPreset(preset.id)}
+                                                className="glass-btn-base glass-btn-soft px-2.5 py-2 text-xs text-[var(--glass-tone-danger-fg)]"
+                                            >
+                                                删除
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            value={preset.prompt}
+                                            onChange={(event) => updateMoodPreset(preset.id, 'prompt', event.target.value)}
+                                            rows={2}
+                                            className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                                            placeholder="用于分镜图片生成的氛围提示，例如：潮湿、压迫、风雨欲来"
+                                        />
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>

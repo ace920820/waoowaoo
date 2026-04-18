@@ -40,6 +40,10 @@ export function useVideoPanelActions({
   isSavingPrompt,
   onUpdateLocalPrompt,
   onSavePrompt,
+  localDialogueOverride,
+  isSavingDialogueOverride,
+  onUpdateLocalDialogueOverride,
+  onSaveDialogueOverride,
   onGenerateVideo,
   onUpdatePanelVideoModel,
   onToggleLink,
@@ -49,6 +53,7 @@ export function useVideoPanelActions({
   onResetFlPrompt,
   onGenerateFirstLastFrame,
   onPreviewImage,
+  onDownloadVideo,
 }: VideoPanelCardShellProps) {
   const t = useTranslations('video')
   const tCommon = useTranslations('common')
@@ -87,6 +92,11 @@ export function useVideoPanelActions({
     onUpdateLocalPrompt,
     onSavePrompt,
   })
+  const dialogueEditor = usePanelPromptEditor({
+    localPrompt: localDialogueOverride,
+    onUpdateLocalPrompt: onUpdateLocalDialogueOverride,
+    onSavePrompt: onSaveDialogueOverride,
+  })
 
   const voiceManager = usePanelVoiceManager({
     projectId,
@@ -108,6 +118,8 @@ export function useVideoPanelActions({
   return {
     t,
     tCommon,
+    projectId,
+    episodeId,
     panel,
     panelIndex,
     panelKey,
@@ -125,6 +137,11 @@ export function useVideoPanelActions({
       ...promptEditor,
       localPrompt,
       isSavingPrompt,
+    },
+    dialogueEditor: {
+      ...dialogueEditor,
+      localPrompt: localDialogueOverride,
+      isSavingPrompt: isSavingDialogueOverride,
     },
     voiceManager,
     lipSync,
@@ -152,6 +169,7 @@ export function useVideoPanelActions({
       onFlCustomPromptChange,
       onResetFlPrompt,
       onGenerateFirstLastFrame,
+      onDownloadVideo,
     },
     computed: {
       showLipSyncSection,

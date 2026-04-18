@@ -120,6 +120,7 @@ export {
     useDownloadProjectImages,
     useUploadProjectStoryboardPanelImage,
     useRestoreProjectStoryboardPanelImage,
+    useSaveProjectVideoTailFrame,
     useUpdateProjectPanel,
     useCreateProjectPanel,
     useDeleteProjectPanel,
@@ -127,6 +128,12 @@ export {
     useRegenerateProjectStoryboardText,
     useCreateProjectStoryboardGroup,
     useMoveProjectStoryboardGroup,
+    useCreateProjectShotGroup,
+    useUpdateProjectShotGroup,
+    useDeleteProjectShotGroup,
+    useGenerateProjectShotGroupImage,
+    useGenerateProjectShotGroupVideo,
+    useUploadProjectShotGroupReferenceImage,
     useInsertProjectPanel,
     useConfirmProjectCharacterSelection,
     useConfirmProjectLocationSelection,
@@ -227,6 +234,10 @@ export {
     useRefreshAll,
     type Episode,
 } from './useProjectData'
+
+export {
+    useTaskTargetStateMap,
+} from './useTaskTargetStateMap'
 
 export {
     useUserModels,

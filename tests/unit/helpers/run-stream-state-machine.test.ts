@@ -51,6 +51,66 @@ describe('run stream state-machine', () => {
     expect(state?.stepsById['step-b']?.status).toBe('completed')
   })
 
+  it('optimistically reopens a failed step when retry starts with a higher attempt', () => {
+    const runId = 'run-retry'
+    const state = applySequence([
+      { runId, event: 'run.start', ts: '2026-02-26T23:00:00.000Z', status: 'running' },
+      {
+        runId,
+        event: 'step.start',
+        ts: '2026-02-26T23:00:01.000Z',
+        status: 'running',
+        stepId: 'step-a',
+        stepTitle: 'Step A',
+        stepIndex: 1,
+        stepTotal: 1,
+      },
+      {
+        runId,
+        event: 'step.error',
+        ts: '2026-02-26T23:00:02.000Z',
+        status: 'failed',
+        stepId: 'step-a',
+        stepAttempt: 1,
+        message: 'boom',
+      },
+      {
+        runId,
+        event: 'run.error',
+        ts: '2026-02-26T23:00:03.000Z',
+        status: 'failed',
+        message: 'boom',
+      },
+      {
+        runId,
+        event: 'run.start',
+        ts: '2026-02-26T23:00:04.000Z',
+        status: 'running',
+        message: 'retrying failed step',
+      },
+      {
+        runId,
+        event: 'step.start',
+        ts: '2026-02-26T23:00:04.100Z',
+        status: 'running',
+        stepId: 'step-a',
+        stepAttempt: 2,
+        stepTitle: 'Step A',
+        stepIndex: 1,
+        stepTotal: 1,
+        message: 'retrying failed step',
+      },
+    ])
+
+    expect(state?.status).toBe('running')
+    expect(state?.errorMessage).toBe('')
+    expect(state?.activeStepId).toBe('step-a')
+    expect(state?.stepsById['step-a']?.attempt).toBe(2)
+    expect(state?.stepsById['step-a']?.status).toBe('running')
+    expect(state?.stepsById['step-a']?.errorMessage).toBe('')
+    expect(state?.stepsById['step-a']?.message).toBe('retrying failed step')
+  })
+
   it('returns readable error output for failed step without stream text', () => {
     const output = getStageOutput({
       id: 'step-failed',
@@ -244,6 +304,40 @@ describe('run stream state-machine', () => {
     expect(state?.status).toBe('completed')
     expect(state?.stepsById['analyze_characters']?.status).toBe('completed')
     expect(state?.stepsById['analyze_characters']?.textOutput).toBe('partial-tail')
+  })
+
+  it('allows a later step.error to override a premature completed state', () => {
+    const runId = 'run-override-error'
+    const state = applySequence([
+      { runId, event: 'run.start', ts: '2026-02-26T23:00:00.000Z', status: 'running' },
+      {
+        runId,
+        event: 'step.complete',
+        ts: '2026-02-26T23:00:01.000Z',
+        status: 'completed',
+        stepId: 'split_clips',
+        stepAttempt: 1,
+        stepTitle: 'split',
+        stepIndex: 1,
+        stepTotal: 1,
+        text: '[]',
+      },
+      {
+        runId,
+        event: 'step.error',
+        ts: '2026-02-26T23:00:02.000Z',
+        status: 'failed',
+        stepId: 'split_clips',
+        stepAttempt: 1,
+        stepTitle: 'split',
+        stepIndex: 1,
+        stepTotal: 1,
+        message: 'split_clips boundary matching failed',
+      },
+    ])
+
+    expect(state?.stepsById.split_clips?.status).toBe('failed')
+    expect(state?.stepsById.split_clips?.errorMessage).toContain('boundary matching failed')
   })
 
   it('moves activeStepId to the latest step when no step is running', () => {

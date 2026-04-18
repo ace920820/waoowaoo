@@ -20,6 +20,10 @@ import {
 } from './image-task-handler-shared'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import {
+  resolveStoryboardMoodHierarchy,
+  buildStoryboardMoodStyleText,
+} from '@/lib/storyboard-mood-presets'
+import {
   findCharacterByName,
   formatPanelImageReadinessError,
   getPanelImageGenerationReadiness,
@@ -79,6 +83,11 @@ function buildPanelPromptContext(params: {
     srtSegment: string | null
     photographyRules: string | null
     actingNotes: string | null
+    storyboardMoodPresetId: string | null
+    customMood: string | null
+    clipMoodPresetId?: string | null
+    clipCustomMood?: string | null
+    episodeDefaultMoodPresetId?: string | null
   }
   projectData: Awaited<ReturnType<typeof resolveNovelData>>
 }) {
@@ -121,6 +130,24 @@ function buildPanelPromptContext(params: {
     }
   })()
 
+  const mood = resolveStoryboardMoodHierarchy({
+    projectPresets: (params.projectData as Record<string, unknown>).storyboardMoodPresets,
+    projectDefault: {
+      presetId: (params.projectData as Record<string, unknown>).storyboardDefaultMoodPresetId as string | null | undefined,
+    },
+    episodeDefault: {
+      presetId: params.panel.episodeDefaultMoodPresetId,
+    },
+    clipApplied: {
+      presetId: params.panel.clipMoodPresetId,
+      customMood: params.panel.clipCustomMood,
+    },
+    panelOverride: {
+      presetId: params.panel.storyboardMoodPresetId,
+      customMood: params.panel.customMood,
+    },
+  })
+
   return {
     panel: {
       panel_id: params.panel.id,
@@ -134,10 +161,19 @@ function buildPanelPromptContext(params: {
       source_text: params.panel.srtSegment || '',
       photography_rules: parseJsonUnknown(params.panel.photographyRules),
       acting_notes: parseJsonUnknown(params.panel.actingNotes),
+      mood: {
+        preset_id: mood.preset?.id || null,
+        preset_label: mood.preset?.label || null,
+        preset_prompt: mood.preset?.prompt || null,
+        custom_text: mood.customMood,
+        summary: mood.summary,
+        source: mood.source,
+      },
     },
     context: {
       character_appearances: characterContexts,
       location_reference: locationContext,
+      storyboard_mood_presets: mood.presets,
     },
   }
 }
@@ -168,7 +204,34 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
 
   const panel = await prisma.novelPromotionPanel.findUnique({
     where: { id: panelId },
-  })
+    include: {
+      storyboard: {
+        include: {
+          clip: {
+            include: {
+              episode: {
+                select: {
+                  storyboardDefaultMoodPresetId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    } as Record<string, unknown>,
+  }) as (Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>> & {
+    storyboardMoodPresetId?: string | null
+    customMood?: string | null
+    storyboard?: {
+      clip?: {
+        storyboardMoodPresetId?: string | null
+        customMood?: string | null
+        episode?: {
+          storyboardDefaultMoodPresetId?: string | null
+        } | null
+      } | null
+    } | null
+  }) | null
 
   if (!panel) throw new Error('Panel not found')
 
@@ -230,6 +293,11 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
       srtSegment: panel.srtSegment,
       photographyRules: panel.photographyRules,
       actingNotes: panel.actingNotes,
+      storyboardMoodPresetId: panel.storyboardMoodPresetId ?? null,
+      customMood: panel.customMood ?? null,
+      clipMoodPresetId: panel.storyboard?.clip?.storyboardMoodPresetId ?? null,
+      clipCustomMood: panel.storyboard?.clip?.customMood ?? null,
+      episodeDefaultMoodPresetId: panel.storyboard?.clip?.episode?.storyboardDefaultMoodPresetId ?? null,
     },
     projectData,
   })
@@ -237,7 +305,23 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const prompt = buildPanelPrompt({
     locale: job.data.locale,
     aspectRatio,
-    styleText: artStyle || '与参考图风格一致',
+    styleText: buildStoryboardMoodStyleText(artStyle || '与参考图风格一致', {
+      projectPresets: (projectData as Record<string, unknown>).storyboardMoodPresets,
+      projectDefault: {
+        presetId: (projectData as Record<string, unknown>).storyboardDefaultMoodPresetId as string | null | undefined,
+      },
+      episodeDefault: {
+        presetId: panel.storyboard?.clip?.episode?.storyboardDefaultMoodPresetId ?? null,
+      },
+      clipApplied: {
+        presetId: panel.storyboard?.clip?.storyboardMoodPresetId ?? null,
+        customMood: panel.storyboard?.clip?.customMood ?? null,
+      },
+      panelOverride: {
+        presetId: panel.storyboardMoodPresetId ?? null,
+        customMood: panel.customMood ?? null,
+      },
+    }, job.data.locale),
     sourceText: panel.srtSegment || panel.description || '',
     contextJson,
   })

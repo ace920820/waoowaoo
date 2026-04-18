@@ -9,6 +9,7 @@ type PanelRow = {
   storyboardId: string
   panelIndex: number
   srtSegment: string | null
+  dialogueOverride?: string | null
   videoUrl: string | null
   imageUrl: string | null
   videoPrompt: string | null
@@ -48,6 +49,13 @@ const utilsMock = vi.hoisted(() => ({
   toSignedUrlIfCos: vi.fn((url: string | null) => (url ? `https://signed.example/${url}` : null)),
   uploadVideoSourceToCos: vi.fn(async () => 'cos/lip-sync/video.mp4'),
 }))
+const modelConfigContractMock = vi.hoisted(() => ({
+  parseModelKeyStrict: vi.fn((value: string) => {
+    const [provider, model] = value.split('::')
+    if (!provider || !model) return null
+    return { provider, modelId: model }
+  }),
+}))
 const configServiceMock = vi.hoisted(() => ({
   getUserWorkflowConcurrencyConfig: vi.fn(async () => ({
     analysis: 5,
@@ -64,6 +72,10 @@ const concurrencyGateMock = vi.hoisted(() => ({
 const prismaMock = vi.hoisted(() => ({
   novelPromotionPanel: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(async () => undefined),
+  },
+  novelPromotionShotGroup: {
     findFirst: vi.fn(),
     update: vi.fn(async () => undefined),
   },
@@ -108,7 +120,7 @@ vi.mock('@/lib/model-capabilities/lookup', () => ({
   resolveBuiltinCapabilitiesByModelKey: vi.fn(() => ({ video: { firstlastframe: true } })),
 }))
 vi.mock('@/lib/model-config-contract', () => ({
-  parseModelKeyStrict: vi.fn(() => ({ provider: 'fal' })),
+  parseModelKeyStrict: modelConfigContractMock.parseModelKeyStrict,
 }))
 vi.mock('@/lib/api-config', () => ({
   getProviderConfig: vi.fn(async () => ({ apiKey: 'api-key' })),
@@ -178,6 +190,30 @@ function buildJob(params: {
   } as unknown as Job<TaskJobData>
 }
 
+function buildShotGroup(overrides?: Record<string, unknown>) {
+  return {
+    id: 'shot-group-1',
+    episodeId: 'episode-1',
+    title: '组 1',
+    templateKey: 'grid-4',
+    groupPrompt: '组提示词',
+    videoPrompt: '视频提示词',
+    compositeImageUrl: 'cos/shot-group.png',
+    generateAudio: true,
+    bgmEnabled: false,
+    includeDialogue: false,
+    dialogueLanguage: 'zh',
+    omniReferenceEnabled: false,
+    smartMultiFrameEnabled: true,
+    videoModel: 'fal::kling-v1',
+    items: [
+      { itemIndex: 0, title: '镜头 1', prompt: '提示词 1', imageUrl: 'cos/frame-1.png', sourcePanelId: 'panel-1' },
+      { itemIndex: 1, title: '镜头 2', prompt: '提示词 2', imageUrl: 'cos/frame-2.png', sourcePanelId: 'panel-2' },
+    ],
+    ...(overrides || {}),
+  }
+}
+
 describe('worker video processor behavior', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -185,6 +221,7 @@ describe('worker video processor behavior', () => {
 
     prismaMock.novelPromotionPanel.findUnique.mockResolvedValue(buildPanel())
     prismaMock.novelPromotionPanel.findFirst.mockResolvedValue(buildPanel())
+    prismaMock.novelPromotionShotGroup.findFirst.mockResolvedValue(buildShotGroup())
     prismaMock.novelPromotionVoiceLine.findUnique.mockResolvedValue({
       id: 'line-1',
       audioUrl: 'cos/line-1.mp3',
@@ -308,6 +345,16 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('avoid lip-sync-like mouth performance or speech-shaped mouth cycles.'),
       }),
     })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Do not add background music, soundtrack, score, or musical bed.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 为 dialogue panel 注入显式口播执行指令', async () => {
@@ -337,6 +384,62 @@ describe('worker video processor behavior', () => {
     expect(resolveCall?.[1]).toMatchObject({
       options: expect.objectContaining({
         prompt: expect.stringContaining('prefer restrained or silent mouth performance over incorrect speech.'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
+  })
+
+  it('VIDEO_PANEL: 优先使用视频阶段手动对白覆盖，避免预览与执行文本不一致', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    prismaMock.novelPromotionPanel.findUnique.mockResolvedValueOnce(buildPanel({
+      srtSegment: '旧对白',
+      dialogueOverride: '视频阶段改后的对白',
+      matchedVoiceLines: [
+        {
+          lineIndex: 1,
+          speaker: 'Hero',
+          content: '旧对白',
+          matchedPanelId: 'panel-1',
+          matchedStoryboardId: 'storyboard-1',
+          matchedPanelIndex: 0,
+        },
+      ],
+    }))
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::kling-v1',
+      },
+    })
+
+    await processor!(job)
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('Panel text reference: 视频阶段改后的对白'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('content="视频阶段改后的对白"'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        prompt: expect.stringContaining('Panel text reference: 旧对白'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        prompt: expect.stringContaining('content="旧对白"'),
       }),
     })
   })
@@ -385,9 +488,14 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('Do not stage these lines as on-screen mouth speech or visible lip-sync'),
       }),
     })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
-  it('VIDEO_PANEL: 显式 generateAudio=false 时使用统一禁音控制面', async () => {
+  it('VIDEO_PANEL: 非 Vidu 模型不向共享 worker 请求注入不受支持的 bgm 参数', async () => {
     const processor = workerState.processor
     expect(processor).toBeTruthy()
 
@@ -412,6 +520,14 @@ describe('worker video processor behavior', () => {
         }),
       }),
     )
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      modelId: 'fal::kling-v1',
+      options: expect.not.objectContaining({
+        bgm: expect.anything(),
+      }),
+    })
   })
 
   it('VIDEO_PANEL: 将 Ark 返回的实际视频 token 用量透传到任务结果', async () => {
@@ -439,6 +555,53 @@ describe('worker video processor behavior', () => {
       panelId: 'panel-1',
       videoUrl: 'cos/lip-sync/video.mp4',
       actualVideoTokens: 108000,
+    })
+  })
+
+  it('VIDEO_SHOT_GROUP: 非 Ark 模型归一为 composite storyboard 真实语义', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_SHOT_GROUP,
+      targetType: 'NovelPromotionShotGroup',
+      targetId: 'shot-group-1',
+      payload: {
+        videoModel: 'fal::kling-v1',
+        generationOptions: {
+          duration: 5,
+          resolution: '720p',
+          generateAudio: true,
+        },
+      },
+    })
+
+    const result = await processor!(job) as {
+      shotGroupId: string
+      videoSourceType: string
+      videoReferences: { mode: string; referenceMode: string }
+    }
+
+    expect(result.videoSourceType).toBe('composite_image_mvp')
+    expect(result.videoReferences).toMatchObject({
+      mode: 'omni-reference',
+      referenceMode: 'composite_image_mvp',
+    })
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      modelId: 'fal::kling-v1',
+      options: expect.not.objectContaining({
+        contentItems: expect.anything(),
+      }),
+    })
+
+    expect(prismaMock.novelPromotionShotGroup.update).toHaveBeenCalledWith({
+      where: { id: 'shot-group-1' },
+      data: expect.objectContaining({
+        videoSourceType: 'composite_image_mvp',
+        videoModel: 'fal::kling-v1',
+      }),
     })
   })
 

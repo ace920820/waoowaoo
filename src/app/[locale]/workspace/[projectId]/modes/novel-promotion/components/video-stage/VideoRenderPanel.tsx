@@ -57,6 +57,7 @@ interface VideoRenderPanelProps {
   ) => Promise<void>
   onPreviewImage: (imageUrl: string | null) => void
   onToggleLipSyncVideo: (key: string, value: boolean) => void
+  onDownloadVideo: (panel: VideoPanel, videoUrl: string) => Promise<void>
   getNextPanel: (currentIndex: number) => VideoPanel | null
   isLinkedAsLastFrame: (currentIndex: number) => boolean
   getDefaultFlPrompt: (firstPrompt?: string, lastPrompt?: string) => string
@@ -103,6 +104,7 @@ export default function VideoRenderPanel({
   onGenerateFirstLastFrame,
   onPreviewImage,
   onToggleLipSyncVideo,
+  onDownloadVideo,
   getNextPanel,
   isLinkedAsLastFrame,
   getDefaultFlPrompt,
@@ -130,6 +132,8 @@ export default function VideoRenderPanel({
             : panel.textPanel?.video_prompt
           const localPrompt = getLocalPrompt(panelKey, externalPrompt, promptField)
           const isSavingPrompt = savingPrompts.has(`${promptField}:${panelKey}`)
+          const localDialogueOverride = getLocalPrompt(panelKey, panel.dialogueOverride || '', 'dialogueOverride')
+          const isSavingDialogueOverride = savingPrompts.has(`dialogueOverride:${panelKey}`)
 
           return (
             <div
@@ -179,6 +183,10 @@ export default function VideoRenderPanel({
                   if (isLinked) onFlCustomPromptChange(panelKey, value)
                 }}
                 onSavePrompt={(value) => savePrompt(panel.storyboardId, panel.panelIndex, panelKey, value, promptField)}
+                localDialogueOverride={localDialogueOverride}
+                isSavingDialogueOverride={isSavingDialogueOverride}
+                onUpdateLocalDialogueOverride={(value) => updateLocalPrompt(panelKey, value, 'dialogueOverride')}
+                onSaveDialogueOverride={(value) => savePrompt(panel.storyboardId, panel.panelIndex, panelKey, value, 'dialogueOverride')}
                 onGenerateVideo={onGenerateVideo}
                 onUpdatePanelVideoModel={onUpdatePanelVideoModel}
                 onToggleLink={onToggleLink}
@@ -188,6 +196,7 @@ export default function VideoRenderPanel({
                 onResetFlPrompt={onResetFlPrompt}
                 onGenerateFirstLastFrame={onGenerateFirstLastFrame}
                 onPreviewImage={onPreviewImage}
+                onDownloadVideo={onDownloadVideo}
               />
             </div>
           )

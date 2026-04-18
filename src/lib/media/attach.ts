@@ -93,6 +93,7 @@ export async function attachMediaFieldsToGlobalVoice<T extends Record<string, un
 async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel: T) {
   const imageMedia = await resolveMediaRef(panel.imageMediaId, panel.imageUrl)
   const videoMedia = await resolveMediaRef(panel.videoMediaId, panel.videoUrl)
+  const savedTailFrameMedia = await resolveMediaRef(panel.savedTailFrameMediaId, panel.savedTailFrameUrl)
   const lipSyncVideoMedia = await resolveMediaRef(panel.lipSyncVideoMediaId, panel.lipSyncVideoUrl)
   const sketchImageMedia = await resolveMediaRef(panel.sketchImageMediaId, panel.sketchImageUrl)
   const previousImageMedia = await resolveMediaRef(panel.previousImageMediaId, panel.previousImageUrl)
@@ -113,11 +114,13 @@ async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel
     media: imageMedia,
     imageMedia,
     videoMedia,
+    savedTailFrameMedia,
     lipSyncVideoMedia,
     sketchImageMedia,
     previousImageMedia,
     imageUrl: imageMedia?.url || panel.imageUrl || null,
     videoUrl: videoMedia?.url || panel.videoUrl || null,
+    savedTailFrameUrl: savedTailFrameMedia?.url || panel.savedTailFrameUrl || null,
     lipSyncVideoUrl: lipSyncVideoMedia?.url || panel.lipSyncVideoUrl || null,
     sketchImageUrl: sketchImageMedia?.url || panel.sketchImageUrl || null,
     previousImageUrl: previousImageMedia?.url || panel.previousImageUrl || null,
@@ -193,6 +196,38 @@ async function attachMediaFieldsToShot<T extends Record<string, unknown>>(shot: 
   }
 }
 
+async function attachMediaFieldsToShotGroupItem<T extends Record<string, unknown>>(item: T) {
+  const imageMedia = await resolveMediaRef(item.imageMediaId, item.imageUrl)
+  return {
+    ...item,
+    media: imageMedia,
+    imageMedia,
+    imageUrl: imageMedia?.url || item.imageUrl || null,
+  }
+}
+
+async function attachMediaFieldsToShotGroup<T extends Record<string, unknown>>(shotGroup: T) {
+  const referenceImageMedia = await resolveMediaRef(shotGroup.referenceImageMediaId, shotGroup.referenceImageUrl)
+  const compositeImageMedia = await resolveMediaRefFromLegacyValue(shotGroup.compositeImageUrl)
+  const videoMedia = await resolveMediaRefFromLegacyValue(shotGroup.videoUrl)
+  const savedTailFrameMedia = await resolveMediaRef(shotGroup.savedTailFrameMediaId, shotGroup.savedTailFrameUrl)
+  const items = await Promise.all(
+    ((shotGroup.items as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToShotGroupItem),
+  )
+  return {
+    ...shotGroup,
+    compositeImageMedia,
+    compositeImageUrl: compositeImageMedia?.url || shotGroup.compositeImageUrl || null,
+    videoMedia,
+    videoUrl: videoMedia?.url || shotGroup.videoUrl || null,
+    referenceImageMedia,
+    referenceImageUrl: referenceImageMedia?.url || shotGroup.referenceImageUrl || null,
+    savedTailFrameMedia,
+    savedTailFrameUrl: savedTailFrameMedia?.url || shotGroup.savedTailFrameUrl || null,
+    items,
+  }
+}
+
 async function attachMediaFieldsToVoiceLine<T extends Record<string, unknown>>(line: T) {
   const audioMedia = await resolveMediaRef(line.audioMediaId, line.audioUrl)
   return {
@@ -220,6 +255,9 @@ export async function attachMediaFieldsToProject<T extends Record<string, unknow
   const storyboards = await Promise.all(
     ((projectLike.storyboards as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToStoryboard),
   )
+  const shotGroups = await Promise.all(
+    ((projectLike.shotGroups as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToShotGroup),
+  )
   const voiceLines = await Promise.all(
     ((projectLike.voiceLines as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToVoiceLine),
   )
@@ -234,6 +272,7 @@ export async function attachMediaFieldsToProject<T extends Record<string, unknow
     props,
     shots,
     storyboards,
+    shotGroups,
     voiceLines,
   }
 }

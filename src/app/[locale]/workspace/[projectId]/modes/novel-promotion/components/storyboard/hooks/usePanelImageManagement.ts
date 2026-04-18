@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { MediaRef, NovelPromotionStoryboard } from '@/types/project'
 import { extractErrorMessage } from '@/lib/errors/extract'
+import { saveBlobAsFile } from '@/lib/download/saveBlobAsFile'
+import { useDownloadRemoteBlob } from '@/lib/query/hooks'
 import {
   getStoryboardPanels,
   type PanelImageStatus,
@@ -41,16 +43,6 @@ interface UsePanelImageManagementParams {
   refreshStoryboards: () => void
 }
 
-function triggerBrowserDownload(url: string, filename: string) {
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.rel = 'noopener'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-}
-
 export function usePanelImageManagement({
   localStoryboards,
   setLocalStoryboards,
@@ -62,6 +54,7 @@ export function usePanelImageManagement({
   refreshStoryboards,
 }: UsePanelImageManagementParams) {
   const t = useTranslations('storyboard')
+  const downloadRemoteBlobMutation = useDownloadRemoteBlob()
   const [panelImageStatusById, setPanelImageStatusById] = useState<Record<string, PanelImageStatus>>({})
 
   const panelNumberById = useMemo(() => {
@@ -74,14 +67,21 @@ export function usePanelImageManagement({
     return next
   }, [localStoryboards])
 
-  const downloadPanelImage = useCallback((panelId: string, imageUrl: string | null) => {
+  const downloadPanelImage = useCallback(async (panelId: string, imageUrl: string | null) => {
     if (!imageUrl) return
     const panelNumber = panelNumberById.get(panelId)
     const filename = panelNumber
       ? `storyboard-panel-${panelNumber}.png`
       : `storyboard-panel-${panelId}.png`
-    triggerBrowserDownload(imageUrl, filename)
-  }, [panelNumberById])
+    try {
+      const blob = await downloadRemoteBlobMutation.mutateAsync(imageUrl)
+      saveBlobAsFile(blob, filename)
+    } catch (error: unknown) {
+      alert(t('messages.downloadFailed', {
+        error: extractErrorMessage(error, t('common.unknownError')),
+      }))
+    }
+  }, [downloadRemoteBlobMutation, panelNumberById, t])
 
   const replacePanelImage = useCallback(async (panelId: string, file: File) => {
     setModifyingPanels((previous) => new Set(previous).add(panelId))

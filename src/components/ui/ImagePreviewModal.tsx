@@ -15,7 +15,9 @@ export default function ImagePreviewModal({ imageUrl, onClose }: ImagePreviewMod
   const t = useTranslations('common')
 
   useEffect(() => {
-    // 禁用body滚动
+    if (!imageUrl) return
+
+    const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     const handleEscape = (e: KeyboardEvent) => {
@@ -27,10 +29,10 @@ export default function ImagePreviewModal({ imageUrl, onClose }: ImagePreviewMod
     document.addEventListener('keydown', handleEscape)
 
     return () => {
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [onClose])
+  }, [imageUrl, onClose])
 
   if (!imageUrl) return null
   const displayImageUrl = toDisplayImageUrl(imageUrl)

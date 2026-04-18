@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler } from '@/lib/api-errors'
 import { extractScreenplayDialogueItems } from '@/lib/novel-promotion/screenplay-dialogue'
+import { normalizeStoryboardMoodText } from '@/lib/storyboard-mood-presets'
 
 type ClipDialogueRecord = {
     id: string
@@ -185,7 +186,7 @@ export const PATCH = apiHandler(async (
     if (isErrorResponse(authResult)) return authResult
 
     const body = await request.json()
-    const { characters, location, props, content, screenplay } = body
+    const { characters, location, props, content, screenplay, storyboardMoodPresetId, customMood } = body
     const clipModel = prisma.novelPromotionClip as unknown as {
         update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<unknown>
     }
@@ -210,12 +211,16 @@ export const PATCH = apiHandler(async (
         props?: string | null
         content?: string
         screenplay?: string | null
+        storyboardMoodPresetId?: string | null
+        customMood?: string | null
     } = {}
     if (characters !== undefined) updateData.characters = characters // JSON string
     if (location !== undefined) updateData.location = location
     if (props !== undefined) updateData.props = props
     if (content !== undefined) updateData.content = content
     if (screenplay !== undefined) updateData.screenplay = screenplay // JSON string
+    if (storyboardMoodPresetId !== undefined) updateData.storyboardMoodPresetId = normalizeStoryboardMoodText(storyboardMoodPresetId)
+    if (customMood !== undefined) updateData.customMood = normalizeStoryboardMoodText(customMood)
 
     const clip = await clipModel.update({
         where: { id: clipId },

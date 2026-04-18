@@ -23,9 +23,11 @@ const TASK_INTENT_SET = new Set<string>(TASK_INTENTS)
 
 const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.IMAGE_PANEL]: 'generate',
+  [TASK_TYPE.IMAGE_SHOT_GROUP]: 'generate',
   [TASK_TYPE.IMAGE_CHARACTER]: 'generate',
   [TASK_TYPE.IMAGE_LOCATION]: 'generate',
   [TASK_TYPE.VIDEO_PANEL]: 'generate',
+  [TASK_TYPE.VIDEO_SHOT_GROUP]: 'generate',
   [TASK_TYPE.LIP_SYNC]: 'process',
   [TASK_TYPE.VOICE_LINE]: 'generate',
   [TASK_TYPE.VOICE_DESIGN]: 'generate',

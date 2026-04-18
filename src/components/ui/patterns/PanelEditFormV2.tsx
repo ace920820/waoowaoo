@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import type { PanelEditData } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PanelEditForm'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 import {
   GlassChip,
   GlassField,
@@ -22,6 +23,7 @@ export interface PanelEditFormV2Props {
   onOpenLocationPicker: () => void
   onRemoveCharacter: (index: number) => void
   onRemoveLocation: () => void
+  storyboardMoodPresets?: StoryboardMoodPreset[]
   uiMode?: UiPatternMode
 }
 
@@ -36,9 +38,27 @@ export default function PanelEditFormV2({
   onOpenLocationPicker,
   onRemoveCharacter,
   onRemoveLocation,
+  storyboardMoodPresets = [],
   uiMode = 'flow'
 }: PanelEditFormV2Props) {
   const t = useTranslations('storyboard')
+  const inheritedMoodPresetLabel = !panelData.storyboardMoodPresetId
+    && panelData.effectiveMoodSource
+    && panelData.effectiveMoodSource !== 'panel_override'
+    ? panelData.effectiveMoodPresetLabel
+    : null
+  const presetPlaceholderLabel = inheritedMoodPresetLabel
+    ? `跟随上层（当前：${inheritedMoodPresetLabel}）`
+    : '不使用预设'
+  const moodSourceLabel = (() => {
+    switch (panelData.effectiveMoodSource) {
+      case 'panel_override': return '当前分镜覆盖'
+      case 'clip_applied': return '分镜组批量应用'
+      case 'episode_default': return '剧集默认'
+      case 'project_default': return '项目默认'
+      default: return null
+    }
+  })()
 
   return (
     <div className={`ui-pattern-form ui-pattern-form-${uiMode} space-y-2`}>
@@ -111,6 +131,42 @@ export default function PanelEditFormV2({
           placeholder={t('panel.videoPromptPlaceholder')}
         />
       </GlassField>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <GlassField
+          label="分镜氛围预设"
+          hint={panelData.effectiveMoodSummary
+            ? `当前生效：${panelData.effectiveMoodSummary}`
+            : '仅影响当前分镜图片生成，不影响角色/场景资产图'}
+        >
+          <select
+            value={panelData.storyboardMoodPresetId || ''}
+            onChange={(event) => onUpdate({ storyboardMoodPresetId: event.target.value || null })}
+            className="w-full rounded-[var(--glass-radius-md)] border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+          >
+            <option value="">{presetPlaceholderLabel}</option>
+            {storyboardMoodPresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+        </GlassField>
+
+        <GlassField
+          label="自定义氛围"
+          hint={moodSourceLabel
+            ? `优先级来源：${moodSourceLabel}`
+            : '补充这一格的情绪、空气感或氛围指令'}
+        >
+          <GlassInput
+            density="compact"
+            value={panelData.customMood || ''}
+            onChange={(event) => onUpdate({ customMood: event.target.value || null })}
+            placeholder="例如：潮湿闷热、风雨欲来、温柔克制"
+          />
+        </GlassField>
+      </div>
 
       <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
         <GlassField

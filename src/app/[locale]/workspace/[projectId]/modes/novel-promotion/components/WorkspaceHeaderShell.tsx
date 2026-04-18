@@ -6,6 +6,7 @@ import WorkspaceTopActions from './WorkspaceTopActions'
 import type { NovelPromotionPanel } from '@/types/project'
 import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config-contract'
 import { resolveEpisodeStageArtifacts } from '@/lib/novel-promotion/stage-readiness'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface EpisodeSummary {
   id: string
@@ -13,6 +14,7 @@ interface EpisodeSummary {
   episodeNumber?: number
   description?: string | null
   clips?: unknown[]
+  shotGroups?: unknown[]
   storyboards?: Array<{
     panels?: NovelPromotionPanel[] | null
   }>
@@ -51,6 +53,8 @@ interface WorkspaceHeaderShellProps {
   capabilityOverrides: CapabilitySelections
   videoRatio: string | null | undefined
   ttsRate: string | null | undefined
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  storyboardDefaultMoodPresetId: string | null | undefined
   onUpdateConfig: (key: string, value: unknown) => Promise<void>
   globalAssetText: string
   projectName: string
@@ -98,6 +102,8 @@ export default function WorkspaceHeaderShell({
   capabilityOverrides,
   videoRatio,
   ttsRate,
+  storyboardMoodPresets,
+  storyboardDefaultMoodPresetId,
   onUpdateConfig,
   globalAssetText,
   projectName,
@@ -137,6 +143,8 @@ export default function WorkspaceHeaderShell({
         videoRatio={videoRatio ?? undefined}
         capabilityOverrides={capabilityOverrides}
         ttsRate={ttsRate ?? undefined}
+        storyboardMoodPresets={storyboardMoodPresets}
+        storyboardDefaultMoodPresetId={storyboardDefaultMoodPresetId ?? null}
         onArtStyleChange={(value) => { onUpdateConfig('artStyle', value) }}
         onAnalysisModelChange={(value) => { onUpdateConfig('analysisModel', value) }}
         onCharacterModelChange={(value) => { onUpdateConfig('characterModel', value) }}
@@ -148,6 +156,8 @@ export default function WorkspaceHeaderShell({
         onVideoRatioChange={(value) => { onUpdateConfig('videoRatio', value) }}
         onCapabilityOverridesChange={(value) => { onUpdateConfig('capabilityOverrides', value) }}
         onTTSRateChange={(value) => { onUpdateConfig('ttsRate', value) }}
+        onStoryboardMoodPresetsChange={(value) => { onUpdateConfig('storyboardMoodPresets', value) }}
+        onStoryboardDefaultMoodPresetIdChange={(value) => { onUpdateConfig('storyboardDefaultMoodPresetId', value) }}
       />
 
       <WorldContextModal
@@ -170,6 +180,7 @@ export default function WorkspaceHeaderShell({
                 novelText: null,
                 clips: ep.clips || [],
                 storyboards: ep.storyboards || [],
+                shotGroups: ep.shotGroups || [],
                 voiceLines: [],
               })
               return {

@@ -6,6 +6,7 @@ import StoryboardHeader from './StoryboardHeader'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { AppIcon } from '@/components/ui/icons'
 import { GlassButton } from '@/components/ui/primitives'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface StoryboardToolbarProps {
   totalSegments: number
@@ -13,6 +14,9 @@ interface StoryboardToolbarProps {
   isDownloadingImages: boolean
   runningCount: number
   pendingPanelCount: number
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  episodeDefaultMoodPresetId: string | null
+  onEpisodeDefaultMoodPresetIdChange: (value: string | null) => Promise<void>
   isBatchSubmitting: boolean
   addingStoryboardGroup: boolean
   addingStoryboardGroupState: TaskPresentationState | null
@@ -28,6 +32,9 @@ export default function StoryboardToolbar({
   isDownloadingImages,
   runningCount,
   pendingPanelCount,
+  storyboardMoodPresets,
+  episodeDefaultMoodPresetId,
+  onEpisodeDefaultMoodPresetIdChange,
   isBatchSubmitting,
   addingStoryboardGroup,
   addingStoryboardGroupState,
@@ -45,6 +52,9 @@ export default function StoryboardToolbar({
         isDownloadingImages={isDownloadingImages}
         runningCount={runningCount}
         pendingPanelCount={pendingPanelCount}
+        storyboardMoodPresets={storyboardMoodPresets}
+        episodeDefaultMoodPresetId={episodeDefaultMoodPresetId}
+        onEpisodeDefaultMoodPresetIdChange={onEpisodeDefaultMoodPresetIdChange}
         isBatchSubmitting={isBatchSubmitting}
         onDownloadAllImages={onDownloadAllImages}
         onGenerateAllPanels={onGenerateAllPanels}

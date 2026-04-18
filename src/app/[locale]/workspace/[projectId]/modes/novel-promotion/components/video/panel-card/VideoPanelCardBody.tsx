@@ -1,10 +1,18 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import { buildPanelSpeechContractViewModel } from '@/lib/novel-promotion/panel-speech-plan'
+import {
+  useSaveProjectVideoTailFrame,
+  useUploadProjectStoryboardPanelImage,
+} from '@/lib/query/hooks'
+import {
+  downloadFileFromUrl,
+  extractVideoTailFrame,
+} from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/video-tail-frame-utils'
 import type { VideoPanelRuntime } from './hooks/useVideoPanelActions'
 
 interface VideoPanelCardBodyProps {
@@ -15,18 +23,26 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
   const {
     t,
     tCommon,
+    projectId,
+    episodeId,
     panel,
     panelIndex,
     panelKey,
     layout,
+    media,
     actions,
     taskStatus,
     videoModel,
     promptEditor,
+    dialogueEditor,
     voiceManager,
     lipSync,
     computed,
   } = runtime
+  const uploadPanelImageMutation = useUploadProjectStoryboardPanelImage(projectId)
+  const saveTailFrameMutation = useSaveProjectVideoTailFrame(projectId, episodeId)
+  const firstFrameInputRef = useRef<HTMLInputElement | null>(null)
+  const [frameActionError, setFrameActionError] = useState<string | null>(null)
   const safeTranslate = (key: string | undefined, fallback = ''): string => {
     if (!key) return fallback
     try {
@@ -53,6 +69,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
   const showsPromptEditor = true
   const showsFirstLastFrameActions = layout.isLinked && !!layout.nextPanel
   const hasTailFrameCandidate = layout.hasNext && !!layout.nextPanel
+  const tailFrameVideoUrl = media.currentVideoUrl || media.baseVideoUrl
   const cssAspectRatio = layout.videoRatio.replace(':', '/')
   const effectiveGenerateAudio = typeof videoModel.generationOptions.generateAudio === 'boolean'
     ? videoModel.generationOptions.generateAudio
@@ -120,6 +137,12 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
 
   const speechSummary = (() => {
     if (!speechContract) return null
+    if (!speechContract.audioEnabled && speechContract.matchKind === 'override') {
+      return t('panelCard.speechContract.summary.overrideAudioDisabled')
+    }
+    if (speechContract.matchKind === 'override') {
+      return t('panelCard.speechContract.summary.override')
+    }
     if (!speechContract.audioEnabled && speechContract.matchKind === 'matched') {
       return t('panelCard.speechContract.summary.matchedAudioDisabled')
     }
@@ -151,6 +174,43 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
     })()
     : []
 
+  const handleReplaceFirstFrame = async (file: File) => {
+    if (!panel.panelId) {
+      setFrameActionError('当前分镜缺少 panel 记录，无法替换首帧。')
+      return
+    }
+
+    setFrameActionError(null)
+    try {
+      await uploadPanelImageMutation.mutateAsync({
+        panelId: panel.panelId,
+        file,
+      })
+    } catch (error) {
+      setFrameActionError(error instanceof Error ? error.message : '替换首帧失败')
+    }
+  }
+
+  const handleSaveTailFrame = async () => {
+    if (!panel.panelId || !tailFrameVideoUrl) {
+      setFrameActionError('当前没有可提取的已生成视频。')
+      return
+    }
+
+    setFrameActionError(null)
+    try {
+      const proxiedVideoUrl = `/api/novel-promotion/${projectId}/video-proxy?key=${encodeURIComponent(tailFrameVideoUrl)}`
+      const file = await extractVideoTailFrame(proxiedVideoUrl)
+      await saveTailFrameMutation.mutateAsync({
+        sourceType: 'panel',
+        sourceId: panel.panelId,
+        file,
+      })
+    } catch (error) {
+      setFrameActionError(error instanceof Error ? error.message : '保存尾帧失败')
+    }
+  }
+
   return (
     <div className="p-4 space-y-2">
       <div className="flex items-center justify-between text-xs">
@@ -159,6 +219,65 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
       </div>
 
       <p className="text-sm text-[var(--glass-text-secondary)] line-clamp-2">{panel.textPanel?.description}</p>
+
+      <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-[var(--glass-text-primary)]">{t('panelCard.dialogueOverride.title')}</div>
+            <div className="mt-1 text-[11px] text-[var(--glass-text-tertiary)]">
+              {panel.dialogueOverride
+                ? t('panelCard.dialogueOverride.overrideActive')
+                : t('panelCard.dialogueOverride.fallbackHint')}
+            </div>
+          </div>
+          {!dialogueEditor.isEditing && (
+            <button
+              onClick={dialogueEditor.handleStartEdit}
+              className="text-[var(--glass-text-tertiary)] hover:text-[var(--glass-tone-info-fg)] transition-colors p-0.5"
+            >
+              <AppIcon name="edit" className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {dialogueEditor.isEditing ? (
+          <div className="relative">
+            <textarea
+              value={dialogueEditor.editingPrompt}
+              onChange={(event) => dialogueEditor.setEditingPrompt(event.target.value)}
+              autoFocus
+              className="w-full text-xs p-2 pr-16 border border-[var(--glass-stroke-focus)] rounded-lg bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--glass-tone-info-fg)] resize-none"
+              rows={3}
+              placeholder={t('panelCard.dialogueOverride.placeholder')}
+            />
+            <div className="absolute right-1 top-1 flex flex-col gap-1">
+              <button
+                onClick={dialogueEditor.handleSave}
+                disabled={dialogueEditor.isSavingPrompt}
+                className="px-2 py-1 text-[10px] bg-[var(--glass-accent-from)] text-white rounded"
+              >
+                {dialogueEditor.isSavingPrompt ? '...' : t('panelCard.save')}
+              </button>
+              <button
+                onClick={dialogueEditor.handleCancelEdit}
+                disabled={dialogueEditor.isSavingPrompt}
+                className="px-2 py-1 text-[10px] bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] rounded"
+              >
+                {t('panelCard.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={dialogueEditor.handleStartEdit}
+            className="text-xs p-2 border border-[var(--glass-stroke-base)] rounded-lg bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] cursor-pointer"
+          >
+            {dialogueEditor.localPrompt || (
+              <span className="text-[var(--glass-text-tertiary)] italic">{t('panelCard.dialogueOverride.empty')}</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {speechContract && speechModeLabel && speechSourceLabel && speechSummary && (
         <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-3">
@@ -215,6 +334,19 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
       )}
 
       <div className="mt-3 pt-3 border-t border-[var(--glass-stroke-base)]">
+        <input
+          ref={firstFrameInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.currentTarget.value = ''
+            if (!file) return
+            void handleReplaceFirstFrame(file)
+          }}
+        />
+
         {(showsIncomingLinkBadge || showsOutgoingLinkBadge) && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {showsIncomingLinkBadge && (
@@ -297,6 +429,56 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
                 : 'bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] border border-[var(--glass-stroke-base)]',
             })}
           </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => firstFrameInputRef.current?.click()}
+              disabled={!panel.panelId || uploadPanelImageMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-1.5 text-xs text-[var(--glass-text-secondary)] transition-colors disabled:opacity-50"
+            >
+              <AppIcon name="upload" className="h-3.5 w-3.5" />
+              <span>{uploadPanelImageMutation.isPending ? '上传中...' : '上传替换首帧'}</span>
+            </button>
+            <button
+              onClick={() => void handleSaveTailFrame()}
+              disabled={!panel.panelId || !tailFrameVideoUrl || saveTailFrameMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-lg bg-[var(--glass-accent-from)] px-3 py-1.5 text-xs text-white transition-colors disabled:opacity-50"
+            >
+              <AppIcon name="image" className="h-3.5 w-3.5" />
+              <span>{saveTailFrameMutation.isPending ? '提取中...' : '提取并保存尾帧'}</span>
+            </button>
+            {panel.savedTailFrameUrl ? (
+              <button
+                onClick={() => downloadFileFromUrl(panel.savedTailFrameUrl!, `panel-${panelIndex + 1}-tail-frame.png`)}
+                className="inline-flex items-center gap-1 rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-1.5 text-xs text-[var(--glass-text-secondary)] transition-colors"
+              >
+                <AppIcon name="download" className="h-3.5 w-3.5" />
+                <span>下载已保存尾帧</span>
+              </button>
+            ) : null}
+          </div>
+
+          <div className="text-[11px] text-[var(--glass-text-tertiary)]">
+            首帧替换会直接覆盖当前 storyboard panel 图片，后续单镜头视频与首尾帧视频都会使用新图。尾帧会保存到当前视频卡片，便于继续下载使用。
+          </div>
+
+          {panel.savedTailFrameUrl ? (
+            <div className="mt-3">
+              {renderFramePreview({
+                imageUrl: panel.savedTailFrameUrl,
+                title: '已保存尾帧',
+                source: '来源：当前视频卡片最近一次保存的尾帧',
+                emptyLabel: '还没有保存尾帧',
+                accentClassName: 'bg-[var(--glass-tone-success-bg)] text-[var(--glass-tone-success-fg)]',
+              })}
+            </div>
+          ) : null}
+
+          {frameActionError ? (
+            <div className="mt-3 rounded-xl border border-[var(--glass-tone-danger-border)] bg-[var(--glass-tone-danger-bg)]/70 px-3 py-2 text-xs text-[var(--glass-tone-danger-fg)]">
+              {frameActionError}
+            </div>
+          ) : null}
         </div>
 
         {showsPromptEditor && (

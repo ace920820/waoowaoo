@@ -10,6 +10,7 @@ import type { PanelSaveState } from './hooks/usePanelCrudActions'
 import type { PanelImageStatus } from './hooks/image-generation-runtime'
 import { AppIcon } from '@/components/ui/icons'
 import { GlassButton } from '@/components/ui/primitives'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 interface StoryboardCanvasProps {
   sortedStoryboards: NovelPromotionStoryboard[]
@@ -33,7 +34,11 @@ interface StoryboardCanvasProps {
   getClipInfo: (clipId: string) => NovelPromotionClip | undefined
   getTextPanels: (storyboard: NovelPromotionStoryboard) => StoryboardPanel[]
   getPanelEditData: (panel: StoryboardPanel) => PanelEditData
+  storyboardMoodPresets: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId: string | null
+  episodeDefaultMoodPresetId: string | null
   formatClipTitle: (clip: NovelPromotionClip | undefined) => string
+  onApplyClipMood: (clipId: string, updates: { storyboardMoodPresetId: string | null; customMood: string | null }) => Promise<void>
   onToggleExpandedClip: (storyboardId: string) => void
   onMoveStoryboardGroup: (clipId: string, direction: 'up' | 'down') => Promise<void>
   onRegenerateStoryboardText: (storyboardId: string) => Promise<void>
@@ -99,7 +104,11 @@ export default function StoryboardCanvas({
   getClipInfo,
   getTextPanels,
   getPanelEditData,
+  storyboardMoodPresets,
+  projectDefaultMoodPresetId,
+  episodeDefaultMoodPresetId,
   formatClipTitle,
+  onApplyClipMood,
   onToggleExpandedClip,
   onMoveStoryboardGroup,
   onRegenerateStoryboardText,
@@ -185,7 +194,11 @@ export default function StoryboardCanvas({
               onPreviewImage={onPreviewImage}
               onCloseError={() => onCloseStoryboardError(storyboard.id)}
               getPanelEditData={getPanelEditData}
+              storyboardMoodPresets={storyboardMoodPresets}
+              projectDefaultMoodPresetId={projectDefaultMoodPresetId}
+              episodeDefaultMoodPresetId={episodeDefaultMoodPresetId}
               onPanelUpdate={onPanelUpdate}
+              onApplyClipMood={onApplyClipMood}
               onPanelDelete={(panelId) => onPanelDelete(panelId, storyboard.id, setLocalStoryboards)}
               onOpenCharacterPicker={onOpenCharacterPicker}
               onOpenLocationPicker={onOpenLocationPicker}

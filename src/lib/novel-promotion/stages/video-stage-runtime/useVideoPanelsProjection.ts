@@ -6,6 +6,10 @@ import type {
   Storyboard,
   VideoPanel,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
+import {
+  resolveEffectivePanelDialogueText,
+  resolvePanelDialogueOverride,
+} from '@/lib/novel-promotion/panel-speech-plan'
 
 interface TaskStateLike {
   phase?: string | null
@@ -54,6 +58,8 @@ export function useVideoPanelsProjection({
         }
 
         const panelId = panel.id
+        const effectiveDialogueText = resolveEffectivePanelDialogueText(panel)
+        const dialogueOverride = resolvePanelDialogueOverride(panel)
         const panelVideoState = panelId ? panelVideoStates.getTaskState(`panel-video:${panelId}`) : null
         const panelLipState = panelId ? panelLipStates.getTaskState(`panel-lip:${panelId}`) : null
 
@@ -69,15 +75,17 @@ export function useVideoPanelsProjection({
             description: panel.description || '',
             characters: charactersArray,
             location: panel.location || '',
-            text_segment: panel.srtSegment || '',
+            text_segment: effectiveDialogueText || '',
             duration: panel.duration || undefined,
             imagePrompt: panel.imagePrompt || undefined,
             video_prompt: panel.videoPrompt ?? undefined,
             videoModel: panel.videoModel || undefined,
           },
+          dialogueOverride: dialogueOverride ?? undefined,
           imageUrl: panel.imageUrl || undefined,
           firstLastFramePrompt: panel.firstLastFramePrompt ?? undefined,
           videoUrl: panel.videoUrl || undefined,
+          savedTailFrameUrl: panel.savedTailFrameUrl || undefined,
           videoGenerationMode: panel.videoGenerationMode || undefined,
           videoTaskRunning: panelVideoState?.phase === 'queued' || panelVideoState?.phase === 'processing',
           videoErrorCode:

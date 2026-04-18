@@ -17,14 +17,14 @@ export type PanelSpeechLine = {
 
 export type PanelSpeechPlan = {
   mode: PanelSpeechMode
-  source: 'screenplay_voice_lines' | 'screenplay_panel_match' | 'none'
+  source: 'panel_dialogue_override' | 'screenplay_voice_lines' | 'screenplay_panel_match' | 'none'
   generatedAudioRequired: boolean
   primaryText: string | null
   speakers: string[]
   lines: PanelSpeechLine[]
 }
 
-export type PanelSpeechContractMatchKind = 'matched' | 'fallback' | 'none'
+export type PanelSpeechContractMatchKind = 'override' | 'matched' | 'fallback' | 'none'
 
 export type PanelSpeechContractGuardrail =
   | 'non_verbal_only'
@@ -55,6 +55,7 @@ type PanelSpeechPlanPanel = {
   storyboardId?: string | null
   panelIndex?: number | null
   srtSegment?: string | null
+  dialogueOverride?: string | null
 }
 
 type PanelSpeechPlanClip = ClipDialogueSource
@@ -86,6 +87,7 @@ type VideoPromptPanelContext = {
   description?: string | null
   duration?: number | null
   srtSegment?: string | null
+  dialogueOverride?: string | null
 }
 
 function normalizeText(value: unknown): string {
@@ -98,6 +100,22 @@ function normalizeText(value: unknown): string {
 
 function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
+}
+
+function trimNullableText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+export function resolvePanelDialogueOverride(panel?: Pick<PanelSpeechPlanPanel, 'dialogueOverride'> | null): string | null {
+  return trimNullableText(panel?.dialogueOverride)
+}
+
+export function resolveEffectivePanelDialogueText(
+  panel?: Pick<PanelSpeechPlanPanel, 'srtSegment' | 'dialogueOverride'> | null,
+): string | null {
+  return resolvePanelDialogueOverride(panel) ?? trimNullableText(panel?.srtSegment)
 }
 
 function resolveScreenplayItems(params: Pick<PanelSpeechPlanParams, 'clip' | 'clips'>): {
@@ -182,6 +200,31 @@ function toSpeechLineFromVoiceLine(
   }
 }
 
+function toSpeechLineWithOverriddenContent(
+  line: PanelSpeechLine,
+  content: string,
+): PanelSpeechLine {
+  return {
+    ...line,
+    content,
+  }
+}
+
+function toSpeechLineFromOverride(
+  content: string,
+  metadata?: Partial<PanelSpeechLine> | null,
+): PanelSpeechLine {
+  return {
+    lineIndex: typeof metadata?.lineIndex === 'number' ? metadata.lineIndex : null,
+    type: metadata?.type === 'voiceover' ? 'voiceover' : 'dialogue',
+    speaker: typeof metadata?.speaker === 'string' && metadata.speaker.trim() ? metadata.speaker.trim() : '旁白',
+    content,
+    parenthetical: typeof metadata?.parenthetical === 'string' && metadata.parenthetical.trim()
+      ? metadata.parenthetical.trim()
+      : null,
+  }
+}
+
 type PanelSpeechTextMatch = {
   item: ScreenplayDialogueItem
   quality: 'exact' | 'narrow_fuzzy'
@@ -191,7 +234,7 @@ function pickSinglePanelSpeechMatch(
   panel: PanelSpeechPlanPanel,
   screenplayItems: ScreenplayDialogueItem[],
 ): PanelSpeechTextMatch[] {
-  const panelText = normalizeText(panel.srtSegment)
+  const panelText = normalizeText(resolveEffectivePanelDialogueText(panel))
   if (!panelText) return []
 
   const exactMatches = screenplayItems.filter((item) => {
@@ -233,6 +276,7 @@ function pickSinglePanelSpeechMatch(
 
 export function derivePanelSpeechPlan(params: PanelSpeechPlanParams): PanelSpeechPlan {
   const { allItems: screenplayItems, clipItems: clipScreenplayItems } = resolveScreenplayItems(params)
+  const dialogueOverride = resolvePanelDialogueOverride(params.panel)
 
   const screenplayItemByLineIndex = new Map<number, ScreenplayDialogueItem>()
   for (const item of screenplayItems) {
@@ -265,13 +309,27 @@ export function derivePanelSpeechPlan(params: PanelSpeechPlanParams): PanelSpeec
     })
     .filter((line): line is PanelSpeechLine => !!line)
 
+  const fallbackPanelTextMatches = pickSinglePanelSpeechMatch(params.panel, clipScreenplayItems)
+
+  if (dialogueOverride) {
+    const overrideMetadata = fallbackPanelTextMatches[0]?.item
+      ? toSpeechLineFromScreenplay(fallbackPanelTextMatches[0].item)
+      : matchedVoiceLines[0] || null
+    const overrideLines = overrideMetadata
+      ? [toSpeechLineWithOverriddenContent(overrideMetadata, dialogueOverride)]
+      : [toSpeechLineFromOverride(dialogueOverride)]
+    return buildSpeechPlan(overrideLines, 'panel_dialogue_override')
+  }
+
   if (matchedVoiceLines.length > 0) {
     return buildSpeechPlan(matchedVoiceLines, 'screenplay_voice_lines')
   }
 
-  const screenplayMatches = pickSinglePanelSpeechMatch(params.panel, clipScreenplayItems)
-  if (screenplayMatches.length > 0) {
-    return buildSpeechPlan(screenplayMatches.map((match) => toSpeechLineFromScreenplay(match.item)), 'screenplay_panel_match')
+  if (fallbackPanelTextMatches.length > 0) {
+    return buildSpeechPlan(
+      fallbackPanelTextMatches.map((match) => toSpeechLineFromScreenplay(match.item)),
+      'screenplay_panel_match',
+    )
   }
 
   return buildSpeechPlan([], 'none')
@@ -313,18 +371,18 @@ function buildSpeechInstruction(params: {
   generateAudio: boolean
 }): string {
   if (!params.generateAudio) {
-    return 'Audio generation is disabled for this request. Do not add spoken dialogue, narration, ambience, or other generated audio.'
+    return 'Audio generation is disabled for this request. Do not add spoken dialogue, narration, ambience, background music, soundtrack, score, musical bed, or other generated audio.'
   }
 
   if (params.speechPlan.mode === 'silent') {
-    return 'No spoken dialogue or narration in this panel. Keep generated audio non-verbal, such as ambience, movement, or scene sound only.'
+    return 'No spoken dialogue or narration in this panel. Keep generated audio non-verbal, such as ambience, movement, or scene sound only. Do not add background music, soundtrack, score, or musical bed.'
   }
 
   if (params.speechPlan.mode === 'voiceover') {
-    return 'Generate audio for the listed speech only as off-screen narration or voiceover. Avoid visible mouth-sync performance unless the visuals explicitly require it.'
+    return 'Generate audio for the listed speech only as off-screen narration or voiceover. Avoid visible mouth-sync performance unless the visuals explicitly require it. Do not add background music, soundtrack, score, or musical bed.'
   }
 
-  return 'Generate audio for the listed speech and keep any visible performance aligned to these lines.'
+  return 'Generate audio for the listed speech and keep any visible performance aligned to these lines. Do not add background music, soundtrack, score, or musical bed.'
 }
 
 function buildSpeechGuardrails(params: {
@@ -335,6 +393,7 @@ function buildSpeechGuardrails(params: {
     return [
       'generated audio disabled for this request',
       'no spoken dialogue, narration, lyrics, or other verbal audio',
+      'no background music, soundtrack, score, or musical bed',
       'no mouth-sync or speech-shaped facial performance that implies unheard words',
     ]
   }
@@ -343,6 +402,7 @@ function buildSpeechGuardrails(params: {
     return [
       'intentional non-speaking panel',
       'no spoken dialogue, narration, ad-libs, or implied verbal beats',
+      'no background music, soundtrack, score, or musical bed',
       'avoid lip-sync and speech-shaped mouth movement',
       'generated audio must stay non-verbal only',
     ]
@@ -351,6 +411,7 @@ function buildSpeechGuardrails(params: {
   if (params.speechPlan.mode === 'voiceover') {
     return [
       'listed lines are voiceover or off-screen narration only',
+      'no background music, soundtrack, score, or musical bed',
       'do not present listed words as on-screen mouth speech',
       'visible characters should read as listening, acting, or silent reaction',
     ]
@@ -358,6 +419,7 @@ function buildSpeechGuardrails(params: {
 
   return [
     'use only the listed structured lines as spoken words',
+    'no background music, soundtrack, score, or musical bed',
     'keep spoken wording verbatim; do not paraphrase, summarize, or add new lines',
     'if a speaker is visible, mouth movement should align to the listed words only',
     'if exact wording cannot be preserved, prefer restrained or silent performance over invented speech',
@@ -409,9 +471,11 @@ export function buildPanelSpeechContractViewModel(params: {
     : params.speechPlan.generatedAudioRequired
   const matchKind: PanelSpeechContractMatchKind = params.speechPlan.source === 'screenplay_voice_lines'
     ? 'matched'
-    : params.speechPlan.source === 'screenplay_panel_match'
-      ? 'fallback'
-      : 'none'
+    : params.speechPlan.source === 'panel_dialogue_override'
+      ? 'override'
+      : params.speechPlan.source === 'screenplay_panel_match'
+        ? 'fallback'
+        : 'none'
 
   return {
     audioEnabled,
@@ -442,6 +506,7 @@ function buildSpeechModeExecutionBlock(params: {
     return [
       ...header,
       '- Do not generate spoken dialogue, narration, sung lyrics, or other verbal audio.',
+      '- Do not add background music, soundtrack, score, or musical bed.',
       '- Keep any generated audio non-verbal only, such as ambience, Foley, motion, or environmental sound.',
       '- Avoid visible mouth-sync performance that implies unheard dialogue.',
     ].join('\n')
@@ -452,6 +517,7 @@ function buildSpeechModeExecutionBlock(params: {
       ...header,
       '- Treat this panel as intentionally non-speaking.',
       '- Do not add spoken dialogue, narration, ad-libs, or implied speech beats.',
+      '- Do not add background music, soundtrack, score, or musical bed.',
       '- Keep character behavior and facial performance non-speaking; avoid lip-sync-like mouth performance or speech-shaped mouth cycles.',
       '- Audio should stay non-verbal: ambience, movement, impacts, room tone, or scene sound only.',
     ].join('\n')
@@ -473,6 +539,7 @@ function buildSpeechModeExecutionBlock(params: {
     return [
       ...header,
       '- Treat the listed lines as off-screen narration or voiceover.',
+      '- Do not add background music, soundtrack, score, or musical bed.',
       '- Do not stage these lines as on-screen mouth speech or visible lip-sync unless the visual prompt explicitly requires it.',
       '- Keep character blocking and facial performance consistent with listening, acting, or silent reaction rather than speaking these words.',
       '- Voiceover lines:',
@@ -483,6 +550,7 @@ function buildSpeechModeExecutionBlock(params: {
   return [
     ...header,
     '- Treat the listed lines as intentional on-screen spoken dialogue for this panel.',
+    '- Do not add background music, soundtrack, score, or musical bed.',
     '- If the speaker is visible, align mouth movement and speaking performance to these exact lines only.',
     '- Do not add extra spoken lines, narration, paraphrases, or substitute wording beyond the structured speech plan.',
     '- If exact wording cannot be rendered reliably, prefer restrained or silent mouth performance over incorrect speech.',
@@ -556,8 +624,9 @@ function buildPanelVisualContextBlock(params: {
     lines.push(`Target duration seconds: ${panel.duration}`)
   }
   const shouldIncludePanelTextReference = params.speechPlan?.source !== 'screenplay_voice_lines'
-  if (shouldIncludePanelTextReference && typeof panel.srtSegment === 'string' && panel.srtSegment.trim()) {
-    lines.push(`Panel text reference: ${panel.srtSegment.trim()}`)
+  const effectivePanelText = resolveEffectivePanelDialogueText(panel)
+  if (shouldIncludePanelTextReference && effectivePanelText) {
+    lines.push(`Panel text reference: ${effectivePanelText}`)
   }
 
   if (lines.length === 0) return null

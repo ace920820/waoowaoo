@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { logError as _ulogError } from '@/lib/logging/core'
 import type { VideoPanel } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video'
 
-export type PromptField = 'videoPrompt' | 'firstLastFramePrompt'
+export type PromptField = 'videoPrompt' | 'firstLastFramePrompt' | 'dialogueOverride'
 
 interface UseVideoPromptStateParams {
   allPanels: VideoPanel[]
@@ -14,6 +14,15 @@ interface UseVideoPromptStateParams {
     value: string,
     field?: PromptField,
   ) => Promise<void>
+}
+
+interface PersistVideoPromptUpdateParams {
+  onUpdateVideoPrompt: UseVideoPromptStateParams['onUpdateVideoPrompt']
+  storyboardId: string
+  panelIndex: number
+  value: string
+  field: PromptField
+  logError?: typeof _ulogError
 }
 
 function buildPromptStateKey(panelKey: string, field: PromptField): string {
@@ -45,6 +54,22 @@ export function resolveLocalPromptValue({
   return externalPrompt || ''
 }
 
+export async function persistVideoPromptUpdate({
+  onUpdateVideoPrompt,
+  storyboardId,
+  panelIndex,
+  value,
+  field,
+  logError = _ulogError,
+}: PersistVideoPromptUpdateParams): Promise<void> {
+  try {
+    await onUpdateVideoPrompt(storyboardId, panelIndex, value, field)
+  } catch (error) {
+    logError('保存视频提示词失败:', error)
+    throw error
+  }
+}
+
 export function useVideoPromptState({
   allPanels,
   onUpdateVideoPrompt,
@@ -66,6 +91,7 @@ export function useVideoPromptState({
         const promptEntries: Array<[PromptField, string]> = [
           ['videoPrompt', panel.textPanel?.video_prompt || ''],
           ['firstLastFramePrompt', panel.firstLastFramePrompt || ''],
+          ['dialogueOverride', panel.dialogueOverride || ''],
         ]
         for (const [field, value] of promptEntries) {
           const stateKey = buildPromptStateKey(panelKey, field)
@@ -108,6 +134,10 @@ export function useVideoPromptState({
         externalPromptMap.set(
           buildPromptStateKey(panelKey, 'firstLastFramePrompt'),
           panel.firstLastFramePrompt || '',
+        )
+        externalPromptMap.set(
+          buildPromptStateKey(panelKey, 'dialogueOverride'),
+          panel.dialogueOverride || '',
         )
       }
       const next = new Set(prev)
@@ -160,9 +190,13 @@ export function useVideoPromptState({
     const stateKey = buildPromptStateKey(panelKey, field)
     setSavingPrompts((prev) => new Set(prev).add(stateKey))
     try {
-      await onUpdateVideoPrompt(storyboardId, panelIndex, value, field)
-    } catch (error) {
-      _ulogError('保存视频提示词失败:', error)
+      await persistVideoPromptUpdate({
+        onUpdateVideoPrompt,
+        storyboardId,
+        panelIndex,
+        value,
+        field,
+      })
     } finally {
       setSavingPrompts((prev) => {
         const next = new Set(prev)
