@@ -14,7 +14,8 @@ import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { parseModelKeyStrict, type CapabilityValue } from '@/lib/model-config-contract'
 import {
   deriveShotGroupModeFlags,
-  normalizeShotGroupVideoMode,
+  resolveShotGroupModeForModel,
+  resolveShotGroupReferenceMode,
   sanitizeShotGroupGenerationOptions,
 } from '@/lib/shot-group/video-config'
 
@@ -150,12 +151,19 @@ export const POST = apiHandler(async (
     imageUrl: item.imageUrl,
     sourcePanelId: item.sourcePanelId,
   }))
-  const mode = normalizeShotGroupVideoMode({
+  const mode = resolveShotGroupModeForModel({
     mode: body.mode ?? savedConfig.mode,
     omniReferenceEnabled: shotGroup.omniReferenceEnabled,
     smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+    modelKey: videoModel,
   })
   const modeFlags = deriveShotGroupModeFlags(mode)
+  const referenceMode = resolveShotGroupReferenceMode({
+    mode,
+    omniReferenceEnabled: modeFlags.omniReferenceEnabled,
+    smartMultiFrameEnabled: modeFlags.smartMultiFrameEnabled,
+    modelKey: videoModel,
+  })
   const billingPayload = {
     shotGroupId,
     templateKey: shotGroup.templateKey,
@@ -185,9 +193,7 @@ export const POST = apiHandler(async (
     targetId: shotGroupId,
     payload: withTaskUiPayload({
       ...billingPayload,
-      referenceMode: mode === 'smart-multi-frame'
-        ? 'ark_content_multireference_smart'
-        : 'ark_content_multireference',
+      referenceMode,
     }, {
       intent: hasOutputAtStart ? 'regenerate' : 'generate',
       hasOutputAtStart,

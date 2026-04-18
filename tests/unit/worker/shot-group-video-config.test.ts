@@ -4,7 +4,10 @@ import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import {
   deriveShotGroupModeFlags,
   normalizeShotGroupVideoMode,
+  resolveShotGroupModeForModel,
+  resolveShotGroupReferenceMode,
   sanitizeShotGroupGenerationOptions,
+  supportsShotGroupMultiReferenceModes,
 } from '@/lib/shot-group/video-config'
 
 function buildShotGroup() {
@@ -57,6 +60,19 @@ describe('shot-group-video-config', () => {
       resolution: '1080p',
       generateAudio: true,
     })
+  })
+
+  it('normalizes non-Ark models to composite storyboard semantics', () => {
+    expect(supportsShotGroupMultiReferenceModes('ark::seedance')).toBe(true)
+    expect(supportsShotGroupMultiReferenceModes('fal::kling-v1')).toBe(false)
+    expect(resolveShotGroupModeForModel({
+      mode: 'smart-multi-frame',
+      modelKey: 'fal::kling-v1',
+    })).toBe('omni-reference')
+    expect(resolveShotGroupReferenceMode({
+      mode: 'smart-multi-frame',
+      modelKey: 'fal::kling-v1',
+    })).toBe('composite_image_mvp')
   })
 
   it('builds prompt around composite storyboard mode without reference-image or music language', () => {

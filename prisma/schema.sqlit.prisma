@@ -132,6 +132,7 @@ model NovelPromotionEpisode {
   clips                   NovelPromotionClip[]
   novelPromotionProject   NovelPromotionProject      @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)
   shots                   NovelPromotionShot[]
+  shotGroups              NovelPromotionShotGroup[]
   storyboards             NovelPromotionStoryboard[]
   voiceLines              NovelPromotionVoiceLine[]
   editorProject           VideoEditorProject?
@@ -233,6 +234,7 @@ model NovelPromotionPanel {
   previousImageMedia MediaObject?             @relation("NovelPromotionPanelPreviousImageMedia", fields: [previousImageMediaId], references: [id], onDelete: SetNull)
   storyboard        NovelPromotionStoryboard  @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
   matchedVoiceLines NovelPromotionVoiceLine[]
+  shotGroupItems    NovelPromotionShotGroupItem[]
 
   @@unique([storyboardId, panelIndex])
   @@index([storyboardId])
@@ -334,6 +336,63 @@ model NovelPromotionStoryboard {
   @@index([clipId])
   @@index([episodeId])
   @@map("novel_promotion_storyboards")
+}
+
+model NovelPromotionShotGroup {
+  id                      String                        @id @default(uuid())
+  episodeId               String
+  title                   String                        @default("未命名镜头组")
+  templateKey             String                        @default("grid-4")
+  groupPrompt             String?
+  referenceImageUrl       String?
+  compositeImageUrl       String?
+  videoPrompt             String?
+  generateAudio           Boolean                       @default(false)
+  bgmEnabled              Boolean                       @default(false)
+  includeDialogue         Boolean                       @default(false)
+  dialogueLanguage        String                        @default("zh")
+  omniReferenceEnabled    Boolean                       @default(false)
+  smartMultiFrameEnabled  Boolean                       @default(false)
+  videoModel              String?
+  videoSourceType         String?
+  videoReferencesJson     String?
+  videoUrl                String?
+  referenceImageMediaId   String?
+  savedTailFrameUrl       String?
+  savedTailFrameMediaId   String?
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @default(now()) @updatedAt
+  episode                 NovelPromotionEpisode         @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  items                   NovelPromotionShotGroupItem[]
+  referenceImageMedia     MediaObject?                  @relation("NovelPromotionShotGroupReferenceImageMedia", fields: [referenceImageMediaId], references: [id], onDelete: SetNull)
+  savedTailFrameMedia     MediaObject?                  @relation("NovelPromotionShotGroupSavedTailFrameMedia", fields: [savedTailFrameMediaId], references: [id], onDelete: SetNull)
+
+  @@index([episodeId])
+  @@index([referenceImageMediaId])
+  @@index([savedTailFrameMediaId])
+  @@map("novel_promotion_shot_groups")
+}
+
+model NovelPromotionShotGroupItem {
+  id            String                    @id @default(uuid())
+  shotGroupId   String
+  itemIndex     Int
+  title         String?
+  prompt        String?
+  imageUrl      String?
+  imageMediaId  String?
+  sourcePanelId String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @default(now()) @updatedAt
+  imageMedia    MediaObject?              @relation("NovelPromotionShotGroupItemImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
+  shotGroup     NovelPromotionShotGroup   @relation(fields: [shotGroupId], references: [id], onDelete: Cascade)
+  sourcePanel   NovelPromotionPanel?      @relation(fields: [sourcePanelId], references: [id], onDelete: SetNull)
+
+  @@unique([shotGroupId, itemIndex])
+  @@index([shotGroupId])
+  @@index([imageMediaId])
+  @@index([sourcePanelId])
+  @@map("novel_promotion_shot_group_items")
 }
 
 model SupplementaryPanel {
@@ -823,6 +882,7 @@ model MediaObject {
   novelPromotionPanelPreviousImages     NovelPromotionPanel[]       @relation("NovelPromotionPanelPreviousImageMedia")
   novelPromotionShotGroupReferenceImages NovelPromotionShotGroup[]  @relation("NovelPromotionShotGroupReferenceImageMedia")
   novelPromotionShotGroupSavedTailFrames NovelPromotionShotGroup[]  @relation("NovelPromotionShotGroupSavedTailFrameMedia")
+  novelPromotionShotGroupItemImages     NovelPromotionShotGroupItem[] @relation("NovelPromotionShotGroupItemImageMedia")
   novelPromotionShotImages              NovelPromotionShot[]        @relation("NovelPromotionShotImageMedia")
   supplementaryPanelImages              SupplementaryPanel[]        @relation("SupplementaryPanelImageMedia")
   novelPromotionVoiceLineAudios         NovelPromotionVoiceLine[]   @relation("NovelPromotionVoiceLineAudioMedia")

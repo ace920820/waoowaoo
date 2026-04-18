@@ -29,7 +29,9 @@ import { buildShotGroupVideoPrompt } from '@/lib/shot-group/prompt'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import {
   deriveShotGroupModeFlags,
-  normalizeShotGroupVideoMode,
+  resolveShotGroupModeForModel,
+  resolveShotGroupReferenceMode,
+  supportsShotGroupMultiReferenceModes,
 } from '@/lib/shot-group/video-config'
 
 type AnyObj = Record<string, unknown>
@@ -318,12 +320,18 @@ function buildShotGroupReferenceSnapshot(input: {
   generationOptions: VideoOptionMap
 }) {
   const { shotGroup, modelId, generationOptions } = input
-  const mode = normalizeShotGroupVideoMode(shotGroup)
+  const mode = resolveShotGroupModeForModel({
+    ...shotGroup,
+    modelKey: modelId,
+  })
   return {
     mode,
-    referenceMode: mode === 'smart-multi-frame'
-      ? 'ark_content_multireference_smart'
-      : 'ark_content_multireference',
+    referenceMode: resolveShotGroupReferenceMode({
+      mode,
+      omniReferenceEnabled: shotGroup.omniReferenceEnabled,
+      smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+      modelKey: modelId,
+    }),
     videoModel: modelId,
     compositeImageUrl: shotGroup.compositeImageUrl,
     generateAudio: typeof generationOptions.generateAudio === 'boolean'
@@ -349,12 +357,10 @@ function normalizeDialogueLanguage(value: string | null | undefined): ShotGroupD
 }
 
 function buildShotGroupVideoSourceType(shotGroup: ShotGroupRecord, modelId: string) {
-  const provider = parseModelKeyStrict(modelId)?.provider
-  const mode = normalizeShotGroupVideoMode(shotGroup)
-  if (provider === 'ark') {
-    return mode === 'smart-multi-frame' ? 'ark_content_multireference_smart' : 'ark_content_multireference'
-  }
-  return 'composite_image_mvp'
+  return resolveShotGroupReferenceMode({
+    ...shotGroup,
+    modelKey: modelId,
+  })
 }
 
 function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReferenceContentItem[] | undefined {
@@ -362,7 +368,10 @@ function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReference
 
   const uniqueUrls = new Set<string>()
   const contentItems: ArkReferenceContentItem[] = []
-  const mode = normalizeShotGroupVideoMode(shotGroup)
+  const mode = resolveShotGroupModeForModel({
+    ...shotGroup,
+    modelKey: shotGroup.videoModel,
+  })
   const pushImage = (url: string | null | undefined, role?: 'reference_image') => {
     const signed = toSignedUrlIfCos(url, 3600)
     if (!signed || uniqueUrls.has(signed)) return
@@ -399,7 +408,10 @@ async function generateVideoForShotGroup(
   const prompt = buildShotGroupVideoPrompt({
     group: {
       ...shotGroup,
-      videoMode: normalizeShotGroupVideoMode(shotGroup),
+      videoMode: resolveShotGroupModeForModel({
+        ...shotGroup,
+        modelKey: modelId,
+      }),
       bgmEnabled: false,
       dialogueLanguage: normalizeDialogueLanguage(shotGroup.dialogueLanguage),
       items: shotGroup.items,
@@ -417,7 +429,7 @@ async function generateVideoForShotGroup(
     ? generationOptions.generateAudio
     : shotGroup.generateAudio
   const sourceType = buildShotGroupVideoSourceType(shotGroup, modelId)
-  const contentItems = parseModelKeyStrict(modelId)?.provider === 'ark'
+  const contentItems = supportsShotGroupMultiReferenceModes(modelId)
     ? buildShotGroupArkContentItems(shotGroup)
     : undefined
 

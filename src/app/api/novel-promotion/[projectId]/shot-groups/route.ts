@@ -7,7 +7,7 @@ import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import {
   deriveShotGroupModeFlags,
-  normalizeShotGroupVideoMode,
+  resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
 } from '@/lib/shot-group/video-config'
 
@@ -71,6 +71,18 @@ type ShotGroupItemFields = {
   }>
 }
 
+function parseShotGroupVideoConfig(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {}
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 function buildShotGroupVideoConfigSnapshot(input: {
   videoModel?: string | null
   generateAudio: boolean
@@ -82,7 +94,10 @@ function buildShotGroupVideoConfigSnapshot(input: {
 }) {
   return JSON.stringify({
     configVersion: 2,
-    mode: normalizeShotGroupVideoMode(input),
+    mode: resolveShotGroupModeForModel({
+      ...input,
+      modelKey: input.videoModel,
+    }),
     generateAudio: input.generateAudio,
     bgmEnabled: false,
     includeDialogue: input.includeDialogue,
@@ -153,11 +168,14 @@ export const POST = apiHandler(async (
   const videoPrompt = normalizeOptionalString(body.videoPrompt)
   const dialogueLanguage = normalizeDialogueLanguage(body.dialogueLanguage) || 'zh'
   const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-4')
-  const mode = normalizeShotGroupVideoMode(body)
-  const modeFlags = deriveShotGroupModeFlags(mode)
   const generateAudio = normalizeOptionalBoolean(body.generateAudio) ?? false
   const includeDialogue = normalizeOptionalBoolean(body.includeDialogue) ?? false
   const videoModel = normalizeOptionalString(body.videoModel)
+  const mode = resolveShotGroupModeForModel({
+    ...body,
+    modelKey: videoModel,
+  })
+  const modeFlags = deriveShotGroupModeFlags(mode)
   const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
 
   if (!episodeId) {
@@ -249,14 +267,19 @@ export const PATCH = apiHandler(async (
     throw new ApiError('NOT_FOUND')
   }
 
+  const currentVideoConfig = parseShotGroupVideoConfig(current.videoReferencesJson)
   const nextTemplateKey = body.templateKey !== undefined
     ? normalizeTemplateKey(body.templateKey)
     : current.templateKey
   const nextItemCount = getTemplateItemCount(nextTemplateKey)
-  const nextMode = normalizeShotGroupVideoMode({
+  const nextVideoModel = body.videoModel === undefined
+    ? current.videoModel
+    : normalizeOptionalString(body.videoModel)
+  const nextMode = resolveShotGroupModeForModel({
     mode: body.mode,
     omniReferenceEnabled: body.omniReferenceEnabled ?? current.omniReferenceEnabled,
     smartMultiFrameEnabled: body.smartMultiFrameEnabled ?? current.smartMultiFrameEnabled,
+    modelKey: nextVideoModel,
   })
   const nextModeFlags = deriveShotGroupModeFlags(nextMode)
   const nextGenerateAudio = body.generateAudio === undefined
@@ -268,10 +291,16 @@ export const PATCH = apiHandler(async (
   const nextDialogueLanguage = body.dialogueLanguage === undefined
     ? current.dialogueLanguage
     : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage)
-  const nextVideoModel = body.videoModel === undefined
-    ? current.videoModel
-    : normalizeOptionalString(body.videoModel)
-  const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
+  const previousGenerationOptions = sanitizeShotGroupGenerationOptions(currentVideoConfig.generationOptions)
+  const nextGenerationOptions = body.generationOptions === undefined
+    ? previousGenerationOptions
+    : {
+      ...previousGenerationOptions,
+      ...sanitizeShotGroupGenerationOptions(body.generationOptions),
+    }
+  const nextReferenceImageUrl = body.referenceImageUrl === undefined
+    ? current.referenceImageUrl
+    : normalizeOptionalString(body.referenceImageUrl)
 
   await prisma.$transaction(async (tx) => {
     const updateData = {
@@ -286,6 +315,10 @@ export const PATCH = apiHandler(async (
       compositeImageUrl: body.compositeImageUrl === undefined
         ? current.compositeImageUrl
         : normalizeOptionalString(body.compositeImageUrl),
+      referenceImageUrl: nextReferenceImageUrl,
+      referenceImageMediaId: body.referenceImageUrl === undefined
+        ? current.referenceImageMediaId
+        : null,
       generateAudio: nextGenerateAudio,
       bgmEnabled: false,
       includeDialogue: nextIncludeDialogue,
@@ -298,7 +331,7 @@ export const PATCH = apiHandler(async (
         includeDialogue: nextIncludeDialogue,
         dialogueLanguage: nextDialogueLanguage,
         ...nextModeFlags,
-        generationOptions,
+        generationOptions: nextGenerationOptions,
       }),
     } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput
 

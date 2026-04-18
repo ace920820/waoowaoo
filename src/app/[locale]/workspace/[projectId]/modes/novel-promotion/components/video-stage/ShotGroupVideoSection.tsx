@@ -17,7 +17,8 @@ import {
   readShotGroupCapabilitySelection,
   type ShotGroupVideoGenerationOptions,
   type ShotGroupVideoMode,
-  normalizeShotGroupVideoMode,
+  resolveShotGroupModeForModel,
+  supportsShotGroupMultiReferenceModes,
 } from '@/lib/shot-group/video-config'
 import {
   useCreateProjectShotGroup,
@@ -160,10 +161,11 @@ function toDraft(
     templateKey: (group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey,
     groupPrompt: group.groupPrompt || '',
     videoPrompt: group.videoPrompt || '',
-    mode: normalizeShotGroupVideoMode({
+    mode: resolveShotGroupModeForModel({
       mode: group.videoMode ?? savedConfig.mode,
       omniReferenceEnabled: group.omniReferenceEnabled,
       smartMultiFrameEnabled: group.smartMultiFrameEnabled,
+      modelKey: videoModel,
     }),
     generationOptions: {
       ...readShotGroupCapabilitySelection(capabilityOverrides, videoModel),
@@ -278,6 +280,7 @@ function renderVideoConfigFields(params: {
   const missingCapabilityFields = capabilityFields
     .filter((field) => field.options.length === 0 || field.value === undefined)
     .map((field) => field.field)
+  const supportsAdvancedReferenceModes = supportsShotGroupMultiReferenceModes(selectedVideoModelOption?.value || draft.videoModel)
 
   return (
     <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-4 space-y-4">
@@ -315,18 +318,25 @@ function renderVideoConfigFields(params: {
               videoCapabilities: nextOption?.capabilities?.video,
               pricingTiers: nextPricingTiers,
             })
-            onChange((current) => ({
-              ...current,
-              videoModel: modelKey,
-              generationOptions: normalizeVideoGenerationSelections({
-                definitions: nextDefinitions,
-                pricingTiers: nextPricingTiers,
-                selection: {
-                  ...readShotGroupCapabilitySelection(capabilityOverrides, modelKey),
-                  ...current.generationOptions,
-                },
-              }),
-            }))
+            onChange((current) => {
+              const nextMode = resolveShotGroupModeForModel({
+                mode: current.mode,
+                modelKey,
+              })
+              return {
+                ...current,
+                videoModel: modelKey,
+                mode: nextMode,
+                generationOptions: normalizeVideoGenerationSelections({
+                  definitions: nextDefinitions,
+                  pricingTiers: nextPricingTiers,
+                  selection: {
+                    ...readShotGroupCapabilitySelection(capabilityOverrides, modelKey),
+                    ...current.generationOptions,
+                  },
+                }),
+              }
+            })
           }}
           capabilityFields={capabilityFields.map((field) => ({
             field: field.field,
@@ -389,44 +399,50 @@ function renderVideoConfigFields(params: {
         </label>
       </div>
 
-      <div className="space-y-2">
-        <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考模式</div>
-        <div className="grid gap-2 md:grid-cols-2">
-          {([
-            {
-              value: 'omni-reference',
-              title: 'Omni reference mode',
-              description: '默认模式，只围绕 composite storyboard 作为统一视觉参考。',
-            },
-            {
-              value: 'smart-multi-frame',
-              title: 'Smart multi-frame mode',
-              description: '严格按槽位顺序推进，多帧衔接更强。',
-            },
-          ] as Array<{ value: ShotGroupVideoMode; title: string; description: string }>).map((option) => {
-            const isSelected = draft.mode === option.value
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => onChange((current) => ({ ...current, mode: option.value }))}
-                className={[
-                  'rounded-xl border px-3 py-3 text-left transition-colors',
-                  isSelected
-                    ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70'
-                    : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]',
-                ].join(' ')}
-              >
-                <div className="text-sm font-medium text-[var(--glass-text-primary)]">{option.title}</div>
-                <div className="mt-1 text-xs text-[var(--glass-text-secondary)]">{option.description}</div>
-              </button>
-            )
-          })}
+      {supportsAdvancedReferenceModes ? (
+        <div className="space-y-2">
+          <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考模式</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {([
+              {
+                value: 'omni-reference',
+                title: 'Omni reference mode',
+                description: '默认模式，只围绕 composite storyboard 作为统一视觉参考。',
+              },
+              {
+                value: 'smart-multi-frame',
+                title: 'Smart multi-frame mode',
+                description: '严格按槽位顺序推进，多帧衔接更强。',
+              },
+            ] as Array<{ value: ShotGroupVideoMode; title: string; description: string }>).map((option) => {
+              const isSelected = draft.mode === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onChange((current) => ({ ...current, mode: option.value }))}
+                  className={[
+                    'rounded-xl border px-3 py-3 text-left transition-colors',
+                    isSelected
+                      ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70'
+                      : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]',
+                  ].join(' ')}
+                >
+                  <div className="text-sm font-medium text-[var(--glass-text-primary)]">{option.title}</div>
+                  <div className="mt-1 text-xs text-[var(--glass-text-secondary)]">{option.description}</div>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
+          当前模型仅支持 composite storyboard 单参考输入，不提供 Omni reference / Smart multi-frame 切换。
+        </div>
+      )}
 
       <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
-        当前：音频 {normalizedGenerationOptions.generateAudio === true ? '开启（固定无背景音乐）' : '关闭'}；对白 {draft.includeDialogue ? `开启（${resolveDialogueLanguageLabel(draft.dialogueLanguage)}）` : '关闭'}；模式 {draft.mode === 'smart-multi-frame' ? 'Smart multi-frame' : 'Omni reference'}。
+        当前：音频 {normalizedGenerationOptions.generateAudio === true ? '开启（固定无背景音乐）' : '关闭'}；对白 {draft.includeDialogue ? `开启（${resolveDialogueLanguageLabel(draft.dialogueLanguage)}）` : '关闭'}；模式 {supportsAdvancedReferenceModes ? (draft.mode === 'smart-multi-frame' ? 'Smart multi-frame' : 'Omni reference') : 'Composite storyboard'}。
       </div>
     </div>
   )
@@ -507,7 +523,10 @@ export default function ShotGroupVideoSection({
             templateKey: (group.templateKey || existing.templateKey) as NovelPromotionShotGroupTemplateKey,
             groupPrompt: group.groupPrompt || '',
             videoPrompt: group.videoPrompt || existing.videoPrompt,
-            mode: normalizeShotGroupVideoMode(group),
+            mode: resolveShotGroupModeForModel({
+              ...group,
+              modelKey: group.videoModel || existing.videoModel || defaultVideoModel,
+            }),
             generationOptions: existing.generationOptions,
             includeDialogue: Boolean(group.includeDialogue),
             dialogueLanguage: normalizeDialogueLanguage(group.dialogueLanguage),

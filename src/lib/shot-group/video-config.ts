@@ -1,7 +1,9 @@
 import type { CapabilitySelections, CapabilityValue } from '@/lib/model-config-contract'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
 
 export type ShotGroupVideoMode = 'omni-reference' | 'smart-multi-frame'
 export type ShotGroupVideoGenerationOptions = Record<string, CapabilityValue>
+export type ShotGroupReferenceMode = 'ark_content_multireference' | 'ark_content_multireference_smart' | 'composite_image_mvp'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -29,6 +31,38 @@ export function deriveShotGroupModeFlags(mode: ShotGroupVideoMode) {
     omniReferenceEnabled: mode === 'omni-reference',
     smartMultiFrameEnabled: mode === 'smart-multi-frame',
   }
+}
+
+export function supportsShotGroupMultiReferenceModes(modelKey: string | null | undefined) {
+  return parseModelKeyStrict(modelKey || '')?.provider === 'ark'
+}
+
+export function resolveShotGroupModeForModel(input: {
+  mode?: unknown
+  omniReferenceEnabled?: unknown
+  smartMultiFrameEnabled?: unknown
+  modelKey?: string | null
+}): ShotGroupVideoMode {
+  const normalized = normalizeShotGroupVideoMode(input)
+  if (!supportsShotGroupMultiReferenceModes(input.modelKey)) {
+    return 'omni-reference'
+  }
+  return normalized
+}
+
+export function resolveShotGroupReferenceMode(input: {
+  mode?: unknown
+  omniReferenceEnabled?: unknown
+  smartMultiFrameEnabled?: unknown
+  modelKey?: string | null
+}): ShotGroupReferenceMode {
+  const mode = resolveShotGroupModeForModel(input)
+  if (!supportsShotGroupMultiReferenceModes(input.modelKey)) {
+    return 'composite_image_mvp'
+  }
+  return mode === 'smart-multi-frame'
+    ? 'ark_content_multireference_smart'
+    : 'ark_content_multireference'
 }
 
 export function sanitizeShotGroupGenerationOptions(
