@@ -1,5 +1,6 @@
 import type { NovelPromotionShotGroup, NovelPromotionShotGroupItem } from '@/types/project'
 import type { ShotGroupTemplateSpec } from './template-registry'
+import { normalizeShotGroupVideoMode } from './video-config'
 
 function stringifyItems(items: NovelPromotionShotGroupItem[] | undefined, template: ShotGroupTemplateSpec) {
   const normalized = Array.from({ length: template.slotCount }, (_, index) => {
@@ -30,12 +31,6 @@ function buildAudioDirective(group: NovelPromotionShotGroup, locale: string) {
     return locale === 'en'
       ? 'Audio: disable generated audio.'
       : '音频策略：不要生成音频轨道。'
-  }
-
-  if (group.bgmEnabled) {
-    return locale === 'en'
-      ? 'Audio: generate audio with ambient sound design and suitable background music when appropriate.'
-      : '音频策略：生成音频，可包含环境声、动作声与贴合节奏的背景音乐。'
   }
 
   return locale === 'en'
@@ -103,19 +98,25 @@ export function buildShotGroupVideoPrompt(params: {
   locale: string
 }) {
   const title = params.group.title?.trim() || '未命名镜头组'
-  const groupPrompt = params.group.groupPrompt?.trim() || '保持同一场景与角色连续性，强调镜头之间的镜头语言推进。'
-  const videoPrompt = params.group.videoPrompt?.trim() || groupPrompt
+  const primaryPrompt = params.group.videoPrompt?.trim()
+    || params.group.groupPrompt?.trim()
+    || '保持同一场景与角色连续性，强调镜头之间的镜头语言推进。'
   const orderedShots = stringifyItems(params.group.items, params.template)
   const audioDirective = buildAudioDirective(params.group, params.locale)
   const dialogueDirective = buildDialogueDirective(params.group, params.locale)
-  const referenceDirective = params.group.omniReferenceEnabled
+  const mode = normalizeShotGroupVideoMode({
+    mode: params.group.videoMode,
+    omniReferenceEnabled: params.group.omniReferenceEnabled,
+    smartMultiFrameEnabled: params.group.smartMultiFrameEnabled,
+  })
+  const referenceDirective = mode === 'omni-reference'
     ? (params.locale === 'en'
-      ? 'Reference strategy: use the storyboard composite plus any reference image and ordered slot references together through multimodal references, keeping character, wardrobe, environment, and lighting continuity.'
-      : '参考策略：综合使用分镜参考表、辅助参考图和有序槽位参考图，优先保持角色、服装、环境与光线连续性。')
+      ? 'Reference strategy: use the composite storyboard as the required omni reference for the whole clip.'
+      : '参考策略：使用 composite storyboard 作为整段视频的必选 omni reference。')
     : (params.locale === 'en'
-      ? 'Reference strategy: use the storyboard composite as the primary visual reference.'
-      : '参考策略：以分镜参考表作为主要视觉参考。')
-  const multiFrameDirective = params.group.smartMultiFrameEnabled
+      ? 'Reference strategy: use the composite storyboard as the source for smart multi-frame progression.'
+      : '参考策略：以 composite storyboard 作为 smart multi-frame 推进依据。')
+  const multiFrameDirective = mode === 'smart-multi-frame'
     ? (params.locale === 'en'
       ? 'Multi-shot strategy: follow the slot order strictly, letting each beat transition naturally into the next within one coherent clip.'
       : '多镜头策略：严格按照槽位顺序推进，让每个镜头节拍自然衔接成一个连贯片段。')
@@ -128,8 +129,7 @@ export function buildShotGroupVideoPrompt(params: {
       `Generate one longer video for shot group: ${title}.`,
       'Use Ark official content[] multimodal inputs for visual references.',
       `Template: ${params.template.label}. Keep the ordered shot beats, camera progression, and scene continuity.`,
-      `Group prompt: ${groupPrompt}`,
-      `Video prompt: ${videoPrompt}`,
+      `Prompt: ${primaryPrompt}`,
       audioDirective,
       dialogueDirective,
       referenceDirective,
@@ -144,8 +144,7 @@ export function buildShotGroupVideoPrompt(params: {
     `请为镜头组《${title}》生成一段完整长视频。`,
     '请使用 Ark 官方 content[] 多模态输入组织视觉参考。',
     `模板：${params.template.label}。请保留组内镜头顺序、镜头推进节奏和场景连续性。`,
-    `组提示词：${groupPrompt}`,
-    `视频提示词：${videoPrompt}`,
+    `提示词：${primaryPrompt}`,
     audioDirective,
     dialogueDirective,
     referenceDirective,

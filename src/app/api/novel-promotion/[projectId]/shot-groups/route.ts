@@ -5,6 +5,11 @@ import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
+import {
+  deriveShotGroupModeFlags,
+  normalizeShotGroupVideoMode,
+  sanitizeShotGroupGenerationOptions,
+} from '@/lib/shot-group/video-config'
 
 const TEMPLATE_ITEM_COUNT: Record<string, number> = {
   'grid-4': 4,
@@ -66,6 +71,27 @@ type ShotGroupItemFields = {
   }>
 }
 
+function buildShotGroupVideoConfigSnapshot(input: {
+  videoModel?: string | null
+  generateAudio: boolean
+  includeDialogue: boolean
+  dialogueLanguage: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled: boolean
+  smartMultiFrameEnabled: boolean
+  generationOptions?: Record<string, string | number | boolean>
+}) {
+  return JSON.stringify({
+    configVersion: 2,
+    mode: normalizeShotGroupVideoMode(input),
+    generateAudio: input.generateAudio,
+    bgmEnabled: false,
+    includeDialogue: input.includeDialogue,
+    dialogueLanguage: input.dialogueLanguage,
+    ...(input.videoModel ? { videoModel: input.videoModel } : {}),
+    generationOptions: sanitizeShotGroupGenerationOptions(input.generationOptions),
+  })
+}
+
 async function listShotGroups(projectId: string, episodeId: string) {
   const shotGroups = await prisma.novelPromotionShotGroup.findMany({
     where: {
@@ -125,9 +151,14 @@ export const POST = apiHandler(async (
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : '未命名镜头组'
   const groupPrompt = normalizeOptionalString(body.groupPrompt)
   const videoPrompt = normalizeOptionalString(body.videoPrompt)
-  const referenceImageUrl = normalizeOptionalString(body.referenceImageUrl)
   const dialogueLanguage = normalizeDialogueLanguage(body.dialogueLanguage) || 'zh'
   const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-4')
+  const mode = normalizeShotGroupVideoMode(body)
+  const modeFlags = deriveShotGroupModeFlags(mode)
+  const generateAudio = normalizeOptionalBoolean(body.generateAudio) ?? false
+  const includeDialogue = normalizeOptionalBoolean(body.includeDialogue) ?? false
+  const videoModel = normalizeOptionalString(body.videoModel)
+  const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
 
   if (!episodeId) {
     throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
@@ -165,13 +196,20 @@ export const POST = apiHandler(async (
       templateKey,
       groupPrompt,
       videoPrompt,
-      referenceImageUrl,
-      generateAudio: normalizeOptionalBoolean(body.generateAudio) ?? false,
-      bgmEnabled: normalizeOptionalBoolean(body.bgmEnabled) ?? false,
-      includeDialogue: normalizeOptionalBoolean(body.includeDialogue) ?? false,
+      generateAudio,
+      bgmEnabled: false,
+      includeDialogue,
       dialogueLanguage,
-      omniReferenceEnabled: normalizeOptionalBoolean(body.omniReferenceEnabled) ?? false,
-      smartMultiFrameEnabled: normalizeOptionalBoolean(body.smartMultiFrameEnabled) ?? false,
+      ...modeFlags,
+      videoModel,
+      videoReferencesJson: buildShotGroupVideoConfigSnapshot({
+        videoModel,
+        generateAudio,
+        includeDialogue,
+        dialogueLanguage,
+        ...modeFlags,
+        generationOptions,
+      }),
       createdAt: newCreatedAt,
       items: {
         create: buildDefaultItems(templateKey),
@@ -215,6 +253,25 @@ export const PATCH = apiHandler(async (
     ? normalizeTemplateKey(body.templateKey)
     : current.templateKey
   const nextItemCount = getTemplateItemCount(nextTemplateKey)
+  const nextMode = normalizeShotGroupVideoMode({
+    mode: body.mode,
+    omniReferenceEnabled: body.omniReferenceEnabled ?? current.omniReferenceEnabled,
+    smartMultiFrameEnabled: body.smartMultiFrameEnabled ?? current.smartMultiFrameEnabled,
+  })
+  const nextModeFlags = deriveShotGroupModeFlags(nextMode)
+  const nextGenerateAudio = body.generateAudio === undefined
+    ? current.generateAudio
+    : (normalizeOptionalBoolean(body.generateAudio) ?? current.generateAudio)
+  const nextIncludeDialogue = body.includeDialogue === undefined
+    ? current.includeDialogue
+    : (normalizeOptionalBoolean(body.includeDialogue) ?? current.includeDialogue)
+  const nextDialogueLanguage = body.dialogueLanguage === undefined
+    ? current.dialogueLanguage
+    : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage)
+  const nextVideoModel = body.videoModel === undefined
+    ? current.videoModel
+    : normalizeOptionalString(body.videoModel)
+  const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
 
   await prisma.$transaction(async (tx) => {
     const updateData = {
@@ -226,33 +283,23 @@ export const PATCH = apiHandler(async (
       videoPrompt: body.videoPrompt === undefined
         ? current.videoPrompt
         : normalizeOptionalString(body.videoPrompt),
-      referenceImageUrl: body.referenceImageUrl === undefined
-        ? current.referenceImageUrl
-        : normalizeOptionalString(body.referenceImageUrl),
       compositeImageUrl: body.compositeImageUrl === undefined
         ? current.compositeImageUrl
         : normalizeOptionalString(body.compositeImageUrl),
-      generateAudio: body.generateAudio === undefined
-        ? current.generateAudio
-        : (normalizeOptionalBoolean(body.generateAudio) ?? current.generateAudio),
-      bgmEnabled: body.bgmEnabled === undefined
-        ? current.bgmEnabled
-        : (normalizeOptionalBoolean(body.bgmEnabled) ?? current.bgmEnabled),
-      includeDialogue: body.includeDialogue === undefined
-        ? current.includeDialogue
-        : (normalizeOptionalBoolean(body.includeDialogue) ?? current.includeDialogue),
-      dialogueLanguage: body.dialogueLanguage === undefined
-        ? current.dialogueLanguage
-        : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage),
-      omniReferenceEnabled: body.omniReferenceEnabled === undefined
-        ? current.omniReferenceEnabled
-        : (normalizeOptionalBoolean(body.omniReferenceEnabled) ?? current.omniReferenceEnabled),
-      smartMultiFrameEnabled: body.smartMultiFrameEnabled === undefined
-        ? current.smartMultiFrameEnabled
-        : (normalizeOptionalBoolean(body.smartMultiFrameEnabled) ?? current.smartMultiFrameEnabled),
-      videoModel: body.videoModel === undefined
-        ? current.videoModel
-        : normalizeOptionalString(body.videoModel),
+      generateAudio: nextGenerateAudio,
+      bgmEnabled: false,
+      includeDialogue: nextIncludeDialogue,
+      dialogueLanguage: nextDialogueLanguage,
+      ...nextModeFlags,
+      videoModel: nextVideoModel,
+      videoReferencesJson: buildShotGroupVideoConfigSnapshot({
+        videoModel: nextVideoModel,
+        generateAudio: nextGenerateAudio,
+        includeDialogue: nextIncludeDialogue,
+        dialogueLanguage: nextDialogueLanguage,
+        ...nextModeFlags,
+        generationOptions,
+      }),
     } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput
 
     await tx.novelPromotionShotGroup.update({

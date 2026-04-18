@@ -3,7 +3,10 @@ import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import { apiFetch } from '@/lib/api-fetch'
-import type { NovelPromotionDialogueLanguage } from '@/types/project'
+import type {
+    NovelPromotionDialogueLanguage,
+    NovelPromotionShotGroupVideoMode,
+} from '@/types/project'
 import {
     clearTaskTargetOverlay,
     upsertTaskTargetOverlay,
@@ -353,11 +356,10 @@ export function useCreateProjectShotGroup(projectId: string, episodeId: string) 
             videoPrompt?: string | null
             referenceImageUrl?: string | null
             generateAudio?: boolean
-            bgmEnabled?: boolean
             includeDialogue?: boolean
             dialogueLanguage?: NovelPromotionDialogueLanguage
-            omniReferenceEnabled?: boolean
-            smartMultiFrameEnabled?: boolean
+            mode?: NovelPromotionShotGroupVideoMode
+            generationOptions?: Record<string, string | number | boolean>
         }) => {
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
                 method: 'POST',
@@ -383,12 +385,11 @@ export function useUpdateProjectShotGroup(projectId: string, episodeId: string) 
       referenceImageUrl?: string | null
       compositeImageUrl?: string | null
       generateAudio?: boolean
-      bgmEnabled?: boolean
       includeDialogue?: boolean
       dialogueLanguage?: NovelPromotionDialogueLanguage
-      omniReferenceEnabled?: boolean
-      smartMultiFrameEnabled?: boolean
+      mode?: NovelPromotionShotGroupVideoMode
       videoModel?: string | null
+      generationOptions?: Record<string, string | number | boolean>
     }) => {
       return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
         method: 'PATCH',
@@ -441,6 +442,7 @@ export function useGenerateProjectShotGroupVideo(projectId: string, episodeId: s
         mutationFn: async (payload: {
             shotGroupId: string
             videoModel?: string
+            mode?: NovelPromotionShotGroupVideoMode
             generationOptions?: Record<string, string | number | boolean>
         }) => {
             const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-video`, {

@@ -1,10 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
+import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
 import { GlassButton } from '@/components/ui/primitives'
 import { resolveErrorDisplay } from '@/lib/errors/display'
+import type { CapabilitySelections, CapabilityValue } from '@/lib/model-config-contract'
+import {
+  normalizeVideoGenerationSelections,
+  resolveEffectiveVideoCapabilityDefinitions,
+  resolveEffectiveVideoCapabilityFields,
+} from '@/lib/model-capabilities/video-effective'
+import { projectVideoPricingTiersByFixedSelections } from '@/lib/model-pricing/video-tier'
+import {
+  readShotGroupCapabilitySelection,
+  type ShotGroupVideoGenerationOptions,
+  type ShotGroupVideoMode,
+  normalizeShotGroupVideoMode,
+} from '@/lib/shot-group/video-config'
 import {
   useCreateProjectShotGroup,
   useGenerateProjectShotGroupVideo,
@@ -19,6 +33,7 @@ import type {
   NovelPromotionDialogueLanguage,
   NovelPromotionShotGroup,
   NovelPromotionShotGroupTemplateKey,
+  NovelPromotionShotGroupVideoMode,
 } from '@/types/project'
 import {
   downloadFileFromUrl,
@@ -31,6 +46,7 @@ interface ShotGroupVideoSectionProps {
   shotGroups?: NovelPromotionShotGroup[]
   defaultVideoModel: string
   videoModelOptions?: VideoModelOption[]
+  capabilityOverrides?: CapabilitySelections
 }
 
 interface VideoDraftState {
@@ -38,13 +54,10 @@ interface VideoDraftState {
   templateKey: NovelPromotionShotGroupTemplateKey
   groupPrompt: string
   videoPrompt: string
-  referenceImageUrl: string
-  generateAudio: boolean
-  bgmEnabled: boolean
+  mode: NovelPromotionShotGroupVideoMode
+  generationOptions: ShotGroupVideoGenerationOptions
   includeDialogue: boolean
   dialogueLanguage: NovelPromotionDialogueLanguage
-  omniReferenceEnabled: boolean
-  smartMultiFrameEnabled: boolean
   videoModel: string
   pendingCompositeFile: File | null
 }
@@ -54,6 +67,7 @@ const TEMPLATE_OPTIONS: Array<{ value: NovelPromotionShotGroupTemplateKey; label
   { value: 'grid-6', label: '6 格', helper: '适合转场推进' },
   { value: 'grid-9', label: '9 格', helper: '适合完整情绪段落' },
 ]
+const SHOT_GROUP_VISIBLE_CAPABILITY_FIELDS = new Set(['duration', 'resolution', 'generateAudio'])
 
 function resolveStatusLabel(params: {
   hasComposite: boolean
@@ -99,20 +113,61 @@ function normalizeDialogueLanguage(value: string | null | undefined): NovelPromo
   return value === 'en' || value === 'ja' ? value : 'zh'
 }
 
-function toDraft(group: NovelPromotionShotGroup, defaultVideoModel: string): VideoDraftState {
+function parseSavedVideoConfig(group: NovelPromotionShotGroup) {
+  if (!group.videoReferencesJson) return {}
+  try {
+    const parsed = JSON.parse(group.videoReferencesJson) as Record<string, unknown>
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function parseGenerationOptionValue(rawValue: string, sample: CapabilityValue): CapabilityValue {
+  if (typeof sample === 'number') return Number(rawValue)
+  if (typeof sample === 'boolean') return rawValue === 'true'
+  return rawValue
+}
+
+function toCapabilityFieldLabel(field: string) {
+  return field.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase())
+}
+
+function toDraft(
+  group: NovelPromotionShotGroup,
+  defaultVideoModel: string,
+  capabilityOverrides?: CapabilitySelections,
+): VideoDraftState {
+  const savedConfig = parseSavedVideoConfig(group)
+  const savedModel = typeof savedConfig.videoModel === 'string' ? savedConfig.videoModel : null
+  const videoModel = group.videoModel || savedModel || defaultVideoModel
+  const savedGenerationOptions = savedConfig.generationOptions as Record<string, unknown> | undefined
   return {
     title: group.title || buildDefaultTitle((group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey),
     templateKey: (group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey,
     groupPrompt: group.groupPrompt || '',
     videoPrompt: group.videoPrompt || '',
-    referenceImageUrl: group.referenceImageUrl || '',
-    generateAudio: Boolean(group.generateAudio),
-    bgmEnabled: Boolean(group.bgmEnabled),
+    mode: normalizeShotGroupVideoMode({
+      mode: group.videoMode ?? savedConfig.mode,
+      omniReferenceEnabled: group.omniReferenceEnabled,
+      smartMultiFrameEnabled: group.smartMultiFrameEnabled,
+    }),
+    generationOptions: {
+      ...readShotGroupCapabilitySelection(capabilityOverrides, videoModel),
+      ...((savedGenerationOptions && typeof savedGenerationOptions === 'object' && !Array.isArray(savedGenerationOptions))
+        ? Object.fromEntries(
+          Object.entries(savedGenerationOptions).filter(([, value]) =>
+            typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean',
+          ),
+        )
+        : {}),
+      ...(typeof savedConfig.generateAudio === 'boolean'
+        ? { generateAudio: savedConfig.generateAudio }
+        : {}),
+    },
     includeDialogue: Boolean(group.includeDialogue),
     dialogueLanguage: normalizeDialogueLanguage(group.dialogueLanguage),
-    omniReferenceEnabled: Boolean(group.omniReferenceEnabled),
-    smartMultiFrameEnabled: Boolean(group.smartMultiFrameEnabled),
-    videoModel: group.videoModel || defaultVideoModel,
+    videoModel,
     pendingCompositeFile: null,
   }
 }
@@ -127,35 +182,96 @@ function buildPendingFilePreview(file: File | null) {
   return URL.createObjectURL(file)
 }
 
-function isPreviewableImageUrl(value: string | null | undefined) {
-  if (!value) return false
-  return value.startsWith('http://')
-    || value.startsWith('https://')
-    || value.startsWith('/')
-    || value.startsWith('blob:')
-    || value.startsWith('data:')
+function buildShotGroupPayload(draft: VideoDraftState, episodeId?: string) {
+  const effectivePrompt = draft.videoPrompt.trim() || draft.groupPrompt.trim() || null
+  const generateAudio = typeof draft.generationOptions.generateAudio === 'boolean'
+    ? draft.generationOptions.generateAudio
+    : false
+  return {
+    ...(episodeId ? { episodeId } : {}),
+    title: draft.title.trim() || buildDefaultTitle(draft.templateKey),
+    templateKey: draft.templateKey,
+    groupPrompt: effectivePrompt,
+    videoPrompt: effectivePrompt,
+    generateAudio,
+    includeDialogue: draft.includeDialogue,
+    dialogueLanguage: draft.dialogueLanguage,
+    mode: draft.mode,
+    videoModel: draft.videoModel || null,
+    generationOptions: draft.generationOptions,
+  }
 }
 
-function renderAdvancedParameterFields(params: {
+function getDraftMissingCapabilityFields(params: {
   draft: VideoDraftState
-  onChange: (updater: (draft: VideoDraftState) => VideoDraftState) => void
-  referenceImage: {
-    previewUrl: string | null
-    inputRef: (node: HTMLInputElement | null) => void
-    onSelectFile: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>
-    onTriggerUpload: () => void
-    onClear: () => void
-    isUploading: boolean
-  }
+  resolvedVideoModelOptions: VideoModelOption[]
+  capabilityOverrides?: CapabilitySelections
 }) {
-  const { draft, onChange, referenceImage } = params
+  const selectedVideoModelOption = params.resolvedVideoModelOptions.find((option) => option.value === params.draft.videoModel)
+  const pricingTiers = projectVideoPricingTiersByFixedSelections({
+    tiers: selectedVideoModelOption?.videoPricingTiers ?? [],
+    fixedSelections: { generationMode: 'normal' },
+  })
+  const capabilityDefinitions = resolveEffectiveVideoCapabilityDefinitions({
+    videoCapabilities: selectedVideoModelOption?.capabilities?.video,
+    pricingTiers,
+  })
+  const capabilityFields = resolveEffectiveVideoCapabilityFields({
+    definitions: capabilityDefinitions,
+    pricingTiers,
+    selection: {
+      ...readShotGroupCapabilitySelection(params.capabilityOverrides, params.draft.videoModel),
+      ...params.draft.generationOptions,
+    },
+  })
+  return capabilityFields
+    .filter((field) => SHOT_GROUP_VISIBLE_CAPABILITY_FIELDS.has(field.field))
+    .filter((field) => field.options.length === 0 || field.value === undefined)
+    .map((field) => field.field)
+}
+
+function renderVideoConfigFields(params: {
+  draft: VideoDraftState
+  resolvedVideoModelOptions: VideoModelOption[]
+  capabilityOverrides?: CapabilitySelections
+  onChange: (updater: (draft: VideoDraftState) => VideoDraftState) => void
+}) {
+  const { draft, resolvedVideoModelOptions, capabilityOverrides, onChange } = params
+  const selectedVideoModelOption = resolvedVideoModelOptions.find((option) => option.value === draft.videoModel)
+    || resolvedVideoModelOptions[0]
+  const pricingTiers = projectVideoPricingTiersByFixedSelections({
+    tiers: selectedVideoModelOption?.videoPricingTiers ?? [],
+    fixedSelections: {
+      generationMode: 'normal',
+    },
+  })
+  const capabilityDefinitions = resolveEffectiveVideoCapabilityDefinitions({
+    videoCapabilities: selectedVideoModelOption?.capabilities?.video,
+    pricingTiers,
+  })
+  const normalizedGenerationOptions = normalizeVideoGenerationSelections({
+    definitions: capabilityDefinitions,
+    pricingTiers,
+    selection: {
+      ...readShotGroupCapabilitySelection(capabilityOverrides, selectedVideoModelOption?.value || ''),
+      ...draft.generationOptions,
+    },
+  })
+  const capabilityFields = resolveEffectiveVideoCapabilityFields({
+    definitions: capabilityDefinitions,
+    pricingTiers,
+    selection: normalizedGenerationOptions,
+  }).filter((field) => SHOT_GROUP_VISIBLE_CAPABILITY_FIELDS.has(field.field))
+  const missingCapabilityFields = capabilityFields
+    .filter((field) => field.options.length === 0 || field.value === undefined)
+    .map((field) => field.field)
 
   return (
     <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-4 space-y-4">
       <div className="space-y-1">
         <div className="text-sm font-medium text-[var(--glass-text-primary)]">高级生成参数</div>
         <div className="text-xs text-[var(--glass-text-tertiary)]">
-          这里配置多镜头视频真正提交给 Seedance / Ark 的输入策略。`视频提示词` 会作为更直接的视频生成文本输入，`组提示词` 保留为组级叙事约束。
+          这里直接复用单镜头视频的模型能力配置方式。核心参数统一收敛为时长、分辨率和音频开关。
         </div>
       </div>
 
@@ -171,85 +287,67 @@ function renderAdvancedParameterFields(params: {
       </label>
 
       <div className="space-y-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考图</div>
-            <div className="text-xs text-[var(--glass-text-tertiary)]">可上传一张辅助参考图；URL 输入保留为补充。</div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={referenceImage.inputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={referenceImage.onSelectFile}
-            />
-            <GlassButton
-              size="sm"
-              variant="ghost"
-              onClick={referenceImage.onTriggerUpload}
-              disabled={referenceImage.isUploading}
-            >
-              <AppIcon name="upload" className="h-3.5 w-3.5" />
-              <span>{referenceImage.isUploading ? '上传中...' : (draft.referenceImageUrl ? '更换参考图' : '上传参考图')}</span>
-            </GlassButton>
-            {draft.referenceImageUrl ? (
-              <GlassButton size="sm" variant="ghost" onClick={referenceImage.onClear}>
-                <AppIcon name="close" className="h-3.5 w-3.5" />
-                <span>清空</span>
-              </GlassButton>
-            ) : null}
-          </div>
-        </div>
-
-        <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
-          <span>参考图 URL</span>
-          <input
-            value={draft.referenceImageUrl}
-            onChange={(event) => onChange((current) => ({ ...current, referenceImageUrl: event.target.value }))}
-            className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
-            placeholder="可选：补充参考图 URL；omni 参考模式开启后会优先纳入 Ark content[] reference_image。"
-          />
-        </label>
-
-        {referenceImage.previewUrl ? (
-          <div className="space-y-2">
-            <div className="text-xs text-[var(--glass-text-secondary)]">参考图预览</div>
-            <img
-              src={referenceImage.previewUrl}
-              alt="参考图预览"
-              className="h-[140px] w-full rounded-xl border border-[var(--glass-stroke-base)] object-cover"
-            />
+        <div className="text-sm font-medium text-[var(--glass-text-primary)]">视频模型</div>
+        <ModelCapabilityDropdown
+          compact
+          models={resolvedVideoModelOptions}
+          value={selectedVideoModelOption?.value || draft.videoModel || undefined}
+          onModelChange={(modelKey) => {
+            const nextOption = resolvedVideoModelOptions.find((option) => option.value === modelKey)
+            const nextPricingTiers = projectVideoPricingTiersByFixedSelections({
+              tiers: nextOption?.videoPricingTiers ?? [],
+              fixedSelections: { generationMode: 'normal' },
+            })
+            const nextDefinitions = resolveEffectiveVideoCapabilityDefinitions({
+              videoCapabilities: nextOption?.capabilities?.video,
+              pricingTiers: nextPricingTiers,
+            })
+            onChange((current) => ({
+              ...current,
+              videoModel: modelKey,
+              generationOptions: normalizeVideoGenerationSelections({
+                definitions: nextDefinitions,
+                pricingTiers: nextPricingTiers,
+                selection: {
+                  ...readShotGroupCapabilitySelection(capabilityOverrides, modelKey),
+                  ...current.generationOptions,
+                },
+              }),
+            }))
+          }}
+          capabilityFields={capabilityFields.map((field) => ({
+            field: field.field,
+            label: toCapabilityFieldLabel(field.field),
+            options: field.options,
+            disabledOptions: capabilityDefinitions
+              .find((definition) => definition.field === field.field)
+              ?.options.filter((option) => !field.options.includes(option)),
+          }))}
+          capabilityOverrides={normalizedGenerationOptions}
+          onCapabilityChange={(field, rawValue, sample) => {
+            onChange((current) => ({
+              ...current,
+              generationOptions: normalizeVideoGenerationSelections({
+                definitions: capabilityDefinitions,
+                pricingTiers,
+                selection: {
+                  ...current.generationOptions,
+                  [field]: parseGenerationOptionValue(rawValue, sample),
+                },
+                pinnedFields: [field],
+              }),
+            }))
+          }}
+          placeholder="选择视频模型"
+        />
+        {missingCapabilityFields.length > 0 ? (
+          <div className="rounded-xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-2 text-xs text-[var(--glass-tone-warning-fg)]">
+            当前模型还有未完成的视频能力配置：{missingCapabilityFields.join('、')}
           </div>
         ) : null}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>生成音频</span>
-          <input
-            type="checkbox"
-            checked={draft.generateAudio}
-            onChange={(event) => onChange((current) => ({
-              ...current,
-              generateAudio: event.target.checked,
-              bgmEnabled: event.target.checked ? current.bgmEnabled : false,
-            }))}
-            className="h-4 w-4"
-          />
-        </label>
-
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>背景音乐</span>
-          <input
-            type="checkbox"
-            checked={draft.bgmEnabled}
-            disabled={!draft.generateAudio}
-            onChange={(event) => onChange((current) => ({ ...current, bgmEnabled: event.target.checked }))}
-            className="h-4 w-4"
-          />
-        </label>
-
         <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
           <span>包含台词</span>
           <input
@@ -276,30 +374,46 @@ function renderAdvancedParameterFields(params: {
             <option value="ja">日文</option>
           </select>
         </label>
+      </div>
 
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>全能参考模式</span>
-          <input
-            type="checkbox"
-            checked={draft.omniReferenceEnabled}
-            onChange={(event) => onChange((current) => ({ ...current, omniReferenceEnabled: event.target.checked }))}
-            className="h-4 w-4"
-          />
-        </label>
-
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>智能多帧模式</span>
-          <input
-            type="checkbox"
-            checked={draft.smartMultiFrameEnabled}
-            onChange={(event) => onChange((current) => ({ ...current, smartMultiFrameEnabled: event.target.checked }))}
-            className="h-4 w-4"
-          />
-        </label>
+      <div className="space-y-2">
+        <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考模式</div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {([
+            {
+              value: 'omni-reference',
+              title: 'Omni reference mode',
+              description: '默认模式，只围绕 composite storyboard 作为统一视觉参考。',
+            },
+            {
+              value: 'smart-multi-frame',
+              title: 'Smart multi-frame mode',
+              description: '严格按槽位顺序推进，多帧衔接更强。',
+            },
+          ] as Array<{ value: ShotGroupVideoMode; title: string; description: string }>).map((option) => {
+            const isSelected = draft.mode === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onChange((current) => ({ ...current, mode: option.value }))}
+                className={[
+                  'rounded-xl border px-3 py-3 text-left transition-colors',
+                  isSelected
+                    ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70'
+                    : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]',
+                ].join(' ')}
+              >
+                <div className="text-sm font-medium text-[var(--glass-text-primary)]">{option.title}</div>
+                <div className="mt-1 text-xs text-[var(--glass-text-secondary)]">{option.description}</div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
-        当前：音频 {draft.generateAudio ? `开启${draft.bgmEnabled ? '，允许背景音乐' : '，不含背景音乐'}` : '关闭'}；对白 {draft.includeDialogue ? `开启（${resolveDialogueLanguageLabel(draft.dialogueLanguage)}）` : '关闭'}；参考 {draft.omniReferenceEnabled ? 'Ark content[] 多参考' : '仅分镜参考表'}；多帧策略 {draft.smartMultiFrameEnabled ? '增强' : '基础'}。
+        当前：音频 {normalizedGenerationOptions.generateAudio === true ? '开启（固定无背景音乐）' : '关闭'}；对白 {draft.includeDialogue ? `开启（${resolveDialogueLanguageLabel(draft.dialogueLanguage)}）` : '关闭'}；模式 {draft.mode === 'smart-multi-frame' ? 'Smart multi-frame' : 'Omni reference'}。
       </div>
     </div>
   )
@@ -311,6 +425,7 @@ export default function ShotGroupVideoSection({
   shotGroups = [],
   defaultVideoModel,
   videoModelOptions = [],
+  capabilityOverrides,
 }: ShotGroupVideoSectionProps) {
   const createMutation = useCreateProjectShotGroup(projectId, episodeId)
   const updateMutation = useUpdateProjectShotGroup(projectId, episodeId)
@@ -324,13 +439,10 @@ export default function ShotGroupVideoSection({
     templateKey: 'grid-9',
     groupPrompt: '',
     videoPrompt: '',
-    referenceImageUrl: '',
-    generateAudio: false,
-    bgmEnabled: false,
+    mode: 'omni-reference',
+    generationOptions: readShotGroupCapabilitySelection(capabilityOverrides, defaultVideoModel),
     includeDialogue: false,
     dialogueLanguage: 'zh',
-    omniReferenceEnabled: false,
-    smartMultiFrameEnabled: true,
     videoModel: defaultVideoModel,
     pendingCompositeFile: null,
   })
@@ -338,23 +450,15 @@ export default function ShotGroupVideoSection({
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
   const [generatingGroupId, setGeneratingGroupId] = useState<string | null>(null)
   const [savingTailFrameGroupId, setSavingTailFrameGroupId] = useState<string | null>(null)
-  const [uploadingReferenceGroupId, setUploadingReferenceGroupId] = useState<string | null>(null)
-  const [isUploadingCreateReference, setIsUploadingCreateReference] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [groupErrors, setGroupErrors] = useState<Record<string, string | null>>({})
   const [groupPendingPreviewUrls, setGroupPendingPreviewUrls] = useState<Record<string, string>>({})
-  const [groupReferencePreviewUrls, setGroupReferencePreviewUrls] = useState<Record<string, string>>({})
   const [createPendingPreviewUrl, setCreatePendingPreviewUrl] = useState<string | null>(null)
-  const [createReferencePreviewUrl, setCreateReferencePreviewUrl] = useState<string | null>(null)
   const [createShotGroupId, setCreateShotGroupId] = useState<string | null>(null)
   const compositeFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-  const referenceFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const createFileInputRef = useRef<HTMLInputElement | null>(null)
-  const createReferenceFileInputRef = useRef<HTMLInputElement | null>(null)
   const groupPendingPreviewUrlsRef = useRef<Record<string, string>>({})
-  const groupReferencePreviewUrlsRef = useRef<Record<string, string>>({})
   const createPendingPreviewUrlRef = useRef<string | null>(null)
-  const createReferencePreviewUrlRef = useRef<string | null>(null)
 
   const resolvedVideoModelOptions = useMemo(
     () => (videoModelOptions.length > 0 ? videoModelOptions : [{ value: defaultVideoModel, label: defaultVideoModel }]),
@@ -381,35 +485,35 @@ export default function ShotGroupVideoSection({
       const next = { ...previous }
       for (const group of shotGroups) {
         const existing = next[group.id]
-        const fallback = toDraft(group, defaultVideoModel)
+        const fallback = toDraft(group, defaultVideoModel, capabilityOverrides)
         next[group.id] = existing
           ? {
             ...existing,
             title: group.title || existing.title,
             templateKey: (group.templateKey || existing.templateKey) as NovelPromotionShotGroupTemplateKey,
             groupPrompt: group.groupPrompt || '',
-            videoPrompt: group.videoPrompt || '',
-            referenceImageUrl: group.referenceImageUrl || '',
-            generateAudio: Boolean(group.generateAudio),
-            bgmEnabled: Boolean(group.bgmEnabled),
+            videoPrompt: group.videoPrompt || existing.videoPrompt,
+            mode: normalizeShotGroupVideoMode(group),
+            generationOptions: existing.generationOptions,
             includeDialogue: Boolean(group.includeDialogue),
             dialogueLanguage: normalizeDialogueLanguage(group.dialogueLanguage),
-            omniReferenceEnabled: Boolean(group.omniReferenceEnabled),
-            smartMultiFrameEnabled: Boolean(group.smartMultiFrameEnabled),
-            videoModel: existing.videoModel || group.videoModel || defaultVideoModel,
+            videoModel: group.videoModel || existing.videoModel || defaultVideoModel,
           }
           : fallback
       }
       return next
     })
-  }, [defaultVideoModel, shotGroups])
+  }, [capabilityOverrides, defaultVideoModel, shotGroups])
 
   useEffect(() => {
     setCreateDraft((previous) => ({
       ...previous,
       videoModel: previous.videoModel || defaultVideoModel,
+      generationOptions: Object.keys(previous.generationOptions).length > 0
+        ? previous.generationOptions
+        : readShotGroupCapabilitySelection(capabilityOverrides, previous.videoModel || defaultVideoModel),
     }))
-  }, [defaultVideoModel])
+  }, [capabilityOverrides, defaultVideoModel])
 
   useEffect(() => {
     setGroupPendingPreviewUrls((previous) => {
@@ -431,31 +535,8 @@ export default function ShotGroupVideoSection({
   }, [groupPendingPreviewUrls])
 
   useEffect(() => {
-    setGroupReferencePreviewUrls((previous) => {
-      let changed = false
-      const next = { ...previous }
-      for (const group of shotGroups) {
-        if (group.referenceImageUrl && next[group.id]) {
-          URL.revokeObjectURL(next[group.id])
-          delete next[group.id]
-          changed = true
-        }
-      }
-      return changed ? next : previous
-    })
-  }, [shotGroups])
-
-  useEffect(() => {
-    groupReferencePreviewUrlsRef.current = groupReferencePreviewUrls
-  }, [groupReferencePreviewUrls])
-
-  useEffect(() => {
     createPendingPreviewUrlRef.current = createPendingPreviewUrl
   }, [createPendingPreviewUrl])
-
-  useEffect(() => {
-    createReferencePreviewUrlRef.current = createReferencePreviewUrl
-  }, [createReferencePreviewUrl])
 
   useEffect(() => () => {
     for (const url of Object.values(groupPendingPreviewUrlsRef.current)) {
@@ -464,20 +545,8 @@ export default function ShotGroupVideoSection({
   }, [])
 
   useEffect(() => () => {
-    for (const url of Object.values(groupReferencePreviewUrlsRef.current)) {
-      URL.revokeObjectURL(url)
-    }
-  }, [])
-
-  useEffect(() => () => {
     if (createPendingPreviewUrlRef.current) {
       URL.revokeObjectURL(createPendingPreviewUrlRef.current)
-    }
-  }, [])
-
-  useEffect(() => () => {
-    if (createReferencePreviewUrlRef.current) {
-      URL.revokeObjectURL(createReferencePreviewUrlRef.current)
     }
   }, [])
 
@@ -492,24 +561,12 @@ export default function ShotGroupVideoSection({
     })
   }
 
-  const buildShotGroupCreatePayload = (draft: VideoDraftState) => ({
-    episodeId,
-    title: draft.title.trim() || buildDefaultTitle(draft.templateKey),
-    templateKey: draft.templateKey,
-    groupPrompt: draft.groupPrompt.trim() || null,
-    videoPrompt: draft.videoPrompt.trim() || null,
-    referenceImageUrl: draft.referenceImageUrl.trim() || null,
-    generateAudio: draft.generateAudio,
-    bgmEnabled: draft.bgmEnabled,
-    includeDialogue: draft.includeDialogue,
-    dialogueLanguage: draft.dialogueLanguage,
-    omniReferenceEnabled: draft.omniReferenceEnabled,
-    smartMultiFrameEnabled: draft.smartMultiFrameEnabled,
-  })
-
   const ensureCreateShotGroupId = async (draft: VideoDraftState) => {
     if (createShotGroupId) return createShotGroupId
-    const created = await createMutation.mutateAsync(buildShotGroupCreatePayload(draft)) as { shotGroup?: { id?: string } }
+    const created = await createMutation.mutateAsync({
+      episodeId,
+      ...buildShotGroupPayload(draft),
+    }) as { shotGroup?: { id?: string } }
     const shotGroupId = created?.shotGroup?.id
     if (!shotGroupId) {
       throw new Error('创建多镜头视频草稿失败')
@@ -525,99 +582,27 @@ export default function ShotGroupVideoSection({
       title: '',
       groupPrompt: '',
       videoPrompt: '',
-      referenceImageUrl: '',
-      generateAudio: false,
-      bgmEnabled: false,
+      mode: 'omni-reference',
+      generationOptions: readShotGroupCapabilitySelection(capabilityOverrides, previous.videoModel || defaultVideoModel),
       includeDialogue: false,
       dialogueLanguage: 'zh',
-      omniReferenceEnabled: false,
-      smartMultiFrameEnabled: true,
       pendingCompositeFile: null,
     }))
     setCreatePendingPreviewUrl((previous) => {
       if (previous) URL.revokeObjectURL(previous)
       return null
     })
-    setCreateReferencePreviewUrl((previous) => {
-      if (previous) URL.revokeObjectURL(previous)
-      return null
-    })
     if (createFileInputRef.current) createFileInputRef.current.value = ''
-    if (createReferenceFileInputRef.current) createReferenceFileInputRef.current.value = ''
-  }
-
-  const handleUploadCreateReference = async (file: File) => {
-    setCreateError(null)
-    setIsUploadingCreateReference(true)
-    try {
-      const shotGroupId = await ensureCreateShotGroupId(createDraft)
-      setCreateReferencePreviewUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous)
-        return URL.createObjectURL(file)
-      })
-      const result = await uploadMutation.mutateAsync({
-        file,
-        shotGroupId,
-        targetField: 'reference',
-        labelText: createDraft.title.trim() || buildDefaultTitle(createDraft.templateKey),
-      }) as { imageKey?: string }
-      const imageKey = result?.imageKey
-      if (imageKey) {
-        setCreateDraft((previous) => ({ ...previous, referenceImageUrl: imageKey }))
-      }
-    } catch (error) {
-      setCreateError(resolveMutationError(error, '上传参考图失败'))
-    } finally {
-      setIsUploadingCreateReference(false)
-    }
-  }
-
-  const handleUploadGroupReference = async (group: NovelPromotionShotGroup, file: File) => {
-    setGroupErrors((previous) => ({ ...previous, [group.id]: null }))
-    setUploadingReferenceGroupId(group.id)
-    try {
-      setGroupReferencePreviewUrls((previous) => {
-        const next = { ...previous }
-        if (next[group.id]) URL.revokeObjectURL(next[group.id])
-        next[group.id] = URL.createObjectURL(file)
-        return next
-      })
-      const result = await uploadMutation.mutateAsync({
-        file,
-        shotGroupId: group.id,
-        targetField: 'reference',
-        labelText: drafts[group.id]?.title?.trim() || group.title || '多镜头片段参考图',
-      }) as { imageKey?: string }
-      const imageKey = result?.imageKey
-      if (imageKey) {
-        updateGroupDraft(group.id, (current) => ({ ...current, referenceImageUrl: imageKey }))
-      }
-    } catch (error) {
-      setGroupErrors((previous) => ({
-        ...previous,
-        [group.id]: resolveMutationError(error, '上传参考图失败'),
-      }))
-    } finally {
-      setUploadingReferenceGroupId(null)
-    }
   }
 
   const persistGroupDraft = async (groupId: string, draft: VideoDraftState) => {
     const nextTitle = draft.title.trim() || buildDefaultTitle(draft.templateKey)
     await updateMutation.mutateAsync({
       shotGroupId: groupId,
-      title: nextTitle,
-      templateKey: draft.templateKey,
-      groupPrompt: draft.groupPrompt.trim() || null,
-      videoPrompt: draft.videoPrompt.trim() || null,
-      referenceImageUrl: draft.referenceImageUrl.trim() || null,
-      generateAudio: draft.generateAudio,
-      bgmEnabled: draft.bgmEnabled,
-      includeDialogue: draft.includeDialogue,
-      dialogueLanguage: draft.dialogueLanguage,
-      omniReferenceEnabled: draft.omniReferenceEnabled,
-      smartMultiFrameEnabled: draft.smartMultiFrameEnabled,
-      videoModel: draft.videoModel || defaultVideoModel,
+      ...buildShotGroupPayload({
+        ...draft,
+        title: nextTitle,
+      }),
     })
 
     if (draft.pendingCompositeFile) {
@@ -671,6 +656,8 @@ export default function ShotGroupVideoSection({
       await generateMutation.mutateAsync({
         shotGroupId: groupId,
         videoModel: draft.videoModel || defaultVideoModel,
+        mode: draft.mode,
+        generationOptions: draft.generationOptions,
       })
     } catch (error) {
       setGroupErrors((previous) => ({
@@ -701,22 +688,16 @@ export default function ShotGroupVideoSection({
       })
       await updateMutation.mutateAsync({
         shotGroupId,
-        title: nextTitle,
-        templateKey: createDraft.templateKey,
-        groupPrompt: createDraft.groupPrompt.trim() || null,
-        videoPrompt: createDraft.videoPrompt.trim() || null,
-        referenceImageUrl: createDraft.referenceImageUrl.trim() || null,
-        generateAudio: createDraft.generateAudio,
-        bgmEnabled: createDraft.bgmEnabled,
-        includeDialogue: createDraft.includeDialogue,
-        dialogueLanguage: createDraft.dialogueLanguage,
-        omniReferenceEnabled: createDraft.omniReferenceEnabled,
-        smartMultiFrameEnabled: createDraft.smartMultiFrameEnabled,
-        videoModel: createDraft.videoModel || defaultVideoModel,
+        ...buildShotGroupPayload({
+          ...createDraft,
+          title: nextTitle,
+        }),
       })
       await generateMutation.mutateAsync({
         shotGroupId,
         videoModel: createDraft.videoModel || defaultVideoModel,
+        mode: createDraft.mode,
+        generationOptions: createDraft.generationOptions,
       })
 
       resetCreateDraftState()
@@ -771,7 +752,7 @@ export default function ShotGroupVideoSection({
         <div className="space-y-1">
           <div className="text-sm font-semibold text-[var(--glass-text-primary)]">新增一个多镜头片段</div>
           <p className="text-xs text-[var(--glass-text-tertiary)]">
-            选择 4 / 6 / 9 格模板，填写提示词和模型，上传参考图与分镜参考表，然后一步提交生成视频。
+            选择 4 / 6 / 9 格模板，上传 composite storyboard，并按单镜头同款视频能力配置后一步提交生成。
           </p>
         </div>
 
@@ -805,55 +786,12 @@ export default function ShotGroupVideoSection({
               </label>
             </div>
 
-            <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
-              <span>组提示词</span>
-              <textarea
-                value={createDraft.groupPrompt}
-                onChange={(event) => setCreateDraft((previous) => ({ ...previous, groupPrompt: event.target.value }))}
-                rows={4}
-                className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
-                placeholder="例如：节奏从建立环境推进到人物对峙，运镜自然连贯，保留同一场景与人物关系。"
-              />
-            </label>
-
-            {renderAdvancedParameterFields({
+            {renderVideoConfigFields({
               draft: createDraft,
+              resolvedVideoModelOptions,
+              capabilityOverrides,
               onChange: (updater) => setCreateDraft((previous) => updater(previous)),
-              referenceImage: {
-                previewUrl: createReferencePreviewUrl || (isPreviewableImageUrl(createDraft.referenceImageUrl) ? createDraft.referenceImageUrl : null),
-                inputRef: (node) => {
-                  createReferenceFileInputRef.current = node
-                },
-                onSelectFile: async (event) => {
-                  const file = event.target.files?.[0]
-                  if (file) await handleUploadCreateReference(file)
-                  event.currentTarget.value = ''
-                },
-                onTriggerUpload: () => createReferenceFileInputRef.current?.click(),
-                onClear: () => {
-                  setCreateDraft((previous) => ({ ...previous, referenceImageUrl: '' }))
-                  setCreateReferencePreviewUrl((previous) => {
-                    if (previous) URL.revokeObjectURL(previous)
-                    return null
-                  })
-                },
-                isUploading: isUploadingCreateReference,
-              },
             })}
-
-            <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
-              <span>视频模型</span>
-              <select
-                value={createDraft.videoModel}
-                onChange={(event) => setCreateDraft((previous) => ({ ...previous, videoModel: event.target.value }))}
-                className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
-                disabled={resolvedVideoModelOptions.length === 0}
-              >
-                {resolvedVideoModelOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
           </div>
 
           <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/40 p-4 space-y-3">
@@ -919,7 +857,7 @@ export default function ShotGroupVideoSection({
             </div>
 
             <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
-              没有分镜参考表就不能生成这个多镜头片段的视频。如需让 AI 先合成参考表，可在 storyboard 阶段上传辅助参考图后生成。
+              没有分镜参考表就不能生成这个多镜头片段的视频。该流程只围绕 composite storyboard 作为视觉参考。
             </div>
           </div>
         </div>
@@ -928,7 +866,16 @@ export default function ShotGroupVideoSection({
           <GlassButton
             size="sm"
             onClick={handleCreateAndGenerate}
-            disabled={isCreatingInline || !createDraft.pendingCompositeFile || !createDraft.videoModel}
+            disabled={
+              isCreatingInline
+              || !createDraft.pendingCompositeFile
+              || !createDraft.videoModel
+              || getDraftMissingCapabilityFields({
+                draft: createDraft,
+                resolvedVideoModelOptions,
+                capabilityOverrides,
+              }).length > 0
+            }
           >
             <AppIcon name="film" className="h-3.5 w-3.5" />
             <span>{isCreatingInline ? '提交中...' : '创建并开始生成'}</span>
@@ -958,9 +905,14 @@ export default function ShotGroupVideoSection({
 
           <div className="grid gap-4 xl:grid-cols-2">
             {visibleShotGroups.map((group) => {
-              const draft = drafts[group.id] || toDraft(group, defaultVideoModel)
+              const draft = drafts[group.id] || toDraft(group, defaultVideoModel, capabilityOverrides)
               const segmentNumber = shotGroups.findIndex((item) => item.id === group.id) + 1
               const hasCompositeInput = Boolean(group.compositeImageUrl || draft.pendingCompositeFile)
+              const missingCapabilityFields = getDraftMissingCapabilityFields({
+                draft,
+                resolvedVideoModelOptions,
+                capabilityOverrides,
+              })
               const isSaving = savingGroupId === group.id
               const isGenerating = generatingGroupId === group.id
               const isSavingTailFrame = savingTailFrameGroupId === group.id
@@ -988,7 +940,11 @@ export default function ShotGroupVideoSection({
               })
               const pendingPreviewUrl = groupPendingPreviewUrls[group.id] || null
               const previewUrl = pendingPreviewUrl || group.compositeImageUrl || null
-              const generationBlockedReason = !hasCompositeInput ? '请先为这个多镜头片段上传分镜参考表，才能生成视频。' : null
+              const generationBlockedReason = !hasCompositeInput
+                ? '请先为这个多镜头片段上传分镜参考表，才能生成视频。'
+                : missingCapabilityFields.length > 0
+                  ? `请先完成视频能力配置：${missingCapabilityFields.join('、')}`
+                  : null
 
               return (
                 <article key={group.id} className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-4 space-y-4">
@@ -1094,66 +1050,12 @@ export default function ShotGroupVideoSection({
                         </label>
                       </div>
 
-                      <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
-                        <span>组提示词</span>
-                        <textarea
-                          value={draft.groupPrompt}
-                          onChange={(event) => updateGroupDraft(group.id, (current) => ({
-                            ...current,
-                            groupPrompt: event.target.value,
-                          }))}
-                          rows={4}
-                          className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
-                          placeholder="例如：镜头推进自然，动作连续，节奏从建立场景推入人物情绪。"
-                        />
-                      </label>
-
-                      {renderAdvancedParameterFields({
+                      {renderVideoConfigFields({
                         draft,
+                        resolvedVideoModelOptions,
+                        capabilityOverrides,
                         onChange: (updater) => updateGroupDraft(group.id, updater),
-                        referenceImage: {
-                          previewUrl: groupReferencePreviewUrls[group.id]
-                            || group.referenceImageUrl
-                            || (isPreviewableImageUrl(draft.referenceImageUrl) ? draft.referenceImageUrl : null),
-                          inputRef: (node) => {
-                            referenceFileInputRefs.current[group.id] = node
-                          },
-                          onSelectFile: async (event) => {
-                            const file = event.target.files?.[0]
-                            if (file) await handleUploadGroupReference(group, file)
-                            event.currentTarget.value = ''
-                          },
-                          onTriggerUpload: () => referenceFileInputRefs.current[group.id]?.click(),
-                          onClear: () => {
-                            updateGroupDraft(group.id, (current) => ({ ...current, referenceImageUrl: '' }))
-                            setGroupReferencePreviewUrls((previous) => {
-                              if (!previous[group.id]) return previous
-                              const next = { ...previous }
-                              URL.revokeObjectURL(next[group.id])
-                              delete next[group.id]
-                              return next
-                            })
-                          },
-                          isUploading: uploadingReferenceGroupId === group.id,
-                        },
                       })}
-
-                      <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
-                        <span>视频模型</span>
-                        <select
-                          value={draft.videoModel}
-                          onChange={(event) => updateGroupDraft(group.id, (current) => ({
-                            ...current,
-                            videoModel: event.target.value,
-                          }))}
-                          className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
-                          disabled={resolvedVideoModelOptions.length === 0}
-                        >
-                          {resolvedVideoModelOptions.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
 
                       {generationBlockedReason ? (
                         <div className="rounded-xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-2 text-xs text-[var(--glass-tone-warning-fg)]">
@@ -1178,7 +1080,7 @@ export default function ShotGroupVideoSection({
                           <GlassButton
                             size="sm"
                             onClick={() => handleGenerateGroup(group.id, Boolean(group.compositeImageUrl))}
-                            disabled={isSaving || isGenerating || !hasCompositeInput || !draft.videoModel}
+                            disabled={isSaving || isGenerating || !hasCompositeInput || !draft.videoModel || missingCapabilityFields.length > 0}
                           >
                           <AppIcon name="film" className="h-3.5 w-3.5" />
                             <span>{isGenerating ? '提交中...' : (group.videoUrl ? '重新生成视频' : '生成视频')}</span>

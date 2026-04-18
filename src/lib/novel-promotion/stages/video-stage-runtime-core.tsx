@@ -542,6 +542,7 @@ export function useVideoStageRuntime({
         shotGroups={shotGroups}
         defaultVideoModel={defaultVideoModel}
         videoModelOptions={normalVideoModelOptions}
+        capabilityOverrides={capabilityOverrides}
       />
 
       <VideoRenderPanel

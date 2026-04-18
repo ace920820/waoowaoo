@@ -27,6 +27,10 @@ import {
 } from '@/lib/novel-promotion/panel-speech-plan'
 import { buildShotGroupVideoPrompt } from '@/lib/shot-group/prompt'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
+import {
+  deriveShotGroupModeFlags,
+  normalizeShotGroupVideoMode,
+} from '@/lib/shot-group/video-config'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
@@ -308,17 +312,28 @@ async function generateVideoForPanel(
   }
 }
 
-function buildShotGroupReferenceSnapshot(shotGroup: ShotGroupRecord) {
+function buildShotGroupReferenceSnapshot(input: {
+  shotGroup: ShotGroupRecord
+  modelId: string
+  generationOptions: VideoOptionMap
+}) {
+  const { shotGroup, modelId, generationOptions } = input
+  const mode = normalizeShotGroupVideoMode(shotGroup)
   return {
-    referenceMode: shotGroup.omniReferenceEnabled ? 'ark_content_multireference' : 'composite_image',
+    mode,
+    referenceMode: mode === 'smart-multi-frame'
+      ? 'ark_content_multireference_smart'
+      : 'ark_content_multireference',
+    videoModel: modelId,
     compositeImageUrl: shotGroup.compositeImageUrl,
-    referenceImageUrl: shotGroup.referenceImageUrl,
-    generateAudio: shotGroup.generateAudio,
-    bgmEnabled: shotGroup.bgmEnabled,
+    generateAudio: typeof generationOptions.generateAudio === 'boolean'
+      ? generationOptions.generateAudio
+      : shotGroup.generateAudio,
+    bgmEnabled: false,
     includeDialogue: shotGroup.includeDialogue,
     dialogueLanguage: shotGroup.dialogueLanguage,
-    omniReferenceEnabled: shotGroup.omniReferenceEnabled,
-    smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+    ...deriveShotGroupModeFlags(mode),
+    generationOptions,
     orderedReferences: (shotGroup.items || []).map((item) => ({
       itemIndex: item.itemIndex,
       title: item.title,
@@ -335,8 +350,9 @@ function normalizeDialogueLanguage(value: string | null | undefined): ShotGroupD
 
 function buildShotGroupVideoSourceType(shotGroup: ShotGroupRecord, modelId: string) {
   const provider = parseModelKeyStrict(modelId)?.provider
-  if (provider === 'ark' && shotGroup.omniReferenceEnabled) {
-    return shotGroup.smartMultiFrameEnabled ? 'ark_content_multireference_smart' : 'ark_content_multireference'
+  const mode = normalizeShotGroupVideoMode(shotGroup)
+  if (provider === 'ark') {
+    return mode === 'smart-multi-frame' ? 'ark_content_multireference_smart' : 'ark_content_multireference'
   }
   return 'composite_image_mvp'
 }
@@ -346,6 +362,7 @@ function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReference
 
   const uniqueUrls = new Set<string>()
   const contentItems: ArkReferenceContentItem[] = []
+  const mode = normalizeShotGroupVideoMode(shotGroup)
   const pushImage = (url: string | null | undefined, role?: 'reference_image') => {
     const signed = toSignedUrlIfCos(url, 3600)
     if (!signed || uniqueUrls.has(signed)) return
@@ -358,12 +375,7 @@ function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReference
   }
 
   pushImage(shotGroup.compositeImageUrl)
-  if (!shotGroup.omniReferenceEnabled) {
-    return contentItems
-  }
-
-  pushImage(shotGroup.referenceImageUrl, 'reference_image')
-  if (shotGroup.smartMultiFrameEnabled) {
+  if (mode === 'smart-multi-frame') {
     for (const item of shotGroup.items || []) {
       pushImage(item.imageUrl, 'reference_image')
     }
@@ -387,6 +399,8 @@ async function generateVideoForShotGroup(
   const prompt = buildShotGroupVideoPrompt({
     group: {
       ...shotGroup,
+      videoMode: normalizeShotGroupVideoMode(shotGroup),
+      bgmEnabled: false,
       dialogueLanguage: normalizeDialogueLanguage(shotGroup.dialogueLanguage),
       items: shotGroup.items,
     },
@@ -441,7 +455,14 @@ async function generateVideoForShotGroup(
     cosKey,
     prompt,
     sourceType,
-    referencesSnapshot: buildShotGroupReferenceSnapshot(shotGroup),
+    referencesSnapshot: buildShotGroupReferenceSnapshot({
+      shotGroup,
+      modelId,
+      generationOptions: {
+        ...generationOptions,
+        generateAudio: effectiveGenerateAudio,
+      },
+    }),
     ...(typeof generatedVideo.actualVideoTokens === 'number'
       ? { actualVideoTokens: generatedVideo.actualVideoTokens }
       : {}),

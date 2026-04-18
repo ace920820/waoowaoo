@@ -12,6 +12,11 @@ import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { parseModelKeyStrict, type CapabilityValue } from '@/lib/model-config-contract'
+import {
+  deriveShotGroupModeFlags,
+  normalizeShotGroupVideoMode,
+  sanitizeShotGroupGenerationOptions,
+} from '@/lib/shot-group/video-config'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -45,6 +50,16 @@ type ShotGroupItemFields = {
     imageUrl: string | null
     sourcePanelId: string | null
   }>
+}
+
+function parseShotGroupVideoConfig(value: string | null | undefined) {
+  if (!value) return {}
+  try {
+    const parsed = JSON.parse(value)
+    return isRecord(parsed) ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
 }
 
 export const POST = apiHandler(async (
@@ -91,8 +106,10 @@ export const POST = apiHandler(async (
   }
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
+  const savedConfig = parseShotGroupVideoConfig(shotGroup.videoReferencesJson)
   const requestedModel = typeof body.videoModel === 'string' ? body.videoModel.trim() : ''
-  const videoModel = requestedModel || projectModelConfig.videoModel
+  const savedModel = typeof savedConfig.videoModel === 'string' ? savedConfig.videoModel.trim() : ''
+  const videoModel = requestedModel || savedModel || shotGroup.videoModel || projectModelConfig.videoModel
   if (!videoModel || !parseModelKeyStrict(videoModel)) {
     throw new ApiError('INVALID_PARAMS', { code: 'VIDEO_MODEL_REQUIRED', field: 'videoModel' })
   }
@@ -108,9 +125,15 @@ export const POST = apiHandler(async (
     })
   }
 
-  const runtimeSelections = toVideoRuntimeSelections(body?.generationOptions)
+  const savedGenerationOptions = sanitizeShotGroupGenerationOptions(savedConfig.generationOptions)
+  const runtimeSelections = {
+    ...savedGenerationOptions,
+    ...toVideoRuntimeSelections(body?.generationOptions),
+  }
   runtimeSelections.generationMode = 'normal'
-  runtimeSelections.generateAudio = shotGroup.generateAudio
+  runtimeSelections.generateAudio = typeof runtimeSelections.generateAudio === 'boolean'
+    ? runtimeSelections.generateAudio
+    : shotGroup.generateAudio
 
   const capabilityOptions = await resolveProjectModelCapabilityGenerationOptions({
     projectId,
@@ -127,20 +150,25 @@ export const POST = apiHandler(async (
     imageUrl: item.imageUrl,
     sourcePanelId: item.sourcePanelId,
   }))
+  const mode = normalizeShotGroupVideoMode({
+    mode: body.mode ?? savedConfig.mode,
+    omniReferenceEnabled: shotGroup.omniReferenceEnabled,
+    smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+  })
+  const modeFlags = deriveShotGroupModeFlags(mode)
   const billingPayload = {
     shotGroupId,
     templateKey: shotGroup.templateKey,
     groupPrompt: shotGroup.groupPrompt,
     videoPrompt: shotGroup.videoPrompt,
-    referenceImageUrl: shotGroup.referenceImageUrl,
     compositeImageUrl: shotGroup.compositeImageUrl,
     orderedReferences,
-    generateAudio: shotGroup.generateAudio,
-    bgmEnabled: shotGroup.bgmEnabled,
+    generateAudio: Boolean(capabilityOptions.generateAudio),
+    bgmEnabled: false,
     includeDialogue: shotGroup.includeDialogue,
     dialogueLanguage: shotGroup.dialogueLanguage,
-    omniReferenceEnabled: shotGroup.omniReferenceEnabled,
-    smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
+    mode,
+    ...modeFlags,
     videoModel,
     generationOptions: capabilityOptions,
   }
@@ -157,7 +185,9 @@ export const POST = apiHandler(async (
     targetId: shotGroupId,
     payload: withTaskUiPayload({
       ...billingPayload,
-      referenceMode: shotGroup.omniReferenceEnabled ? 'ark_content_multireference' : 'composite_image',
+      referenceMode: mode === 'smart-multi-frame'
+        ? 'ark_content_multireference_smart'
+        : 'ark_content_multireference',
     }, {
       intent: hasOutputAtStart ? 'regenerate' : 'generate',
       hasOutputAtStart,
