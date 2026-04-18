@@ -164,6 +164,11 @@ function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
     if (!Array.isArray(request.content) || request.content.length === 0) {
         throw new Error('ARK_VIDEO_REQUEST_INVALID: content must be a non-empty array')
     }
+    const hasFrameRoles = request.content.some((item) => item.role === 'first_frame' || item.role === 'last_frame')
+    const hasMultimodalReferences = request.content.some((item) => item.role === 'reference_image' || item.role === 'reference_video')
+    if (hasFrameRoles && hasMultimodalReferences) {
+        throw new Error('ARK_VIDEO_REQUEST_INVALID: first/last frame cannot be mixed with multimodal references')
+    }
 
     const allowedRatios = new Set(['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'])
     if (request.ratio !== undefined && !allowedRatios.has(request.ratio)) {

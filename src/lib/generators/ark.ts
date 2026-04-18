@@ -44,6 +44,7 @@ interface ArkVideoOptions {
     aspectRatio?: string
     generateAudio?: boolean
     lastFrameImageUrl?: string
+    contentItems?: ArkVideoContentItem[]
     serviceTier?: 'default' | 'flex'
     executionExpiresAfter?: number
     returnLastFrame?: boolean
@@ -144,6 +145,93 @@ const ARK_VIDEO_ALLOWED_RATIOS = new Set(['16:9', '4:3', '1:1', '3:4', '9:16', '
 
 function isInteger(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0
+}
+
+function parseArkVideoContentItem(item: unknown, index: number): ArkVideoContentItem {
+    const path = `contentItems[${index}]`
+    if (!isRecord(item)) {
+        throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path} must be object`)
+    }
+
+    if (item.type === 'text') {
+        if (!isNonEmptyString(item.text)) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.text is required`)
+        }
+        return { type: 'text', text: item.text.trim() }
+    }
+
+    if (item.type === 'image_url') {
+        if (!isRecord(item.image_url) || !isNonEmptyString(item.image_url.url)) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.image_url.url is required`)
+        }
+        if (
+            item.role !== undefined
+            && item.role !== 'first_frame'
+            && item.role !== 'last_frame'
+            && item.role !== 'reference_image'
+        ) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.role=${String(item.role)}`)
+        }
+        return {
+            type: 'image_url',
+            image_url: { url: item.image_url.url.trim() },
+            ...(item.role ? { role: item.role } : {}),
+        }
+    }
+
+    if (item.type === 'video_url') {
+        if (!isRecord(item.video_url) || !isNonEmptyString(item.video_url.url)) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.video_url.url is required`)
+        }
+        if (item.role !== undefined && item.role !== 'reference_video') {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.role=${String(item.role)}`)
+        }
+        return {
+            type: 'video_url',
+            video_url: { url: item.video_url.url.trim() },
+            role: 'reference_video',
+        }
+    }
+
+    if (item.type === 'audio_url') {
+        if (!isRecord(item.audio_url) || !isNonEmptyString(item.audio_url.url)) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.audio_url.url is required`)
+        }
+        if (item.role !== undefined && item.role !== 'reference_audio') {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.role=${String(item.role)}`)
+        }
+        return {
+            type: 'audio_url',
+            audio_url: { url: item.audio_url.url.trim() },
+            role: 'reference_audio',
+        }
+    }
+
+    throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.type=${String(item.type)}`)
+}
+
+async function normalizeArkVideoContentItems(items: ArkVideoContentItem[]) {
+    const normalized: ArkVideoContentItem[] = []
+    for (const item of items) {
+        if (item.type === 'image_url') {
+            normalized.push({
+                type: 'image_url',
+                image_url: { url: await normalizeToBase64ForGeneration(item.image_url.url) },
+                ...(item.role ? { role: item.role } : {}),
+            })
+            continue
+        }
+        normalized.push(item)
+    }
+    return normalized
 }
 
 // ============================================================
@@ -317,6 +405,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             aspectRatio,
             generateAudio,
             lastFrameImageUrl,  // 首尾帧模式的尾帧图片
+            contentItems: rawContentItems,
             serviceTier,
             executionExpiresAfter,
             returnLastFrame,
@@ -336,6 +425,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             'aspectRatio',
             'generateAudio',
             'lastFrameImageUrl',
+            'contentItems',
             'serviceTier',
             'executionExpiresAfter',
             'returnLastFrame',
@@ -391,6 +481,9 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         if (lastFrameImageUrl && !modelSpec.supportsFirstLastFrame) {
             throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: lastFrameImageUrl for ${realModel}`)
         }
+        const contentItems = Array.isArray(rawContentItems)
+            ? rawContentItems.map((item, index) => parseArkVideoContentItem(item, index))
+            : undefined
         if (generateAudio !== undefined && !modelSpec.supportsGenerateAudio) {
             throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: generateAudio for ${realModel}`)
         }
@@ -430,17 +523,22 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
 
         _ulogInfo(`[ARK Video] 模型: ${realModel}, 批量: ${isBatchMode}, 分辨率: ${resolution || '(默认)'}, 时长: ${duration ?? '(默认)'}`)
 
-        // 转换图片为 base64
-        const imageBase64 = await normalizeToBase64ForGeneration(imageUrl)
-
         // 构建请求体 content
         const content: ArkVideoContentItem[] = []
         if (prompt.trim()) {
             content.push({ type: 'text', text: prompt })
         }
 
-        if (lastFrameImageUrl) {
+        if (contentItems && contentItems.length > 0) {
+            const hasFrameRoles = contentItems.some((item) => 'role' in item && (item.role === 'first_frame' || item.role === 'last_frame'))
+            const hasMultimodalReferences = contentItems.some((item) => 'role' in item && (item.role === 'reference_image' || item.role === 'reference_video'))
+            if (lastFrameImageUrl || (hasFrameRoles && hasMultimodalReferences)) {
+                throw new Error('ARK_VIDEO_OPTION_INVALID: first/last frame cannot be mixed with multimodal references')
+            }
+            content.push(...(await normalizeArkVideoContentItems(contentItems)))
+        } else if (lastFrameImageUrl) {
             // 首尾帧模式
+            const imageBase64 = await normalizeToBase64ForGeneration(imageUrl)
             const lastImageBase64 = await normalizeToBase64ForGeneration(lastFrameImageUrl)
             content.push({
                 type: 'image_url',
@@ -454,6 +552,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             })
             _ulogInfo(`[ARK Video] 首尾帧模式`)
         } else {
+            const imageBase64 = await normalizeToBase64ForGeneration(imageUrl)
             content.push({
                 type: 'image_url',
                 image_url: { url: imageBase64 }

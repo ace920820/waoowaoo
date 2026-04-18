@@ -353,6 +353,12 @@ model NovelPromotionShotGroup {
   referenceImageUrl String?                      @db.Text
   compositeImageUrl String?                      @db.Text
   videoPrompt      String?                       @db.Text
+  generateAudio    Boolean                       @default(false)
+  bgmEnabled       Boolean                       @default(false)
+  includeDialogue  Boolean                       @default(false)
+  dialogueLanguage String                        @default("zh")
+  omniReferenceEnabled Boolean                   @default(false)
+  smartMultiFrameEnabled Boolean                 @default(false)
   videoModel       String?
   videoSourceType  String?
   videoReferencesJson String?                    @db.Text

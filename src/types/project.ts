@@ -224,6 +224,7 @@ export interface NovelPromotionStoryboard {
 }
 
 export type NovelPromotionShotGroupTemplateKey = 'grid-4' | 'grid-6' | 'grid-9'
+export type NovelPromotionDialogueLanguage = 'zh' | 'en' | 'ja'
 
 export interface NovelPromotionShotGroupItem {
   id: string
@@ -247,6 +248,12 @@ export interface NovelPromotionShotGroup {
   compositeImageUrl?: string | null
   compositeImageMedia?: MediaRef | null
   videoPrompt?: string | null
+  generateAudio?: boolean
+  bgmEnabled?: boolean
+  includeDialogue?: boolean
+  dialogueLanguage?: NovelPromotionDialogueLanguage
+  omniReferenceEnabled?: boolean
+  smartMultiFrameEnabled?: boolean
   videoModel?: string | null
   videoSourceType?: string | null
   videoReferencesJson?: string | null

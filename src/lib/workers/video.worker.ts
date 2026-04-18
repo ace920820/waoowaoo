@@ -32,13 +32,25 @@ type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
 type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
+type ShotGroupAdvancedFields = {
+  generateAudio: boolean
+  bgmEnabled: boolean
+  includeDialogue: boolean
+  dialogueLanguage: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled: boolean
+  smartMultiFrameEnabled: boolean
+}
+type ShotGroupDialogueLanguage = 'zh' | 'en' | 'ja'
+type ArkReferenceContentItem =
+  | { type: 'image_url'; image_url: { url: string }; role?: 'reference_image' }
+  | { type: 'video_url'; video_url: { url: string }; role: 'reference_video' }
 type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
 type VideoPanelRecord = NonNullable<Awaited<ReturnType<typeof fetchPanelByStoryboardIndex>>>
 type ShotGroupRecord = Prisma.NovelPromotionShotGroupGetPayload<{
   include: {
     items: true
   }
-}>
+}> & ShotGroupAdvancedFields
 
 function readPanelDialogueOverride(panel: VideoPanelRecord): string | null | undefined {
   return (panel as VideoPanelRecord & { dialogueOverride?: string | null }).dialogueOverride
@@ -298,8 +310,15 @@ async function generateVideoForPanel(
 
 function buildShotGroupReferenceSnapshot(shotGroup: ShotGroupRecord) {
   return {
-    referenceMode: 'composite_image',
+    referenceMode: shotGroup.omniReferenceEnabled ? 'ark_content_multireference' : 'composite_image',
     compositeImageUrl: shotGroup.compositeImageUrl,
+    referenceImageUrl: shotGroup.referenceImageUrl,
+    generateAudio: shotGroup.generateAudio,
+    bgmEnabled: shotGroup.bgmEnabled,
+    includeDialogue: shotGroup.includeDialogue,
+    dialogueLanguage: shotGroup.dialogueLanguage,
+    omniReferenceEnabled: shotGroup.omniReferenceEnabled,
+    smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
     orderedReferences: (shotGroup.items || []).map((item) => ({
       itemIndex: item.itemIndex,
       title: item.title,
@@ -308,6 +327,49 @@ function buildShotGroupReferenceSnapshot(shotGroup: ShotGroupRecord) {
       sourcePanelId: item.sourcePanelId,
     })),
   }
+}
+
+function normalizeDialogueLanguage(value: string | null | undefined): ShotGroupDialogueLanguage {
+  return value === 'en' || value === 'ja' ? value : 'zh'
+}
+
+function buildShotGroupVideoSourceType(shotGroup: ShotGroupRecord, modelId: string) {
+  const provider = parseModelKeyStrict(modelId)?.provider
+  if (provider === 'ark' && shotGroup.omniReferenceEnabled) {
+    return shotGroup.smartMultiFrameEnabled ? 'ark_content_multireference_smart' : 'ark_content_multireference'
+  }
+  return 'composite_image_mvp'
+}
+
+function buildShotGroupArkContentItems(shotGroup: ShotGroupRecord): ArkReferenceContentItem[] | undefined {
+  if (!shotGroup.compositeImageUrl) return undefined
+
+  const uniqueUrls = new Set<string>()
+  const contentItems: ArkReferenceContentItem[] = []
+  const pushImage = (url: string | null | undefined, role?: 'reference_image') => {
+    const signed = toSignedUrlIfCos(url, 3600)
+    if (!signed || uniqueUrls.has(signed)) return
+    uniqueUrls.add(signed)
+    contentItems.push({
+      type: 'image_url',
+      image_url: { url: signed },
+      ...(role ? { role } : {}),
+    })
+  }
+
+  pushImage(shotGroup.compositeImageUrl)
+  if (!shotGroup.omniReferenceEnabled) {
+    return contentItems
+  }
+
+  pushImage(shotGroup.referenceImageUrl, 'reference_image')
+  if (shotGroup.smartMultiFrameEnabled) {
+    for (const item of shotGroup.items || []) {
+      pushImage(item.imageUrl, 'reference_image')
+    }
+  }
+
+  return contentItems
 }
 
 async function generateVideoForShotGroup(
@@ -325,6 +387,7 @@ async function generateVideoForShotGroup(
   const prompt = buildShotGroupVideoPrompt({
     group: {
       ...shotGroup,
+      dialogueLanguage: normalizeDialogueLanguage(shotGroup.dialogueLanguage),
       items: shotGroup.items,
     },
     template,
@@ -336,6 +399,13 @@ async function generateVideoForShotGroup(
     throw new Error('Shot group composite image url invalid')
   }
   const sourceImageBase64 = await normalizeToBase64ForGeneration(sourceImageUrl)
+  const effectiveGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
+    ? generationOptions.generateAudio
+    : shotGroup.generateAudio
+  const sourceType = buildShotGroupVideoSourceType(shotGroup, modelId)
+  const contentItems = parseModelKeyStrict(modelId)?.provider === 'ark'
+    ? buildShotGroupArkContentItems(shotGroup)
+    : undefined
 
   const generatedVideo = await resolveVideoSourceFromGeneration(job, {
     userId: job.data.userId,
@@ -346,6 +416,8 @@ async function generateVideoForShotGroup(
       ...(projectVideoRatio ? { aspectRatio: projectVideoRatio } : {}),
       ...generationOptions,
       generationMode: 'normal',
+      generateAudio: effectiveGenerateAudio,
+      ...(contentItems ? { contentItems } : {}),
     },
   })
 
@@ -368,6 +440,7 @@ async function generateVideoForShotGroup(
   return {
     cosKey,
     prompt,
+    sourceType,
     referencesSnapshot: buildShotGroupReferenceSnapshot(shotGroup),
     ...(typeof generatedVideo.actualVideoTokens === 'number'
       ? { actualVideoTokens: generatedVideo.actualVideoTokens }
@@ -428,7 +501,7 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },
-  })
+  }) as ShotGroupRecord | null
   if (!shotGroup) throw new Error('Shot group not found')
 
   const generationOptions = extractGenerationOptions(payload)
@@ -438,7 +511,7 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
     shotGroupId: shotGroup.id,
   })
 
-  const { cosKey, prompt, referencesSnapshot, actualVideoTokens } = await generateVideoForShotGroup(
+  const { cosKey, prompt, sourceType, referencesSnapshot, actualVideoTokens } = await generateVideoForShotGroup(
     job,
     shotGroup,
     modelId,
@@ -451,9 +524,8 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
     where: { id: shotGroup.id },
     data: {
       videoUrl: cosKey,
-      videoPrompt: prompt,
       videoModel: modelId,
-      videoSourceType: 'composite_image_mvp',
+      videoSourceType: sourceType,
       videoReferencesJson: JSON.stringify(referencesSnapshot),
     },
   })
@@ -463,7 +535,7 @@ async function handleShotGroupVideoTask(job: Job<TaskJobData>) {
     videoUrl: cosKey,
     videoPrompt: prompt,
     videoModel: modelId,
-    videoSourceType: 'composite_image_mvp',
+    videoSourceType: sourceType,
     videoReferences: referencesSnapshot,
     ...(typeof actualVideoTokens === 'number' ? { actualVideoTokens } : {}),
   }

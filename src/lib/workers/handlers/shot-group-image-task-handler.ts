@@ -6,6 +6,7 @@ import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
+import type { NovelPromotionDialogueLanguage } from '@/types/project'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { resolveNovelData } from './image-task-handler-shared'
 import {
@@ -15,6 +16,10 @@ import {
   toSignedUrlIfCos,
   uploadImageSourceToCos,
 } from '@/lib/workers/utils'
+
+function normalizeShotGroupDialogueLanguage(value: string | null | undefined): NovelPromotionDialogueLanguage {
+  return value === 'en' || value === 'ja' ? value : 'zh'
+}
 
 export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
   const shotGroupId = job.data.targetId
@@ -40,6 +45,7 @@ export async function handleShotGroupImageTask(job: Job<TaskJobData>) {
   const prompt = buildShotGroupCompositePrompt({
     group: {
       ...shotGroup,
+      dialogueLanguage: normalizeShotGroupDialogueLanguage(shotGroup.dialogueLanguage),
       items: shotGroup.items,
     },
     template,

@@ -3,6 +3,7 @@ import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import { apiFetch } from '@/lib/api-fetch'
+import type { NovelPromotionDialogueLanguage } from '@/types/project'
 import {
     clearTaskTargetOverlay,
     upsertTaskTargetOverlay,
@@ -349,6 +350,14 @@ export function useCreateProjectShotGroup(projectId: string, episodeId: string) 
             title?: string
             templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
             groupPrompt?: string | null
+            videoPrompt?: string | null
+            referenceImageUrl?: string | null
+            generateAudio?: boolean
+            bgmEnabled?: boolean
+            includeDialogue?: boolean
+            dialogueLanguage?: NovelPromotionDialogueLanguage
+            omniReferenceEnabled?: boolean
+            smartMultiFrameEnabled?: boolean
         }) => {
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
                 method: 'POST',
@@ -370,8 +379,15 @@ export function useUpdateProjectShotGroup(projectId: string, episodeId: string) 
       title?: string
       templateKey?: 'grid-4' | 'grid-6' | 'grid-9'
       groupPrompt?: string | null
+      videoPrompt?: string | null
       referenceImageUrl?: string | null
       compositeImageUrl?: string | null
+      generateAudio?: boolean
+      bgmEnabled?: boolean
+      includeDialogue?: boolean
+      dialogueLanguage?: NovelPromotionDialogueLanguage
+      omniReferenceEnabled?: boolean
+      smartMultiFrameEnabled?: boolean
       videoModel?: string | null
     }) => {
       return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {

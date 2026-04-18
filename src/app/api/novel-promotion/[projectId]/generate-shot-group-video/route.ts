@@ -29,6 +29,24 @@ function toVideoRuntimeSelections(value: unknown): Record<string, CapabilityValu
   return selections
 }
 
+type ShotGroupAdvancedFields = {
+  generateAudio: boolean
+  bgmEnabled: boolean
+  includeDialogue: boolean
+  dialogueLanguage: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled: boolean
+  smartMultiFrameEnabled: boolean
+}
+type ShotGroupItemFields = {
+  items: Array<{
+    itemIndex: number
+    title: string | null
+    prompt: string | null
+    imageUrl: string | null
+    sourcePanelId: string | null
+  }>
+}
+
 export const POST = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> },
@@ -60,7 +78,7 @@ export const POST = apiHandler(async (
         orderBy: { itemIndex: 'asc' },
       },
     },
-  })
+  }) as (Awaited<ReturnType<typeof prisma.novelPromotionShotGroup.findFirst>> & ShotGroupAdvancedFields & ShotGroupItemFields) | null
   if (!shotGroup) {
     throw new ApiError('NOT_FOUND')
   }
@@ -92,6 +110,7 @@ export const POST = apiHandler(async (
 
   const runtimeSelections = toVideoRuntimeSelections(body?.generationOptions)
   runtimeSelections.generationMode = 'normal'
+  runtimeSelections.generateAudio = shotGroup.generateAudio
 
   const capabilityOptions = await resolveProjectModelCapabilityGenerationOptions({
     projectId,
@@ -112,8 +131,16 @@ export const POST = apiHandler(async (
     shotGroupId,
     templateKey: shotGroup.templateKey,
     groupPrompt: shotGroup.groupPrompt,
+    videoPrompt: shotGroup.videoPrompt,
+    referenceImageUrl: shotGroup.referenceImageUrl,
     compositeImageUrl: shotGroup.compositeImageUrl,
     orderedReferences,
+    generateAudio: shotGroup.generateAudio,
+    bgmEnabled: shotGroup.bgmEnabled,
+    includeDialogue: shotGroup.includeDialogue,
+    dialogueLanguage: shotGroup.dialogueLanguage,
+    omniReferenceEnabled: shotGroup.omniReferenceEnabled,
+    smartMultiFrameEnabled: shotGroup.smartMultiFrameEnabled,
     videoModel,
     generationOptions: capabilityOptions,
   }
@@ -130,7 +157,7 @@ export const POST = apiHandler(async (
     targetId: shotGroupId,
     payload: withTaskUiPayload({
       ...billingPayload,
-      referenceMode: 'composite_image',
+      referenceMode: shotGroup.omniReferenceEnabled ? 'ark_content_multireference' : 'composite_image',
     }, {
       intent: hasOutputAtStart ? 'regenerate' : 'generate',
       hasOutputAtStart,

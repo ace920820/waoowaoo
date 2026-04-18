@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
@@ -26,11 +27,43 @@ function getTemplateItemCount(templateKey: string) {
   return TEMPLATE_ITEM_COUNT[templateKey] ?? TEMPLATE_ITEM_COUNT['grid-4']
 }
 
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+function normalizeOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function normalizeDialogueLanguage(value: unknown): 'zh' | 'en' | 'ja' | undefined {
+  return value === 'zh' || value === 'en' || value === 'ja' ? value : undefined
+}
+
 function buildDefaultItems(templateKey: string) {
   return Array.from({ length: getTemplateItemCount(templateKey) }, (_, index) => ({
     itemIndex: index,
     title: `镜头 ${index + 1}`,
   }))
+}
+
+type ShotGroupAdvancedFields = {
+  generateAudio: boolean
+  bgmEnabled: boolean
+  includeDialogue: boolean
+  dialogueLanguage: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled: boolean
+  smartMultiFrameEnabled: boolean
+}
+type ShotGroupItemFields = {
+  items: Array<{
+    itemIndex: number
+    title: string | null
+    prompt: string | null
+    imageUrl: string | null
+    sourcePanelId: string | null
+  }>
 }
 
 async function listShotGroups(projectId: string, episodeId: string) {
@@ -90,7 +123,10 @@ export const POST = apiHandler(async (
   const body = await request.json().catch(() => ({}))
   const episodeId = typeof body.episodeId === 'string' ? body.episodeId : ''
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : '未命名镜头组'
-  const groupPrompt = typeof body.groupPrompt === 'string' ? body.groupPrompt.trim() : null
+  const groupPrompt = normalizeOptionalString(body.groupPrompt)
+  const videoPrompt = normalizeOptionalString(body.videoPrompt)
+  const referenceImageUrl = normalizeOptionalString(body.referenceImageUrl)
+  const dialogueLanguage = normalizeDialogueLanguage(body.dialogueLanguage) || 'zh'
   const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-4')
 
   if (!episodeId) {
@@ -123,17 +159,27 @@ export const POST = apiHandler(async (
     newCreatedAt = new Date((previous.createdAt.getTime() + next.createdAt.getTime()) / 2)
   }
 
-  const shotGroup = await prisma.novelPromotionShotGroup.create({
-    data: {
+  const createData = {
       episodeId,
       title,
       templateKey,
       groupPrompt,
+      videoPrompt,
+      referenceImageUrl,
+      generateAudio: normalizeOptionalBoolean(body.generateAudio) ?? false,
+      bgmEnabled: normalizeOptionalBoolean(body.bgmEnabled) ?? false,
+      includeDialogue: normalizeOptionalBoolean(body.includeDialogue) ?? false,
+      dialogueLanguage,
+      omniReferenceEnabled: normalizeOptionalBoolean(body.omniReferenceEnabled) ?? false,
+      smartMultiFrameEnabled: normalizeOptionalBoolean(body.smartMultiFrameEnabled) ?? false,
       createdAt: newCreatedAt,
       items: {
         create: buildDefaultItems(templateKey),
       },
-    },
+    } as unknown as Prisma.NovelPromotionShotGroupUncheckedCreateInput
+
+  const shotGroup = await prisma.novelPromotionShotGroup.create({
+    data: createData,
     include: {
       items: { orderBy: { itemIndex: 'asc' } },
     },
@@ -160,7 +206,7 @@ export const PATCH = apiHandler(async (
   const current = await prisma.novelPromotionShotGroup.findFirst({
     where: buildShotGroupInProjectWhere(projectId, shotGroupId),
     include: { items: { orderBy: { itemIndex: 'asc' } } },
-  })
+  }) as (Awaited<ReturnType<typeof prisma.novelPromotionShotGroup.findFirst>> & ShotGroupAdvancedFields & ShotGroupItemFields) | null
   if (!current) {
     throw new ApiError('NOT_FOUND')
   }
@@ -171,24 +217,47 @@ export const PATCH = apiHandler(async (
   const nextItemCount = getTemplateItemCount(nextTemplateKey)
 
   await prisma.$transaction(async (tx) => {
+    const updateData = {
+      title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : current.title,
+      templateKey: nextTemplateKey,
+      groupPrompt: body.groupPrompt === undefined
+        ? current.groupPrompt
+        : normalizeOptionalString(body.groupPrompt),
+      videoPrompt: body.videoPrompt === undefined
+        ? current.videoPrompt
+        : normalizeOptionalString(body.videoPrompt),
+      referenceImageUrl: body.referenceImageUrl === undefined
+        ? current.referenceImageUrl
+        : normalizeOptionalString(body.referenceImageUrl),
+      compositeImageUrl: body.compositeImageUrl === undefined
+        ? current.compositeImageUrl
+        : normalizeOptionalString(body.compositeImageUrl),
+      generateAudio: body.generateAudio === undefined
+        ? current.generateAudio
+        : (normalizeOptionalBoolean(body.generateAudio) ?? current.generateAudio),
+      bgmEnabled: body.bgmEnabled === undefined
+        ? current.bgmEnabled
+        : (normalizeOptionalBoolean(body.bgmEnabled) ?? current.bgmEnabled),
+      includeDialogue: body.includeDialogue === undefined
+        ? current.includeDialogue
+        : (normalizeOptionalBoolean(body.includeDialogue) ?? current.includeDialogue),
+      dialogueLanguage: body.dialogueLanguage === undefined
+        ? current.dialogueLanguage
+        : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage),
+      omniReferenceEnabled: body.omniReferenceEnabled === undefined
+        ? current.omniReferenceEnabled
+        : (normalizeOptionalBoolean(body.omniReferenceEnabled) ?? current.omniReferenceEnabled),
+      smartMultiFrameEnabled: body.smartMultiFrameEnabled === undefined
+        ? current.smartMultiFrameEnabled
+        : (normalizeOptionalBoolean(body.smartMultiFrameEnabled) ?? current.smartMultiFrameEnabled),
+      videoModel: body.videoModel === undefined
+        ? current.videoModel
+        : normalizeOptionalString(body.videoModel),
+    } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput
+
     await tx.novelPromotionShotGroup.update({
       where: { id: shotGroupId },
-      data: {
-        title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : current.title,
-        templateKey: nextTemplateKey,
-        groupPrompt: body.groupPrompt === undefined
-          ? current.groupPrompt
-          : (typeof body.groupPrompt === 'string' && body.groupPrompt.trim() ? body.groupPrompt.trim() : null),
-        referenceImageUrl: body.referenceImageUrl === undefined
-          ? current.referenceImageUrl
-          : (typeof body.referenceImageUrl === 'string' && body.referenceImageUrl.trim() ? body.referenceImageUrl.trim() : null),
-        compositeImageUrl: body.compositeImageUrl === undefined
-          ? current.compositeImageUrl
-          : (typeof body.compositeImageUrl === 'string' && body.compositeImageUrl.trim() ? body.compositeImageUrl.trim() : null),
-        videoModel: body.videoModel === undefined
-          ? current.videoModel
-          : (typeof body.videoModel === 'string' && body.videoModel.trim() ? body.videoModel.trim() : null),
-      },
+      data: updateData,
     })
 
     if (current.items.length > nextItemCount) {
