@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { getSignedUrl, toFetchableUrl } from '@/lib/storage'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 
 /**
  * 代理下载单个视频文件
@@ -14,9 +15,9 @@ export const GET = apiHandler(async (
 ) => {
     const { projectId } = await context.params
     const { searchParams } = new URL(request.url)
-    const videoKey = searchParams.get('key')
+    const videoValue = searchParams.get('key')
 
-    if (!videoKey) {
+    if (!videoValue) {
         throw new ApiError('INVALID_PARAMS')
     }
 
@@ -26,10 +27,14 @@ export const GET = apiHandler(async (
 
     // 生成签名 URL 并下载
     let fetchUrl: string
-    if (videoKey.startsWith('http://') || videoKey.startsWith('https://')) {
-        fetchUrl = videoKey
+    if (videoValue.startsWith('http://') || videoValue.startsWith('https://')) {
+        fetchUrl = videoValue
     } else {
-        fetchUrl = toFetchableUrl(getSignedUrl(videoKey, 3600))
+        const storageKey = await resolveStorageKeyFromMediaValue(videoValue)
+        if (!storageKey) {
+            throw new ApiError('INVALID_PARAMS')
+        }
+        fetchUrl = toFetchableUrl(getSignedUrl(storageKey, 3600))
     }
 
     _ulogInfo(`[视频代理] 下载: ${fetchUrl.substring(0, 100)}...`)
