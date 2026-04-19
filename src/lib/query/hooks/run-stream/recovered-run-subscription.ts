@@ -37,10 +37,10 @@ async function reconcileRunTerminalState(runId: string): Promise<{
       payload: Object.keys(output).length > 0 ? output : run,
     }
   }
-  if (status === 'failed' || status === 'canceled') {
+  if (status === 'failed' || status === 'canceled' || status === 'canceling') {
     return {
       status: 'failed',
-      message: readText(run.errorMessage) || `run ${status}`,
+      message: readText(run.errorMessage) || 'Run cancelled by user',
       payload: run,
     }
   }

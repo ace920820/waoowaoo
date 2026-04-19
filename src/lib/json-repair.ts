@@ -12,6 +12,16 @@ function stripMarkdownFence(input: string): string {
         .replace(/```\s*/g, '')
         .trim()
 }
+
+/**
+ * Strip common reasoning wrappers like <think>...</think> that some models
+ * prepend before the final JSON answer.
+ */
+function stripReasoningBlocks(input: string): string {
+    return input
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .trim()
+}
 /**
  * Try to extract a JSON object or array substring from mixed text.
  * Returns the extracted substring, or the original input if no clear
@@ -49,6 +59,60 @@ function extractJsonSubstring(input: string): string {
     return input
 }
 
+function collectJsonStartIndexes(input: string): number[] {
+    const indexes: number[] = []
+    for (let i = 0; i < input.length; i += 1) {
+        const ch = input[i]
+        if (ch === '{' || ch === '[') {
+            indexes.push(i)
+        }
+    }
+    return indexes
+}
+
+function extractBalancedJsonFromIndex(input: string, start: number): string | null {
+    const openChar = input[start]
+    if (openChar !== '{' && openChar !== '[') return null
+    const closeChar = openChar === '{' ? '}' : ']'
+
+    let depth = 0
+    let inString = false
+    let escaped = false
+
+    for (let i = start; i < input.length; i += 1) {
+        const ch = input[i]
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString; continue }
+        if (inString) continue
+        if (ch === openChar) depth += 1
+        else if (ch === closeChar) {
+            depth -= 1
+            if (depth === 0) {
+                return input.slice(start, i + 1)
+            }
+        }
+    }
+
+    return null
+}
+
+function extractPreferredJsonSubstring(input: string): string {
+    const indexes = collectJsonStartIndexes(input)
+    for (let i = indexes.length - 1; i >= 0; i -= 1) {
+        const candidate = extractBalancedJsonFromIndex(input, indexes[i])
+        if (!candidate) continue
+        try {
+            JSON.parse(candidate)
+            return candidate
+        } catch {
+            continue
+        }
+    }
+
+    return extractJsonSubstring(input)
+}
+
 /**
  * Safely parse JSON text from LLM output.
  * First attempts a direct JSON.parse; on failure, tries to extract a JSON
@@ -56,14 +120,14 @@ function extractJsonSubstring(input: string): string {
  * control characters, trailing commas, single quotes, etc.) before re-parsing.
  */
 export function safeParseJson(input: string): unknown {
-    const cleaned = stripMarkdownFence(input.trim())
+    const cleaned = stripReasoningBlocks(stripMarkdownFence(input.trim()))
     // Fast path: direct parse
     try {
         return JSON.parse(cleaned)
     } catch { /* continue to repair */ }
 
     // Try extracting a JSON substring first (handles LLM explanatory text)
-    const extracted = extractJsonSubstring(cleaned)
+    const extracted = extractPreferredJsonSubstring(cleaned)
     try {
         return JSON.parse(extracted)
     } catch { /* continue to repair */ }

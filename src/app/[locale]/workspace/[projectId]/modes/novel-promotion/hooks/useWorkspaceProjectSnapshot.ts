@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import type { NovelPromotionWorkspaceProps } from '../types'
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import { normalizeStoryboardMoodPresets } from '@/lib/storyboard-mood-presets'
+import type { NovelPromotionEpisodeProductionMode } from '@/types/project'
 
 function parseCapabilitySelections(raw: unknown): CapabilitySelections {
   if (!raw) return {}
@@ -24,17 +25,20 @@ export function useWorkspaceProjectSnapshot({
   project,
   episode,
   urlStage,
-}: Pick<NovelPromotionWorkspaceProps, 'project' | 'episode' | 'urlStage'>) {
+  episodeProductionMode,
+}: Pick<NovelPromotionWorkspaceProps, 'project' | 'episode' | 'urlStage'> & {
+  episodeProductionMode?: NovelPromotionEpisodeProductionMode | null
+}) {
   return useMemo(() => {
     const projectData = project.novelPromotionData
     const capabilityOverrides = parseCapabilitySelections(projectData?.capabilityOverrides)
-    const episodeProductionMode = episode?.episodeProductionMode || 'multi_shot'
+    const resolvedEpisodeProductionMode = episodeProductionMode || episode?.episodeProductionMode || 'multi_shot'
     const normalizedStage = (() => {
       if (urlStage === 'editor') return 'videos'
-      if (urlStage === 'storyboard' && episodeProductionMode === 'multi_shot') {
+      if (urlStage === 'storyboard' && resolvedEpisodeProductionMode === 'multi_shot') {
         return 'multi-shot-storyboard'
       }
-      if (urlStage === 'multi-shot-storyboard' && episodeProductionMode === 'traditional') {
+      if (urlStage === 'multi-shot-storyboard' && resolvedEpisodeProductionMode === 'traditional') {
         return 'storyboard'
       }
       return urlStage || 'config'
@@ -63,6 +67,7 @@ export function useWorkspaceProjectSnapshot({
       artStyle: projectData?.artStyle,
     }
   }, [
+    episodeProductionMode,
     episode?.episodeProductionMode,
     episode?.novelText,
     episode?.storyboards,

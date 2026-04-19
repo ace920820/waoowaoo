@@ -38,7 +38,6 @@ export function useScriptToStoryboardRunStream({ projectId, episodeId }: UseScri
       })
       search.append('status', 'queued')
       search.append('status', 'running')
-      search.append('status', 'canceling')
       search.set('_v', '2')
       const response = await apiFetch(`/api/runs?${search.toString()}`, {
         method: 'GET',

@@ -17,7 +17,6 @@ export type RunRecoveryDecision = {
 const ACTIVE_RUN_STATUSES = new Set<RunStatus>([
   RUN_STATUS.QUEUED,
   RUN_STATUS.RUNNING,
-  RUN_STATUS.CANCELING,
 ])
 
 function toTimestamp(value: string | null | undefined): number {

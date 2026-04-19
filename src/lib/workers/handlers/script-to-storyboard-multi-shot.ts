@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq'
 import { buildCharactersIntroduction } from '@/lib/constants'
 import { safeParseJsonArray } from '@/lib/json-repair'
+import { logError as _ulogError, logInfo as _ulogInfo } from '@/lib/logging/core'
 import { createArtifact } from '@/lib/run-runtime/service'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { reportTaskProgress } from '@/lib/workers/shared'
@@ -48,6 +49,35 @@ type NovelDataLike = {
 
 function normalizeText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function truncateText(value: string | null | undefined, maxLength: number): string {
+  const normalized = normalizeText(value)
+  if (!normalized) return ''
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength)}...`
+}
+
+function splitNameList(value: string | null | undefined): string[] {
+  return normalizeText(value)
+    .split(/[、，,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function buildRelevantCharacterIntroduction(params: {
+  clipCharacters: string | null | undefined
+  characters: NovelDataLike['characters']
+}) {
+  const characterNames = new Set(splitNameList(params.clipCharacters))
+  const prioritized = params.characters.filter((item) => characterNames.has(item.name))
+  const fallback = prioritized.length > 0 ? prioritized : params.characters.slice(0, 4)
+  return truncateText(buildCharactersIntroduction(fallback as never[]), 800) || '暂无角色介绍'
+}
+
+function buildRelevantAssetNames(items: string[], maxItems = 6) {
+  if (items.length === 0) return '无'
+  return items.slice(0, maxItems).join('、')
 }
 
 function normalizeExpectedShotCount(value: unknown, fallback: number): number {
@@ -113,23 +143,26 @@ function buildClipGenerationPrompt(params: {
       segment_count: String(params.segmentDefaults.length),
       expected_shot_count: String(expectedShotCount),
       scene_label: sceneLabel,
-      clip_summary: normalizeText(params.clip.summary) || '无',
-      clip_content: normalizeText(params.clip.content) || '无',
-      screenplay_json: normalizeText(params.clip.screenplay) || '无',
-      clip_characters: normalizeText(params.clip.characters) || '无',
-      clip_location: normalizeText(params.clip.location) || '无',
-      clip_props: normalizeText(params.clip.props) || '无',
+      clip_summary: truncateText(params.clip.summary, 600) || '无',
+      clip_content: truncateText(params.clip.content, 1800) || '无',
+      screenplay_json: truncateText(params.clip.screenplay, 2200) || '无',
+      clip_characters: truncateText(params.clip.characters, 120) || '无',
+      clip_location: truncateText(params.clip.location, 120) || '无',
+      clip_props: truncateText(params.clip.props, 120) || '无',
       segment_windows: segmentWindowSummary || '无',
-      characters_lib_name: params.novelData.characters.map((item) => item.name).join('、') || '无',
-      characters_introduction: buildCharactersIntroduction(params.novelData.characters as never[]),
-      locations_lib_name: params.novelData.locations
+      characters_lib_name: buildRelevantAssetNames(params.novelData.characters.map((item) => item.name)),
+      characters_introduction: buildRelevantCharacterIntroduction({
+        clipCharacters: params.clip.characters,
+        characters: params.novelData.characters,
+      }),
+      locations_lib_name: buildRelevantAssetNames(params.novelData.locations
         .filter((item) => item.assetKind !== 'prop')
         .map((item) => item.name)
-        .join('、') || '无',
-      props_lib_name: params.novelData.locations
+      ),
+      props_lib_name: buildRelevantAssetNames(params.novelData.locations
         .filter((item) => item.assetKind === 'prop')
         .map((item) => item.name)
-        .join('、') || '无',
+      ),
     },
   })
 }
@@ -214,10 +247,22 @@ export async function handleMultiShotScriptToStoryboardTask(params: {
     const clip = params.clips[index]
     const segmentDefaults = defaultsByClipId.get(clip.id) || []
     panelCount += segmentDefaults.length
+    _ulogInfo('[MultiShotStoryboard] clip processing started', {
+      runId: params.runId,
+      episodeId: params.episodeId,
+      clipId: clip.id,
+      clipIndex: index + 1,
+      totalClips: params.clips.length,
+      segmentDefaultCount: segmentDefaults.length,
+    })
 
     if (segmentDefaults.length === 0) continue
 
     if (segmentDefaults.every((item) => item.sourceStatus === 'placeholder')) {
+      _ulogInfo('[MultiShotStoryboard] clip defaults already placeholder', {
+        runId: params.runId,
+        clipId: clip.id,
+      })
       generatedDrafts.push(...segmentDefaults)
       continue
     }
@@ -240,9 +285,20 @@ export async function handleMultiShotScriptToStoryboardTask(params: {
         retryable: true,
       }, prompt, 'multi_shot_storyboard', 3600)
       const generatedRows = safeParseJsonArray(output.text, 'segments')
+      _ulogInfo('[MultiShotStoryboard] clip generation completed', {
+        runId: params.runId,
+        clipId: clip.id,
+        generatedRowCount: generatedRows.length,
+      })
       const merged = mergeClipSegments({
         segmentDefaults,
         generatedRows,
+      })
+      _ulogInfo('[MultiShotStoryboard] clip merge completed', {
+        runId: params.runId,
+        clipId: clip.id,
+        mergedCount: merged.length,
+        placeholderCount: merged.filter((item) => item.sourceStatus === 'placeholder').length,
       })
       generatedDrafts.push(...merged)
 
@@ -256,7 +312,12 @@ export async function handleMultiShotScriptToStoryboardTask(params: {
           segments: merged,
         },
       })
-    } catch {
+    } catch (error) {
+      _ulogError('[MultiShotStoryboard] clip generation failed', {
+        runId: params.runId,
+        clipId: clip.id,
+        message: error instanceof Error ? error.message : String(error),
+      })
       generatedDrafts.push(...segmentDefaults.map(markDraftGenerationFailed))
     }
   }
@@ -267,10 +328,22 @@ export async function handleMultiShotScriptToStoryboardTask(params: {
     displayMode: 'detail',
   })
   await params.assertRunActive('multi_shot_storyboard_persist')
+  _ulogInfo('[MultiShotStoryboard] persisting drafts', {
+    runId: params.runId,
+    episodeId: params.episodeId,
+    generatedDraftCount: generatedDrafts.length,
+    placeholderCount: generatedDrafts.filter((item) => item.sourceStatus === 'placeholder').length,
+  })
 
   const persisted = await persistEpisodeMultiShotDrafts({
     episodeId: params.episodeId,
     drafts: generatedDrafts,
+  })
+  _ulogInfo('[MultiShotStoryboard] persisted drafts', {
+    runId: params.runId,
+    episodeId: params.episodeId,
+    shotGroupCount: persisted.shotGroups.length,
+    summary: persisted.summary,
   })
 
   await createArtifact({

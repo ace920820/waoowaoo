@@ -2,6 +2,7 @@
 
 const PROBE_SUCCESS_COOLDOWN_MS = 60_000
 const PROBE_RETRY_INTERVAL_MS = 2_000
+const PROBE_MAX_RETRY_INTERVAL_MS = 30_000
 const successfulProbeScopes = new Map<string, number>()
 
 type RecoveryProbeContext = {
@@ -28,6 +29,7 @@ function scheduleProbe(
 export function startRecoveryProbe(args: StartRecoveryProbeArgs): () => void {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let consecutiveMisses = 0
 
   const clearRetryTimer = () => {
     if (retryTimer) {
@@ -65,10 +67,16 @@ export function startRecoveryProbe(args: StartRecoveryProbeArgs): () => void {
     if (cancelled || args.hasRunState()) return
 
     if (!activeRunId) {
-      scheduleRetry(PROBE_RETRY_INTERVAL_MS)
+      consecutiveMisses += 1
+      const retryDelayMs = Math.min(
+        PROBE_RETRY_INTERVAL_MS * (2 ** Math.max(0, consecutiveMisses - 1)),
+        PROBE_MAX_RETRY_INTERVAL_MS,
+      )
+      scheduleRetry(retryDelayMs)
       return
     }
 
+    consecutiveMisses = 0
     successfulProbeScopes.set(args.storageKey, Date.now())
     args.onRecovered(activeRunId)
   }
@@ -87,4 +95,5 @@ export const recoveryProbeTestUtils = {
   },
   PROBE_RETRY_INTERVAL_MS,
   PROBE_SUCCESS_COOLDOWN_MS,
+  PROBE_MAX_RETRY_INTERVAL_MS,
 }

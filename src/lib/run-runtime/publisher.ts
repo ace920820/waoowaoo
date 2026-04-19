@@ -1,3 +1,4 @@
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { redis } from '@/lib/redis'
 import { appendRunEventWithSeq } from './service'
 import type { RunEventInput } from './types'
@@ -10,6 +11,16 @@ export function getProjectRunChannel(projectId: string) {
 
 export async function publishRunEvent(input: RunEventInput) {
   const event = await appendRunEventWithSeq(input)
+  _ulogInfo('[RunPublisher] publish run event', {
+    runId: event.runId,
+    projectId: event.projectId,
+    seq: event.seq,
+    eventType: event.eventType,
+    stepKey: event.stepKey || null,
+    attempt: event.attempt || null,
+    lane: event.lane || null,
+    payload: event.payload || null,
+  })
   const message = {
     id: event.id,
     type: 'run.event',
@@ -27,4 +38,3 @@ export async function publishRunEvent(input: RunEventInput) {
   await redis.publish(getProjectRunChannel(event.projectId), JSON.stringify(message))
   return message
 }
-

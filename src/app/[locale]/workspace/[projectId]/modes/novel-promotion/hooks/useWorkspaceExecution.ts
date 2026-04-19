@@ -230,6 +230,13 @@ export function useWorkspaceExecution({
     }
 
     try {
+      _ulogInfo('[WorkspaceExecution] script-to-storyboard requested', {
+        projectId,
+        episodeId,
+        currentStage,
+        episodeProductionMode,
+        analysisModel: analysisModel || null,
+      })
       setScriptToStoryboardConsoleMinimized(false)
       setIsConfirmingAssets(true)
       setTransitionProgress({ message: t('execution.scriptToStoryboardRunning'), step: 'streaming' })
@@ -239,11 +246,24 @@ export function useWorkspaceExecution({
         temperature: 0.7,
         reasoning: true,
       })
+      _ulogInfo('[WorkspaceExecution] script-to-storyboard run finished', {
+        projectId,
+        episodeId,
+        status: runResult.status,
+        runId: runResult.runId || null,
+        errorMessage: runResult.errorMessage || null,
+        summary: runResult.summary,
+      })
       if (runResult.status !== 'completed') {
         throw new Error(runResult.errorMessage || t('execution.scriptToStoryboardFailed'))
       }
       await finalizeScriptToStoryboardSuccess(runResult.runId || '')
     } catch (err: unknown) {
+      _ulogInfo('[WorkspaceExecution] script-to-storyboard run failed', {
+        projectId,
+        episodeId,
+        message: getErrorMessage(err),
+      })
       if (isAbortError(err)) {
         _ulogInfo(t('execution.requestAborted'))
         return
@@ -254,7 +274,16 @@ export function useWorkspaceExecution({
       setIsConfirmingAssets(false)
       setTransitionProgress({ message: '', step: '' })
     }
-  }, [analysisModel, episodeId, finalizeScriptToStoryboardSuccess, scriptToStoryboardStream, t])
+  }, [
+    analysisModel,
+    currentStage,
+    episodeId,
+    episodeProductionMode,
+    finalizeScriptToStoryboardSuccess,
+    projectId,
+    scriptToStoryboardStream,
+    t,
+  ])
 
   useEffect(() => {
     const active = (

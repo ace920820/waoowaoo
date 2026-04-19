@@ -1,3 +1,4 @@
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import type { MutableRefObject } from 'react'
 import type { RunStreamEvent } from '@/lib/novel-promotion/run-stream/types'
 import { isAsyncTaskResponse } from '@/lib/task/client'
@@ -46,8 +47,8 @@ async function reconcileRunTerminalState(runId: string): Promise<RunResult | nul
       errorMessage: '',
     }
   }
-  if (status === 'failed' || status === 'canceled') {
-    const errorMessage = readText(run.errorMessage) || `run ${status}`
+  if (status === 'failed' || status === 'canceled' || status === 'canceling') {
+    const errorMessage = readText(run.errorMessage) || 'Run cancelled by user'
     return buildFailedResult(runId, errorMessage)
   }
   return null
@@ -73,6 +74,11 @@ async function waitRunEventsTerminal(args: {
   let afterSeq = 0
   let emptyPollCount = 0
 
+  _ulogInfo('[RunRequestExecutor] waiting run terminal state', {
+    runId: args.runId,
+    taskStreamTimeoutMs: args.taskStreamTimeoutMs,
+  })
+
   while (true) {
     if (args.controller.signal.aborted) {
       return buildFailedResult(args.runId, 'aborted')
@@ -93,6 +99,11 @@ async function waitRunEventsTerminal(args: {
       runId: args.runId,
       afterSeq,
       limit: RUN_EVENTS_LIMIT,
+    })
+    _ulogInfo('[RunRequestExecutor] polled run events', {
+      runId: args.runId,
+      afterSeq,
+      rowCount: rows.length,
     })
 
     let sawNewEvent = false
@@ -133,9 +144,20 @@ async function waitRunEventsTerminal(args: {
         event: row,
       })
       if (!streamEvent) continue
+      _ulogInfo('[RunRequestExecutor] received run event', {
+        runId: args.runId,
+        seq: row.seq,
+        eventType: row.eventType,
+        stepKey: row.stepKey || null,
+      })
       args.applyAndCapture(streamEvent)
       const terminalResult = toTerminalRunResult(streamEvent)
       if (terminalResult) {
+        _ulogInfo('[RunRequestExecutor] terminal run event received', {
+          runId: args.runId,
+          status: terminalResult.status,
+          errorMessage: terminalResult.errorMessage || null,
+        })
         return {
           ...terminalResult,
           runId: args.runId,
@@ -150,6 +172,11 @@ async function waitRunEventsTerminal(args: {
       if (emptyPollCount >= RUN_TERMINAL_RECONCILE_EMPTY_POLLS) {
         const reconciled = await reconcileRunTerminalState(args.runId)
         if (reconciled) {
+          _ulogInfo('[RunRequestExecutor] reconciled terminal run snapshot', {
+            runId: args.runId,
+            status: reconciled.status,
+            errorMessage: reconciled.errorMessage || null,
+          })
           if (reconciled.status === 'completed') {
             args.applyAndCapture({
               runId: args.runId,
@@ -179,6 +206,10 @@ async function waitRunEventsTerminal(args: {
 
 export async function executeRunRequest(args: RunRequestExecutorArgs): Promise<RunResult> {
   try {
+    _ulogInfo('[RunRequestExecutor] sending run request', {
+      endpointUrl: args.endpointUrl,
+      requestBody: args.requestBody,
+    })
     const response = await apiFetch(args.endpointUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -212,6 +243,13 @@ export async function executeRunRequest(args: RunRequestExecutorArgs): Promise<R
         if (!runId) {
           throw new Error('async task response missing runId')
         }
+        _ulogInfo('[RunRequestExecutor] received async task response', {
+          endpointUrl: args.endpointUrl,
+          runId,
+          taskId: typeof asyncPayload.taskId === 'string' ? asyncPayload.taskId : null,
+          status: typeof asyncPayload.status === 'string' ? asyncPayload.status : null,
+          deduped: asyncPayload.deduped === true,
+        })
 
         const result = await waitRunEventsTerminal({
           runId,
@@ -245,6 +283,10 @@ export async function executeRunRequest(args: RunRequestExecutorArgs): Promise<R
     }
 
     const message = error instanceof Error ? error.message : String(error)
+    _ulogInfo('[RunRequestExecutor] request failed', {
+      endpointUrl: args.endpointUrl,
+      message,
+    })
     args.finalResultRef.current = buildFailedResult('', message)
     throw error
   }

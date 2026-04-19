@@ -40,8 +40,14 @@ export function useNovelPromotionWorkspaceController({
   const router = useRouter()
   const { onRefresh } = useWorkspaceProvider()
   const liveEpisodeStageData = useWorkspaceEpisodeStageData()
+  const liveEpisodeProductionMode = liveEpisodeStageData.episodeProductionMode || episode?.episodeProductionMode || 'multi_shot'
 
-  const projectSnapshot = useWorkspaceProjectSnapshot({ project, episode, urlStage })
+  const projectSnapshot = useWorkspaceProjectSnapshot({
+    project,
+    episode,
+    urlStage,
+    episodeProductionMode: liveEpisodeProductionMode,
+  })
   const { currentStage, ...projectSection } = projectSnapshot
 
   const assetsLoading = false
@@ -100,7 +106,7 @@ export function useNovelPromotionWorkspaceController({
     projectId,
     episodeId,
     currentStage,
-    episodeProductionMode: episode?.episodeProductionMode || 'multi_shot',
+    episodeProductionMode: liveEpisodeProductionMode,
     analysisModel: projectSnapshot.analysisModel,
     novelText: projectSnapshot.novelText,
     t,
@@ -154,7 +160,7 @@ export function useNovelPromotionWorkspaceController({
   const capsuleNavItems = useWorkspaceStageNavigation({
     isAnyOperationRunning,
     stageArtifacts,
-    episodeProductionMode: episode?.episodeProductionMode || 'multi_shot',
+    episodeProductionMode: liveEpisodeProductionMode,
     t,
   })
 
@@ -170,7 +176,7 @@ export function useNovelPromotionWorkspaceController({
     artStyle: projectSnapshot.artStyle,
     storyboardMoodPresets: projectSnapshot.storyboardMoodPresets,
     storyboardDefaultMoodPresetId: projectSnapshot.storyboardDefaultMoodPresetId,
-    episodeProductionMode: episode?.episodeProductionMode || 'multi_shot',
+    episodeProductionMode: liveEpisodeProductionMode,
     videoModel: projectSnapshot.videoModel,
     capabilityOverrides: projectSnapshot.capabilityOverrides,
     userVideoModels: userModels.userVideoModels || [],

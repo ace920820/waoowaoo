@@ -48,6 +48,15 @@ function resolveRunIdFromPayload(payload: unknown): string | null {
   return runIdFromMeta || null
 }
 
+async function verifyReusableRunTaskAlive(taskId: string): Promise<boolean> {
+  try {
+    const { isJobAlive } = await import('./reconcile')
+    return await isJobAlive(taskId)
+  } catch {
+    return true
+  }
+}
+
 export function isActiveTaskStatus(status: string | null | undefined) {
   return status === TASK_STATUS.QUEUED || status === TASK_STATUS.PROCESSING
 }
@@ -154,9 +163,25 @@ export async function submitTask(params: {
         targetId: params.targetId,
       })
     : null
-  const reusableRunTask = reusableRun?.taskId
+  let reusableRunTask = reusableRun?.taskId
     ? await getTaskById(reusableRun.taskId)
     : null
+
+  if (runCentricTask && reusableRun && reusableRunTask && isActiveTaskStatus(reusableRunTask.status)) {
+      const jobAlive = await verifyReusableRunTaskAlive(reusableRunTask.id)
+      if (!jobAlive) {
+        await rollbackTaskBillingForTask({
+          taskId: reusableRunTask.id,
+          billingInfo: reusableRunTask.billingInfo,
+        })
+        await markTaskFailed(
+          reusableRunTask.id,
+          'RECONCILE_ORPHAN',
+          'Queue job lost, replaced by new run-centric task',
+        )
+        reusableRunTask = await getTaskById(reusableRunTask.id)
+      }
+  }
 
   if (runCentricTask && reusableRun && reusableRunTask && isActiveTaskStatus(reusableRunTask.status)) {
       return {
