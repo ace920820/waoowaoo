@@ -84,6 +84,31 @@ type DraftMetadataRecord = {
   expectedShotCount: number
   sourceStatus: 'ready' | 'placeholder'
   placeholderReason: 'missing_clip_content' | null
+  dialogueOverrideText?: string | null
+  selectedLocationAsset?: {
+    assetType: 'location'
+    source: 'manual' | 'preselected' | 'scriptDerived'
+    assetId: string | null
+    label: string
+  } | null
+  selectedCharacterAssets?: Array<{
+    assetType: 'character'
+    source: 'manual' | 'preselected' | 'scriptDerived'
+    assetId: string | null
+    label: string
+  }>
+  selectedPropAssets?: Array<{
+    assetType: 'prop'
+    source: 'manual' | 'preselected' | 'scriptDerived'
+    assetId: string | null
+    label: string
+  }>
+  referencePromptText?: string | null
+  compositePromptText?: string | null
+  storyboardModeId?: string | null
+  storyboardModeLabel?: string | null
+  storyboardMoodPresetId?: string | null
+  customMood?: string | null
 }
 
 type EpisodeRecord = {
@@ -460,5 +485,131 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
     expect(new Set(metadataList.map((metadata) => metadata.segmentKey)).size).toBe(8)
     expect(metadataList.filter((metadata) => metadata.clipId === 'clip-1')).toHaveLength(4)
     expect(metadataList.filter((metadata) => metadata.clipId === 'clip-2')).toHaveLength(4)
+  })
+
+  it('preserves saved editable metadata when multi-shot drafts are rebuilt', async () => {
+    routeState.episode = {
+      id: 'episode-1',
+      clips: [
+        buildClip({ id: 'clip-1', start: 0, end: 60, duration: 60, location: '新雨夜街口' }),
+      ],
+      shotGroups: [
+        buildShotGroup({
+          id: 'shot-group-editable',
+          videoReferencesJson: JSON.stringify({
+            configVersion: 2,
+            mode: 'smart-multi-frame',
+            generateAudio: false,
+            includeDialogue: true,
+            dialogueLanguage: 'zh',
+            draftMetadata: buildDraftMetadata({
+              clipId: 'clip-1',
+              sourceClipId: 'clip-1',
+              segmentKey: 'stale-key',
+              segmentIndexWithinClip: 1,
+              segmentOrder: 99,
+              segmentStartSeconds: 120,
+              segmentEndSeconds: 135,
+              sceneLabel: '旧场景',
+              narrativePrompt: '旧提示词',
+              embeddedDialogue: '旧台词',
+              dialogueOverrideText: '保留这句用户台词',
+              selectedLocationAsset: {
+                assetType: 'location',
+                source: 'manual',
+                assetId: 'loc-1',
+                label: '天台',
+              },
+              selectedCharacterAssets: [{
+                assetType: 'character',
+                source: 'manual',
+                assetId: 'char-1',
+                label: '林夏定妆',
+              }],
+              selectedPropAssets: [{
+                assetType: 'prop',
+                source: 'manual',
+                assetId: 'prop-1',
+                label: '黑伞',
+              }],
+              referencePromptText: '保留参考提示词',
+              compositePromptText: '保留合成提示词',
+              storyboardModeId: 'story-mode-1',
+              storyboardModeLabel: '电影感',
+              storyboardMoodPresetId: 'mood-rain',
+              customMood: '潮湿压迫感',
+            }),
+          }),
+        }),
+      ],
+    }
+
+    const mod = await import('@/app/api/novel-promotion/[projectId]/multi-shot-drafts/route')
+    const req = buildMockRequest({
+      path: '/api/novel-promotion/project-1/multi-shot-drafts',
+      method: 'POST',
+      body: { episodeId: 'episode-1' },
+    })
+
+    const res = await mod.POST(req, { params: Promise.resolve({ projectId: 'project-1' }) })
+    const json = await res.json() as {
+      shotGroups: ShotGroupRecord[]
+      summary: { totalSegments: number; createdCount: number; reusedCount: number; placeholderCount: number }
+    }
+
+    expect(res.status).toBe(200)
+    expect(json.summary).toEqual({
+      totalSegments: 4,
+      createdCount: 3,
+      reusedCount: 0,
+      placeholderCount: 0,
+    })
+
+    const rebuilt = json.shotGroups.find((group) => group.id === 'shot-group-editable')
+    expect(rebuilt).toBeTruthy()
+
+    const rebuiltMetadata = JSON.parse(rebuilt?.videoReferencesJson || '{}').draftMetadata as DraftMetadataRecord
+    expect(rebuiltMetadata.dialogueOverrideText).toBe('保留这句用户台词')
+    expect(rebuiltMetadata.selectedLocationAsset).toMatchObject({
+      assetType: 'location',
+      source: 'manual',
+      assetId: 'loc-1',
+      label: '天台',
+    })
+    expect(rebuiltMetadata.selectedCharacterAssets).toMatchObject([{
+      assetType: 'character',
+      source: 'manual',
+      assetId: 'char-1',
+      label: '林夏定妆',
+    }])
+    expect(rebuiltMetadata.selectedPropAssets).toMatchObject([{
+      assetType: 'prop',
+      source: 'manual',
+      assetId: 'prop-1',
+      label: '黑伞',
+    }])
+    expect(rebuiltMetadata.storyboardModeId).toBe('story-mode-1')
+    expect(rebuiltMetadata.storyboardModeLabel).toBe('电影感')
+    expect(rebuiltMetadata.storyboardMoodPresetId).toBe('mood-rain')
+    expect(rebuiltMetadata.customMood).toBe('潮湿压迫感')
+    expect(rebuiltMetadata.referencePromptText).toBe('保留参考提示词')
+    expect(rebuiltMetadata.compositePromptText).toBe('保留合成提示词')
+
+    expect(rebuiltMetadata.segmentKey).toBe('clip-1:1')
+    expect(rebuiltMetadata.segmentOrder).toBe(1)
+    expect(rebuiltMetadata.segmentIndexWithinClip).toBe(1)
+    expect(rebuiltMetadata.segmentStartSeconds).toBe(0)
+    expect(rebuiltMetadata.segmentEndSeconds).toBe(15)
+    expect(rebuiltMetadata.sceneLabel).toBe('新雨夜街口')
+
+    const persisted = routeState.episode?.shotGroups.find((group) => group.id === 'shot-group-editable')
+    const persistedMetadata = JSON.parse(persisted?.videoReferencesJson || '{}').draftMetadata as DraftMetadataRecord
+    expect(persistedMetadata.dialogueOverrideText).toBe('保留这句用户台词')
+    expect(persistedMetadata.selectedLocationAsset?.assetId).toBe('loc-1')
+    expect(persistedMetadata.storyboardModeId).toBe('story-mode-1')
+    expect(persistedMetadata.customMood).toBe('潮湿压迫感')
+    expect(persistedMetadata.segmentKey).toBe('clip-1:1')
+    expect(persistedMetadata.segmentStartSeconds).toBe(0)
+    expect(persistedMetadata.segmentEndSeconds).toBe(15)
   })
 })
