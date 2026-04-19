@@ -39,6 +39,14 @@ export default function MultiShotStoryboardStage() {
             多镜头快路径会按剧集片段结构自动生成草稿。每个片段对应一个 15 秒视频生成单元，最多承载 9 个镜头；这里先做人审和参考确认，不会直接提交视频生成。
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-black/55">
+            <span className="rounded-full border border-black/10 bg-black/[0.04] px-3 py-1">剧本</span>
+            <span aria-hidden="true">-&gt;</span>
+            <span className="rounded-full border border-black/10 bg-black/[0.04] px-3 py-1">多镜头分镜/参考确认</span>
+            <span aria-hidden="true">-&gt;</span>
+            <span className="rounded-full border border-black/10 bg-black/[0.04] px-3 py-1">videos</span>
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button
               type="button"

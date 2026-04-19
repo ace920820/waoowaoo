@@ -117,11 +117,17 @@ describe('multi-shot storyboard stage', () => {
     expect(html).toContain('草稿创建已完成')
     expect(html).toContain('视频生成尚未开始')
     expect(html).toContain('进入 videos 前，必须逐段确认分镜参考')
+    expect(html).toContain('剧本')
+    expect(html).toContain('多镜头分镜/参考确认')
+    expect(html).toContain('videos')
   })
 
   it('shows per-segment reference confirmation affordances before videos', () => {
     const html = renderStage()
 
+    expect(html).toContain('片段 1')
+    expect(html).toContain('片段 2')
+    expect(html).toContain('片段 3')
     expect(html).toContain('上传参考图')
     expect(html).toContain('生成参考板')
     expect(html).toContain('替换参考图')
