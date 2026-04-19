@@ -1,4 +1,6 @@
 import React from 'react'
+import fs from 'node:fs'
+import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { resolveVisibleBaseVideoUrl } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/panel-card/runtime/shared'
@@ -96,5 +98,25 @@ describe('video stage regressions', () => {
       field: 'firstLastFramePrompt',
       externalPrompt: '',
     })).toBe('')
+  })
+
+  it('renders the single-shot supplement section after shot groups', () => {
+    const runtimeSource = fs.readFileSync(
+      path.join(process.cwd(), 'src/lib/novel-promotion/stages/video-stage-runtime-core.tsx'),
+      'utf8',
+    )
+    const renderPanelSource = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        'src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/VideoRenderPanel.tsx',
+      ),
+      'utf8',
+    )
+
+    expect(runtimeSource).toContain('sectionTitle="手动补充单镜头"')
+    expect(runtimeSource).toContain('sectionDescription="这些镜头作为多镜头片段之外的补充单元独立生成。"')
+    expect(runtimeSource.indexOf('<ShotGroupVideoSection')).toBeLessThan(runtimeSource.indexOf('<VideoRenderPanel'))
+    expect(renderPanelSource).toContain('sectionTitle?: string')
+    expect(renderPanelSource).toContain('sectionDescription?: string')
   })
 })

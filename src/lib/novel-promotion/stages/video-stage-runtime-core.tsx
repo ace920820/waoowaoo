@@ -571,6 +571,8 @@ export function useVideoStageRuntime({
 
       <VideoRenderPanel
         allPanels={projectedPanels}
+        sectionTitle="手动补充单镜头"
+        sectionDescription="这些镜头作为多镜头片段之外的补充单元独立生成。"
         linkedPanels={linkedPanels}
         highlightedPanelKey={highlightedPanelKey}
         panelRefs={panelRefs}

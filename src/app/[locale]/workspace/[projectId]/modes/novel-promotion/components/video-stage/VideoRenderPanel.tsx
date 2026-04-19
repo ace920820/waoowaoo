@@ -6,6 +6,8 @@ import type { PromptField } from '@/lib/novel-promotion/stages/video-stage-runti
 
 interface VideoRenderPanelProps {
   allPanels: VideoPanel[]
+  sectionTitle?: string
+  sectionDescription?: string
   linkedPanels: Map<string, boolean>
   highlightedPanelKey: string | null
   panelRefs: MutableRefObject<Map<string, HTMLDivElement>>
@@ -74,6 +76,8 @@ interface VideoRenderPanelProps {
 
 export default function VideoRenderPanel({
   allPanels,
+  sectionTitle,
+  sectionDescription,
   linkedPanels,
   highlightedPanelKey,
   panelRefs,
@@ -113,7 +117,21 @@ export default function VideoRenderPanel({
   savePrompt,
 }: VideoRenderPanelProps) {
   return (
-    <>
+    <section className="space-y-4">
+      {(sectionTitle || sectionDescription) && (
+        <div className="space-y-2">
+          {sectionTitle ? (
+            <h2 className="text-xl font-semibold text-black">
+              {sectionTitle}
+            </h2>
+          ) : null}
+          {sectionDescription ? (
+            <p className="text-sm leading-6 text-black/65">
+              {sectionDescription}
+            </p>
+          ) : null}
+        </div>
+      )}
       <div className={`grid gap-4 ${getAspectRatioConfig(videoRatio).isVertical
         ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
         : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
@@ -202,6 +220,6 @@ export default function VideoRenderPanel({
           )
         })}
       </div>
-    </>
+    </section>
   )
 }
