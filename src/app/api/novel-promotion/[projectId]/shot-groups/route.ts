@@ -88,6 +88,20 @@ function parseShotGroupVideoConfig(value: string | null | undefined): Record<str
   }
 }
 
+function mergeIncomingDraftMetadata(
+  previousDraftMetadata: ShotGroupDraftMetadata | null,
+  patch: unknown,
+): ShotGroupDraftMetadata | null {
+  if (!patch || typeof patch !== 'object') {
+    return previousDraftMetadata
+  }
+
+  return {
+    ...(previousDraftMetadata || {}),
+    ...(patch as Partial<ShotGroupDraftMetadata>),
+  } as ShotGroupDraftMetadata
+}
+
 async function listShotGroups(projectId: string, episodeId: string) {
   const shotGroups = await prisma.novelPromotionShotGroup.findMany({
     where: {
@@ -158,9 +172,7 @@ export const POST = apiHandler(async (
   })
   const modeFlags = deriveShotGroupModeFlags(mode)
   const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
-  const draftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
-    ? body.draftMetadata as ShotGroupDraftMetadata
-    : null
+  const draftMetadata = mergeIncomingDraftMetadata(null, body.draftMetadata)
 
   if (!episodeId) {
     throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
@@ -278,12 +290,7 @@ export const PATCH = apiHandler(async (
     : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage)
   const previousGenerationOptions = sanitizeShotGroupGenerationOptions(currentVideoConfig.generationOptions)
   const previousDraftMetadata = parseShotGroupDraftMetadata(current.videoReferencesJson)
-  const nextDraftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
-    ? {
-      ...(previousDraftMetadata || {}),
-      ...(body.draftMetadata as Partial<ShotGroupDraftMetadata>),
-    } as ShotGroupDraftMetadata
-    : previousDraftMetadata
+  const nextDraftMetadata = mergeIncomingDraftMetadata(previousDraftMetadata, body.draftMetadata)
   const nextGenerationOptions = body.generationOptions === undefined
     ? previousGenerationOptions
     : {

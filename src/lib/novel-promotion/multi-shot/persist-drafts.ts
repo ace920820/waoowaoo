@@ -114,6 +114,7 @@ export async function persistEpisodeMultiShotDrafts(params: {
         sceneLabel: draft.sceneLabel,
         narrativePrompt: draft.narrativePrompt,
         embeddedDialogue: draft.embeddedDialogue,
+        dialogueOverrideText: previousDraftMetadata?.dialogueOverrideText ?? null,
         shotRhythmGuidance: draft.shotRhythmGuidance,
         expectedShotCount: draft.expectedShotCount,
         sourceStatus: draft.sourceStatus,

@@ -155,6 +155,7 @@ export const POST = apiHandler(async (
         sceneLabel: draft.sceneLabel,
         narrativePrompt: draft.narrativePrompt,
         embeddedDialogue: draft.embeddedDialogue,
+        dialogueOverrideText: null,
         shotRhythmGuidance: draft.shotRhythmGuidance,
         expectedShotCount: draft.expectedShotCount,
         sourceStatus: draft.sourceStatus,

@@ -20,6 +20,7 @@ function buildBaseDraftMetadata(
     sceneLabel: '雨夜街口',
     narrativePrompt: '主角在雨夜街口追上目标，镜头从远景推进到近景。',
     embeddedDialogue: '“你终于肯停下了。”',
+    dialogueOverrideText: null,
     shotRhythmGuidance: '先建立环境压迫感，再切人物对峙。',
     expectedShotCount: 6,
     sourceStatus: 'ready',

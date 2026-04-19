@@ -9,6 +9,7 @@ export interface ShotGroupDraftMetadata {
   sceneLabel: string
   narrativePrompt: string | null
   embeddedDialogue: string | null
+  dialogueOverrideText: string | null
   shotRhythmGuidance: string | null
   expectedShotCount: number
   sourceStatus: 'ready' | 'placeholder'
@@ -63,6 +64,15 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function readOptionalStringWithPrevious(
+  value: unknown,
+  previousValue: string | null | undefined,
+): string | null {
+  if (value === null) return null
+  if (value === undefined) return previousValue ?? null
+  return readString(value) ?? previousValue ?? null
 }
 
 function readNumber(value: unknown): number | null {
@@ -329,6 +339,10 @@ export function normalizeShotGroupDraftMetadata(
     submittedCompositePrompt: readString(metadata.submittedCompositePrompt) ?? previous?.submittedCompositePrompt ?? null,
     storyboardMoodPresetId: readString(metadata.storyboardMoodPresetId) ?? previous?.storyboardMoodPresetId ?? null,
     customMood: readString(metadata.customMood) ?? previous?.customMood ?? null,
+    dialogueOverrideText: readOptionalStringWithPrevious(
+      metadata.dialogueOverrideText,
+      previous?.dialogueOverrideText,
+    ),
   }
 }
 
@@ -374,6 +388,7 @@ export function parseShotGroupDraftMetadata(value: string | null | undefined): S
       sceneLabel,
       narrativePrompt: readString(metadata.narrativePrompt),
       embeddedDialogue: readString(metadata.embeddedDialogue),
+      dialogueOverrideText: readString(metadata.dialogueOverrideText),
       shotRhythmGuidance: readString(metadata.shotRhythmGuidance),
       expectedShotCount,
       sourceStatus,
