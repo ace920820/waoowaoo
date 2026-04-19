@@ -227,6 +227,8 @@ export interface NovelPromotionStoryboard {
 export type NovelPromotionShotGroupTemplateKey = 'grid-4' | 'grid-6' | 'grid-9'
 export type NovelPromotionDialogueLanguage = 'zh' | 'en' | 'ja'
 export type NovelPromotionShotGroupVideoMode = 'omni-reference' | 'smart-multi-frame'
+export type ShotGroupDraftSourceStatus = 'ready' | 'placeholder'
+export type ShotGroupDraftPlaceholderReason = 'missing_clip_content' | null
 
 export interface NovelPromotionShotGroupItem {
   id: string
