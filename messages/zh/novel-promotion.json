@@ -3,9 +3,22 @@
     "story": "故事",
     "script": "剧本",
     "storyboard": "分镜",
+    "multiShotStoryboard": "多镜头确认",
     "video": "成片",
     "editor": "AI剪辑",
     "editorComingSoon": "开发中，关注我们获取最新消息"
+  },
+  "multiShotStoryboard": {
+    "summary": "草稿创建已完成，视频生成尚未开始。请先确认每个 15 秒片段的参考图/参考板、提示词和镜头节奏，再继续进入 videos。",
+    "boundary": "未开始视频生成，继续后进入视频阶段。",
+    "assetControls": {
+      "location": "场景",
+      "character": "角色",
+      "prop": "物品",
+      "moodPreset": "分镜氛围预设",
+      "customMood": "自定义氛围",
+      "warningContinue": "缺少资产绑定时仍可继续生成"
+    }
   },
   "buttons": {
     "assetLibrary": "资产库",
@@ -169,6 +182,10 @@
     "scriptToStoryboard": {
       "title": "将重建分镜数据",
       "message": "检测到当前剧集已有分镜数据（{storyboardCount} 个分镜，{panelCount} 个镜头面板）。继续执行将清空当前分镜并重新生成，是否继续？"
+    },
+    "switchEpisodeProductionMode": {
+      "title": "切换已开始生产的集",
+      "message": "检测到当前剧集已有下游内容（{storyboardCount} 个分镜，{panelCount} 个镜头面板，{shotGroupCount} 个多镜头片段条目，{videoArtifactCount} 个已生成画面/视频结果）。切换后，本集后续将按新的生产路径继续，已有内容可能需要重新执行。确认切换吗？"
     },
     "confirm": "继续并清空",
     "cancel": "取消"

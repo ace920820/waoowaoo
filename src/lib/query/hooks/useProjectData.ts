@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
-import type { Project, MediaRef } from '@/types/project'
+import type { Project, MediaRef, NovelPromotionEpisodeProductionMode } from '@/types/project'
 import { apiFetch } from '@/lib/api-fetch'
 
 // ============ 项目数据 Hook ============
@@ -55,6 +55,7 @@ export interface Episode {
     name: string
     description?: string | null
     novelText?: string | null
+    episodeProductionMode?: NovelPromotionEpisodeProductionMode | null
     storyboardDefaultMoodPresetId?: string | null
     audioUrl?: string | null
     media?: MediaRef | null

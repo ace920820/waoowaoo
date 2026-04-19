@@ -1,6 +1,8 @@
 import type { Project } from '@/types/project'
 import type {
   NovelPromotionClip,
+  NovelPromotionEpisodeProductionMode,
+  NovelPromotionShotGroup,
   NovelPromotionShot,
   NovelPromotionStoryboard,
 } from '@/types/project'
@@ -11,11 +13,13 @@ export interface Episode {
   name: string
   description?: string | null
   novelText?: string | null
+  episodeProductionMode?: NovelPromotionEpisodeProductionMode | null
   storyboardDefaultMoodPresetId?: string | null
   audioUrl?: string | null
   srtContent?: string | null
   clips?: NovelPromotionClip[]
   storyboards?: NovelPromotionStoryboard[]
+  shotGroups?: NovelPromotionShotGroup[]
   shots?: NovelPromotionShot[]
   voiceLines?: unknown[]
   createdAt: string

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import VideoStage from './VideoStage'
 import { useWorkspaceStageRuntime } from '../WorkspaceStageRuntimeContext'
 import { useWorkspaceEpisodeStageData } from '../hooks/useWorkspaceEpisodeStageData'
@@ -32,7 +33,9 @@ export default function VideoStageRoute() {
       userVideoModels={runtime.userVideoModels}
       onGenerateVideo={runtime.onGenerateVideo}
       onGenerateAllVideos={runtime.onGenerateAllVideos}
-      onBack={() => runtime.onStageChange('storyboard')}
+      onBack={() => runtime.onStageChange(
+        runtime.episodeProductionMode === 'traditional' ? 'storyboard' : 'multi-shot-storyboard',
+      )}
       onUpdateVideoPrompt={runtime.onUpdateVideoPrompt}
       onUpdatePanelVideoModel={runtime.onUpdatePanelVideoModel}
       onOpenAssetLibraryForCharacter={(characterId) =>

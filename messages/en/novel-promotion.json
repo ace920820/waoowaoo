@@ -3,9 +3,22 @@
     "story": "Story",
     "script": "Script",
     "storyboard": "Storyboard",
+    "multiShotStoryboard": "Multi-shot Confirmation",
     "video": "Video",
     "editor": "AI Editor",
     "editorComingSoon": "Coming soon, follow us for updates"
+  },
+  "multiShotStoryboard": {
+    "summary": "Draft creation is complete and video generation has not started. Confirm each 15-second segment's references, prompt, and shot rhythm here before you continue to videos.",
+    "boundary": "Video generation has not started; continue to videos only after reference confirmation.",
+    "assetControls": {
+      "location": "Location",
+      "character": "Character",
+      "prop": "Prop",
+      "moodPreset": "Storyboard mood preset",
+      "customMood": "Custom mood",
+      "warningContinue": "Generation can continue even when some asset bindings are missing"
+    }
   },
   "buttons": {
     "assetLibrary": "Asset Library",
@@ -169,6 +182,10 @@
     "scriptToStoryboard": {
       "title": "Storyboard Data Will Be Rebuilt",
       "message": "Existing storyboard data is detected for this episode ({storyboardCount} storyboards, {panelCount} panels). Continuing will clear current storyboards and regenerate them. Continue?"
+    },
+    "switchEpisodeProductionMode": {
+      "title": "Switch a Started Episode",
+      "message": "Downstream content already exists for this episode ({storyboardCount} storyboards, {panelCount} panels, {shotGroupCount} multi-shot entries, {videoArtifactCount} generated image/video outputs). After switching, this episode will continue on the new production path and some existing outputs may need to be regenerated. Continue?"
     },
     "confirm": "Continue and Clear",
     "cancel": "Cancel"

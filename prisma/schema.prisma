@@ -125,6 +125,7 @@ model NovelPromotionEpisode {
   name                    String
   description             String?                    @db.Text
   novelText               String?                    @db.Text
+  episodeProductionMode   String                     @default("multi_shot")
   storyboardDefaultMoodPresetId String?             @db.Text
   audioUrl                String?                    @db.Text
   audioMediaId            String?

@@ -14,10 +14,12 @@ interface UseWorkspaceStageRuntimeParams {
   isConfirmingAssets: boolean
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
+  isPreparingMultiShotDrafts: boolean
   videoRatio: string | undefined
   artStyle: string | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]
   storyboardDefaultMoodPresetId: string | null | undefined
+  episodeProductionMode: 'multi_shot' | 'traditional'
   videoModel: string | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: Array<{
@@ -30,7 +32,7 @@ interface UseWorkspaceStageRuntimeParams {
   }> | undefined
   handleUpdateEpisode: (key: string, value: unknown) => Promise<void>
   handleUpdateConfig: (key: string, value: unknown) => Promise<void>
-  runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard', operation: () => Promise<void>) => Promise<void>
+  runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode', operation: () => Promise<void>) => Promise<void>
   runStoryToScriptFlow: () => Promise<void>
   runScriptToStoryboardFlow: () => Promise<void>
   handleUpdateClip: (clipId: string, updates: Record<string, unknown>) => Promise<void>
@@ -66,10 +68,12 @@ export function useWorkspaceStageRuntime({
   isConfirmingAssets,
   isStartingStoryToScript,
   isStartingScriptToStoryboard,
+  isPreparingMultiShotDrafts,
   videoRatio,
   artStyle,
   storyboardMoodPresets,
   storyboardDefaultMoodPresetId,
+  episodeProductionMode,
   videoModel,
   capabilityOverrides,
   userVideoModels,
@@ -98,15 +102,23 @@ export function useWorkspaceStageRuntime({
     isConfirmingAssets,
     isStartingStoryToScript,
     isStartingScriptToStoryboard,
+    isPreparingMultiShotDrafts,
     videoRatio,
     artStyle,
     storyboardMoodPresets,
     storyboardDefaultMoodPresetId,
+    episodeProductionMode,
     videoModel,
     capabilityOverrides,
     userVideoModels: resolvedUserVideoModels,
     onNovelTextChange: (value) => handleUpdateEpisode('novelText', value),
     onEpisodeDefaultMoodPresetChange: (value) => handleUpdateEpisode('storyboardDefaultMoodPresetId', value),
+    onEpisodeProductionModeChange: async (value) => {
+      if (value === episodeProductionMode) return
+      await runWithRebuildConfirm('switchEpisodeProductionMode', async () => {
+        await handleUpdateEpisode('episodeProductionMode', value)
+      })
+    },
     onVideoRatioChange: (value) => handleUpdateConfig('videoRatio', value),
     onArtStyleChange: (value) => handleUpdateConfig('artStyle', value),
     onRunStoryToScript: () => runWithRebuildConfirm('storyToScript', runStoryToScriptFlow),
@@ -117,7 +129,9 @@ export function useWorkspaceStageRuntime({
       return handleUpdateClip(clipId, data as Record<string, unknown>)
     },
     onOpenAssetLibrary: () => openAssetLibrary(),
-    onRunScriptToStoryboard: () => runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow),
+    onRunScriptToStoryboard: async () => {
+      await runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
+    },
     onStageChange: handleStageChange,
     onGenerateVideo: handleGenerateVideo,
     onGenerateAllVideos: handleGenerateAllVideos,
@@ -136,6 +150,7 @@ export function useWorkspaceStageRuntime({
     handleUpdatePanelVideoModel,
     handleUpdateVideoPrompt,
     isConfirmingAssets,
+    isPreparingMultiShotDrafts,
     isStartingScriptToStoryboard,
     isStartingStoryToScript,
     isSubmittingTTS,
@@ -146,6 +161,7 @@ export function useWorkspaceStageRuntime({
     runWithRebuildConfirm,
     resolvedUserVideoModels,
     capabilityOverrides,
+    episodeProductionMode,
     videoModel,
     videoRatio,
     storyboardMoodPresets,

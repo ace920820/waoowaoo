@@ -4,6 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
+const EPISODE_PRODUCTION_MODES = new Set(['multi_shot', 'traditional'])
+
+function resolveEpisodeProductionMode(value: unknown) {
+  if (value === undefined) return 'multi_shot'
+  if (typeof value === 'string' && EPISODE_PRODUCTION_MODES.has(value)) return value
+  throw new ApiError('INVALID_PARAMS')
+}
+
 /**
  * GET - 获取项目的所有剧集
  */
@@ -41,7 +49,7 @@ export const POST = apiHandler(async (
   const { novelData } = authResult
 
   const body = await request.json()
-  const { name, description, novelText } = body
+  const { name, description, novelText, episodeProductionMode } = body
 
   if (!name || name.trim().length === 0) {
     throw new ApiError('INVALID_PARAMS')
@@ -60,6 +68,7 @@ export const POST = apiHandler(async (
     episodeNumber: nextEpisodeNumber,
     name: name.trim(),
     description: description?.trim() || null,
+    episodeProductionMode: resolveEpisodeProductionMode(episodeProductionMode),
   }
   if (typeof novelText === 'string') {
     createData.novelText = novelText

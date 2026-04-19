@@ -1,6 +1,11 @@
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
 import type { PanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import type {
+  ShotGroupAssetBindingReference,
+  ShotGroupAssetBindingWarning,
+  ShotGroupDraftMetadata,
+} from '@/lib/shot-group/draft-metadata'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 // ============================================
@@ -131,12 +136,19 @@ export interface AssetLibraryLocation {
   media?: MediaRef | null
 }
 
+export type {
+  ShotGroupAssetBindingReference,
+  ShotGroupAssetBindingWarning,
+  ShotGroupDraftMetadata,
+}
+
 // ============================================
 // 小说推文模式类型
 // ============================================
 
 // 工作流模式
 export type WorkflowMode = 'srt' | 'agent'
+export type NovelPromotionEpisodeProductionMode = 'multi_shot' | 'traditional'
 
 // Clip类型（兼容SRT和Agent两种模式）
 export interface NovelPromotionClip {
@@ -226,6 +238,8 @@ export interface NovelPromotionStoryboard {
 export type NovelPromotionShotGroupTemplateKey = 'grid-4' | 'grid-6' | 'grid-9'
 export type NovelPromotionDialogueLanguage = 'zh' | 'en' | 'ja'
 export type NovelPromotionShotGroupVideoMode = 'omni-reference' | 'smart-multi-frame'
+export type ShotGroupDraftSourceStatus = 'ready' | 'placeholder'
+export type ShotGroupDraftPlaceholderReason = 'missing_clip_content' | 'generation_failed' | null
 
 export interface NovelPromotionShotGroupItem {
   id: string
@@ -329,6 +343,7 @@ export interface NovelPromotionProject {
     name: string
     description: string | null
     novelText: string | null
+    episodeProductionMode?: NovelPromotionEpisodeProductionMode | null
     storyboardDefaultMoodPresetId?: string | null
     audioUrl: string | null
     srtContent: string | null

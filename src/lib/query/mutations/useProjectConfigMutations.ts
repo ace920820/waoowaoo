@@ -82,6 +82,8 @@ export function useCopyProjectAssetFromGlobal(projectId: string) {
 
 export function useUpdateProjectConfig(projectId: string) {
     const queryClient = useQueryClient()
+    const projectQueryKey = queryKeys.projectData(projectId)
+    const episodeQueryKeyPrefix = ['episode-data', projectId] as const
 
     return useMutation({
         mutationFn: async ({ key, value }: { key: string; value: unknown }) =>
@@ -95,7 +97,6 @@ export function useUpdateProjectConfig(projectId: string) {
                 'Failed to update config',
             ),
         onMutate: async ({ key, value }) => {
-            const projectQueryKey = queryKeys.projectData(projectId)
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
 
@@ -117,8 +118,12 @@ export function useUpdateProjectConfig(projectId: string) {
                 queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
             }
         },
-        onSettled: () => {
-            invalidateQueryTemplates(queryClient, [queryKeys.projectData(projectId)])
+        onSettled: async () => {
+            await invalidateQueryTemplates(queryClient, [projectQueryKey, episodeQueryKeyPrefix])
+            await Promise.all([
+                queryClient.refetchQueries({ queryKey: projectQueryKey, type: 'active' }),
+                queryClient.refetchQueries({ queryKey: episodeQueryKeyPrefix, type: 'active' }),
+            ])
         },
     })
 }
@@ -159,20 +164,39 @@ export function useAnalyzeProjectAssets(projectId: string) {
 export function useGetProjectStoryboardStats(projectId: string) {
     return useMutation({
         mutationFn: async ({ episodeId }: { episodeId: string }) => {
-            const data = await requestJsonWithError<{ storyboards?: Array<{ panels?: unknown[] }> }>(
-                `/api/novel-promotion/${projectId}/storyboards?episodeId=${encodeURIComponent(episodeId)}`,
+            const data = await requestJsonWithError<{
+                episode?: {
+                    storyboards?: Array<{ panels?: Array<{ videoUrl?: string | null }> }>
+                    shotGroups?: Array<{ compositeImageUrl?: string | null; videoUrl?: string | null }>
+                }
+            }>(
+                `/api/novel-promotion/${projectId}/episodes/${encodeURIComponent(episodeId)}`,
                 { method: 'GET' },
                 'storyboards check failed',
             )
-            const storyboards = Array.isArray(data?.storyboards) ? data.storyboards : []
+            const storyboards = Array.isArray(data?.episode?.storyboards) ? data.episode.storyboards : []
+            const shotGroups = Array.isArray(data?.episode?.shotGroups) ? data.episode.shotGroups : []
             const storyboardCount = storyboards.length
             const panelCount = storyboards.reduce((sum: number, storyboard) => {
                 const panels = Array.isArray(storyboard?.panels) ? storyboard.panels.length : 0
                 return sum + panels
             }, 0)
+            const shotGroupCount = shotGroups.length
+            const videoArtifactCount =
+                storyboards.reduce((sum: number, storyboard) => {
+                    const panels = Array.isArray(storyboard?.panels) ? storyboard.panels : []
+                    return sum + panels.filter((panel) => typeof panel?.videoUrl === 'string' && panel.videoUrl.trim().length > 0).length
+                }, 0) +
+                shotGroups.reduce((sum: number, group) => {
+                    const hasComposite = typeof group?.compositeImageUrl === 'string' && group.compositeImageUrl.trim().length > 0
+                    const hasVideo = typeof group?.videoUrl === 'string' && group.videoUrl.trim().length > 0
+                    return sum + Number(hasComposite) + Number(hasVideo)
+                }, 0)
             return {
                 storyboardCount,
                 panelCount,
+                shotGroupCount,
+                videoArtifactCount,
             }
         },
     })

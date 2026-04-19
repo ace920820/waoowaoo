@@ -6,10 +6,15 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import {
+  parseShotGroupDraftMetadata,
+} from '@/lib/shot-group/draft-metadata'
+import {
   deriveShotGroupModeFlags,
   resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
 } from '@/lib/shot-group/video-config'
+import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
+import type { ShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 
 const TEMPLATE_ITEM_COUNT: Record<string, number> = {
   'grid-4': 4,
@@ -29,7 +34,7 @@ function normalizeTemplateKey(value: unknown): string {
 }
 
 function getTemplateItemCount(templateKey: string) {
-  return TEMPLATE_ITEM_COUNT[templateKey] ?? TEMPLATE_ITEM_COUNT['grid-4']
+  return TEMPLATE_ITEM_COUNT[templateKey] ?? TEMPLATE_ITEM_COUNT['grid-9']
 }
 
 function normalizeOptionalString(value: unknown): string | null {
@@ -81,30 +86,6 @@ function parseShotGroupVideoConfig(value: string | null | undefined): Record<str
   } catch {
     return {}
   }
-}
-
-function buildShotGroupVideoConfigSnapshot(input: {
-  videoModel?: string | null
-  generateAudio: boolean
-  includeDialogue: boolean
-  dialogueLanguage: 'zh' | 'en' | 'ja'
-  omniReferenceEnabled: boolean
-  smartMultiFrameEnabled: boolean
-  generationOptions?: Record<string, string | number | boolean>
-}) {
-  return JSON.stringify({
-    configVersion: 2,
-    mode: resolveShotGroupModeForModel({
-      ...input,
-      modelKey: input.videoModel,
-    }),
-    generateAudio: input.generateAudio,
-    bgmEnabled: false,
-    includeDialogue: input.includeDialogue,
-    dialogueLanguage: input.dialogueLanguage,
-    ...(input.videoModel ? { videoModel: input.videoModel } : {}),
-    generationOptions: sanitizeShotGroupGenerationOptions(input.generationOptions),
-  })
 }
 
 async function listShotGroups(projectId: string, episodeId: string) {
@@ -167,7 +148,7 @@ export const POST = apiHandler(async (
   const groupPrompt = normalizeOptionalString(body.groupPrompt)
   const videoPrompt = normalizeOptionalString(body.videoPrompt)
   const dialogueLanguage = normalizeDialogueLanguage(body.dialogueLanguage) || 'zh'
-  const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-4')
+  const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-9')
   const generateAudio = normalizeOptionalBoolean(body.generateAudio) ?? false
   const includeDialogue = normalizeOptionalBoolean(body.includeDialogue) ?? false
   const videoModel = normalizeOptionalString(body.videoModel)
@@ -177,6 +158,9 @@ export const POST = apiHandler(async (
   })
   const modeFlags = deriveShotGroupModeFlags(mode)
   const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
+  const draftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
+    ? body.draftMetadata as ShotGroupDraftMetadata
+    : null
 
   if (!episodeId) {
     throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
@@ -227,6 +211,7 @@ export const POST = apiHandler(async (
         dialogueLanguage,
         ...modeFlags,
         generationOptions,
+        draftMetadata,
       }),
       createdAt: newCreatedAt,
       items: {
@@ -292,6 +277,13 @@ export const PATCH = apiHandler(async (
     ? current.dialogueLanguage
     : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage)
   const previousGenerationOptions = sanitizeShotGroupGenerationOptions(currentVideoConfig.generationOptions)
+  const previousDraftMetadata = parseShotGroupDraftMetadata(current.videoReferencesJson)
+  const nextDraftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
+    ? {
+      ...(previousDraftMetadata || {}),
+      ...(body.draftMetadata as Partial<ShotGroupDraftMetadata>),
+    } as ShotGroupDraftMetadata
+    : previousDraftMetadata
   const nextGenerationOptions = body.generationOptions === undefined
     ? previousGenerationOptions
     : {
@@ -332,6 +324,8 @@ export const PATCH = apiHandler(async (
         dialogueLanguage: nextDialogueLanguage,
         ...nextModeFlags,
         generationOptions: nextGenerationOptions,
+        previousDraftMetadata,
+        draftMetadata: nextDraftMetadata,
       }),
     } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput
 

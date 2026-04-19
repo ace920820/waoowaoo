@@ -28,6 +28,18 @@ export function useWorkspaceProjectSnapshot({
   return useMemo(() => {
     const projectData = project.novelPromotionData
     const capabilityOverrides = parseCapabilitySelections(projectData?.capabilityOverrides)
+    const episodeProductionMode = episode?.episodeProductionMode || 'multi_shot'
+    const normalizedStage = (() => {
+      if (urlStage === 'editor') return 'videos'
+      if (urlStage === 'storyboard' && episodeProductionMode === 'multi_shot') {
+        return 'multi-shot-storyboard'
+      }
+      if (urlStage === 'multi-shot-storyboard' && episodeProductionMode === 'traditional') {
+        return 'storyboard'
+      }
+      return urlStage || 'config'
+    })()
+
     return {
       projectData,
       projectCharacters: projectData?.characters || [],
@@ -35,7 +47,7 @@ export function useWorkspaceProjectSnapshot({
       storyboardMoodPresets: normalizeStoryboardMoodPresets(projectData?.storyboardMoodPresets),
       storyboardDefaultMoodPresetId: projectData?.storyboardDefaultMoodPresetId || null,
       episodeStoryboards: episode?.storyboards || [],
-      currentStage: urlStage === 'editor' ? 'videos' : (urlStage || 'config'),
+      currentStage: normalizedStage,
       globalAssetText: projectData?.globalAssetText || '',
       novelText: episode?.novelText || '',
       analysisModel: projectData?.analysisModel,
@@ -50,5 +62,11 @@ export function useWorkspaceProjectSnapshot({
       ttsRate: projectData?.ttsRate,
       artStyle: projectData?.artStyle,
     }
-  }, [episode?.novelText, episode?.storyboards, project.novelPromotionData, urlStage])
+  }, [
+    episode?.episodeProductionMode,
+    episode?.novelText,
+    episode?.storyboards,
+    project.novelPromotionData,
+    urlStage,
+  ])
 }

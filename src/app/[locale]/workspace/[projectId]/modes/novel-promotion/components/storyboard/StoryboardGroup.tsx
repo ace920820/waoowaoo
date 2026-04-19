@@ -82,6 +82,8 @@ export default function StoryboardGroup({
   const [clipMoodPresetId, setClipMoodPresetId] = useState<string>(clip?.storyboardMoodPresetId || '')
   const [clipCustomMood, setClipCustomMood] = useState<string>(clip?.customMood || '')
   const [isApplyingClipMood, setIsApplyingClipMood] = useState(false)
+  const inheritedClipMoodPresetId = episodeDefaultMoodPresetId || projectDefaultMoodPresetId || ''
+  const displayedClipMoodPresetId = clipMoodPresetId || inheritedClipMoodPresetId
   const projectDefaultLabel = resolveStoryboardMoodPreset(storyboardMoodPresets, projectDefaultMoodPresetId)?.label || '未设置'
   const episodeDefaultLabel = resolveStoryboardMoodPreset(storyboardMoodPresets, episodeDefaultMoodPresetId)?.label || '未设置'
 
@@ -212,7 +214,7 @@ export default function StoryboardGroup({
                 setIsApplyingClipMood(true)
                 try {
                   await onApplyClipMood(clip.id, {
-                    storyboardMoodPresetId: clipMoodPresetId || null,
+                    storyboardMoodPresetId: clipMoodPresetId || inheritedClipMoodPresetId || null,
                     customMood: clipCustomMood || null,
                   })
                 } finally {
@@ -228,7 +230,7 @@ export default function StoryboardGroup({
             <label className="space-y-2">
               <span className="text-xs text-[var(--glass-text-secondary)]">分镜组预设</span>
               <select
-                value={clipMoodPresetId}
+                value={displayedClipMoodPresetId}
                 onChange={(event) => setClipMoodPresetId(event.target.value)}
                 className="w-full rounded-lg border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
               >

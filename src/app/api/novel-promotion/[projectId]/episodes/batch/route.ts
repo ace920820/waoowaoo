@@ -7,10 +7,19 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
+const EPISODE_PRODUCTION_MODES = new Set(['multi_shot', 'traditional'])
+
 interface BatchEpisode {
     name: string
     description?: string
     novelText: string
+    episodeProductionMode?: string
+}
+
+function resolveEpisodeProductionMode(value: unknown) {
+    if (value === undefined) return 'multi_shot'
+    if (typeof value === 'string' && EPISODE_PRODUCTION_MODES.has(value)) return value
+    throw new ApiError('INVALID_PARAMS')
 }
 
 export const POST = apiHandler(async (
@@ -76,7 +85,8 @@ export const POST = apiHandler(async (
                     episodeNumber: startNumber + idx,
                     name: ep.name,
                     description: ep.description || null,
-                    novelText: ep.novelText
+                    novelText: ep.novelText,
+                    episodeProductionMode: resolveEpisodeProductionMode(ep.episodeProductionMode),
                 }
             })
         )

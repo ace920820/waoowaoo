@@ -1,7 +1,9 @@
 'use client'
 
+import React from 'react'
 import ConfigStage from './ConfigStage'
 import ScriptStage from './ScriptStage'
+import MultiShotStoryboardStage from './MultiShotStoryboardStage'
 import StoryboardStage from './StoryboardStage'
 import VideoStageRoute from './VideoStageRoute'
 import VoiceStageRoute from './VoiceStageRoute'
@@ -20,6 +22,8 @@ export default function WorkspaceStageContent({
       {(currentStage === 'script' || currentStage === 'assets') && <ScriptStage />}
 
       {currentStage === 'storyboard' && <StoryboardStage />}
+
+      {currentStage === 'multi-shot-storyboard' && <MultiShotStoryboardStage />}
 
       {currentStage === 'videos' && <VideoStageRoute />}
 

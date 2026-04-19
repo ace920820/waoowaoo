@@ -117,7 +117,7 @@ function ShotGroupImageCard({
 function toDraft(group: NovelPromotionShotGroup): DraftState {
   return {
     title: group.title || '未命名镜头组',
-    templateKey: (group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey,
+    templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
     groupPrompt: group.groupPrompt || '',
   }
 }
@@ -225,7 +225,7 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
         </div>
         <GlassButton
           size="sm"
-          onClick={() => createMutation.mutate({ episodeId, templateKey: 'grid-4' })}
+          onClick={() => createMutation.mutate({ episodeId, templateKey: 'grid-9' })}
           disabled={creating}
         >
           <AppIcon name="plusAlt" className="h-3.5 w-3.5" />
@@ -235,7 +235,7 @@ export default function ShotGroupSection({ projectId, episodeId, shotGroups }: S
 
       {isEmpty ? (
         <div className="rounded-2xl border border-dashed border-[var(--glass-stroke-base)] px-4 py-8 text-center text-sm text-[var(--glass-text-tertiary)]">
-          当前还没有高级多镜头分镜参考表草稿。点击右上角可创建一个 4 格草稿，用辅助参考图让 AI 继续合成。
+          当前还没有高级多镜头分镜参考表草稿。点击右上角可创建一个 9 格草稿，用辅助参考图让 AI 继续合成。
         </div>
       ) : (
         <div className="space-y-4">

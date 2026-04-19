@@ -47,6 +47,7 @@ export default function PanelEditFormV2({
     && panelData.effectiveMoodSource !== 'panel_override'
     ? panelData.effectiveMoodPresetLabel
     : null
+  const displayedMoodPresetId = panelData.storyboardMoodPresetId || panelData.effectiveMoodPresetId || ''
   const presetPlaceholderLabel = inheritedMoodPresetLabel
     ? `跟随上层（当前：${inheritedMoodPresetLabel}）`
     : '不使用预设'
@@ -140,7 +141,7 @@ export default function PanelEditFormV2({
             : '仅影响当前分镜图片生成，不影响角色/场景资产图'}
         >
           <select
-            value={panelData.storyboardMoodPresetId || ''}
+            value={displayedMoodPresetId}
             onChange={(event) => onUpdate({ storyboardMoodPresetId: event.target.value || null })}
             className="w-full rounded-[var(--glass-radius-md)] border border-[var(--glass-border-subtle)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
           >

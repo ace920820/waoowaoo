@@ -60,6 +60,39 @@
         "removeCharacter": "Are you sure you want to remove this character from current clip?",
         "removeLocation": "Are you sure you want to remove this location from current clip?"
     },
+    "productionMode": {
+        "title": "Production Mode",
+        "subtitle": "Confirm this episode's production path before you start drawing",
+        "badge": {
+            "multiShot": "Default fast path",
+            "traditional": "Traditional panel path"
+        },
+        "options": {
+            "multiShot": {
+                "label": "Multi-shot Segment Mode",
+                "description": "Skip the long traditional storyboard script and move straight into multi-shot segment production"
+            },
+            "traditional": {
+                "label": "Traditional Mode",
+                "description": "Keep the classic storyboard flow for projects that need shot-by-shot control"
+            }
+        },
+        "helper": {
+            "multiShot": {
+                "title": "This episode will auto-create segment drafts and open multi-shot confirmation",
+                "description": "After you click the button below, the workflow uses the episode's clip structure to auto-create multi-shot segment drafts, opens the confirmation step, and waits for you to continue to videos.",
+                "model": "This fast path is clip-structure-driven: a typical episode lands around eight 15-second segments, and each segment is one video-generation unit. Confirm references here before you continue to videos."
+            },
+            "traditional": {
+                "title": "This episode will enter traditional storyboard generation",
+                "description": "After you click the button below, the workflow continues through the traditional script-to-storyboard path."
+            }
+        },
+        "cta": {
+            "multiShot": "Current mode: Multi-shot Segment Mode. The next step auto-creates segment drafts and opens the multi-shot confirmation step; video generation starts only after you continue to videos.",
+            "traditional": "Current mode: Traditional Mode. The next step generates traditional storyboard content."
+        }
+    },
     "generate": {
         "missingAssets": "{count} referenced characters/locations are still missing images",
         "missingAssetsTip": "You can still generate storyboard text now, but before generating panel images please finish the referenced character and location images in",

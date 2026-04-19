@@ -81,8 +81,8 @@ interface BuildWorkspaceControllerViewModelParams {
     showRebuildConfirm: boolean
     rebuildConfirmTitle: string
     rebuildConfirmMessage: string
-    pendingActionType: 'storyToScript' | 'scriptToStoryboard' | null
-    runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard', operation: () => Promise<void>) => Promise<void>
+    pendingActionType: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode' | null
+    runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode', operation: () => Promise<void>) => Promise<void>
     handleCancelRebuildConfirm: () => void
     handleAcceptRebuildConfirm: () => void
   }

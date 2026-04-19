@@ -12,6 +12,7 @@ interface UseWorkspaceExecutionParams {
   projectId: string
   episodeId?: string
   currentStage: string
+  episodeProductionMode: 'multi_shot' | 'traditional'
   analysisModel?: string | null
   novelText: string
   t: (key: string) => string
@@ -61,6 +62,7 @@ export function useWorkspaceExecution({
   projectId,
   episodeId,
   currentStage,
+  episodeProductionMode,
   analysisModel,
   novelText,
   t,
@@ -130,9 +132,9 @@ export function useWorkspaceExecution({
     }
 
     setScriptToStoryboardConsoleMinimized(true)
-    onStageChange('storyboard')
+    onStageChange(episodeProductionMode === 'traditional' ? 'storyboard' : 'multi-shot-storyboard')
     scriptToStoryboardStream.reset()
-  }, [onRefresh, onStageChange, scriptToStoryboardStream])
+  }, [episodeProductionMode, onRefresh, onStageChange, scriptToStoryboardStream])
 
   useEffect(() => {
     setStoryToScriptConsoleMinimized(readSessionBoolean(storyToScriptMinimizedStorageKey))

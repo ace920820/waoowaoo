@@ -5,6 +5,7 @@ import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from './components/video'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
+import type { NovelPromotionEpisodeProductionMode } from '@/types/project'
 
 export interface WorkspaceStageVideoModelOption {
   value: string
@@ -22,15 +23,18 @@ export interface WorkspaceStageRuntimeValue {
   isConfirmingAssets: boolean
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
+  isPreparingMultiShotDrafts: boolean
   videoRatio: string | null | undefined
   artStyle: string | null | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]
   storyboardDefaultMoodPresetId: string | null | undefined
+  episodeProductionMode: NovelPromotionEpisodeProductionMode
   videoModel: string | null | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: WorkspaceStageVideoModelOption[]
   onNovelTextChange: (value: string) => Promise<void>
   onEpisodeDefaultMoodPresetChange: (value: string | null) => Promise<void>
+  onEpisodeProductionModeChange: (value: NovelPromotionEpisodeProductionMode) => Promise<void>
   onVideoRatioChange: (value: string) => Promise<void>
   onArtStyleChange: (value: string) => Promise<void>
   onRunStoryToScript: () => Promise<void>

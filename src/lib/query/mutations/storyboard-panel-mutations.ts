@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api-fetch'
 import type {
     NovelPromotionDialogueLanguage,
     NovelPromotionShotGroupVideoMode,
+    ShotGroupDraftMetadata,
 } from '@/types/project'
 import {
     clearTaskTargetOverlay,
@@ -360,6 +361,7 @@ export function useCreateProjectShotGroup(projectId: string, episodeId: string) 
             dialogueLanguage?: NovelPromotionDialogueLanguage
             mode?: NovelPromotionShotGroupVideoMode
             generationOptions?: Record<string, string | number | boolean>
+            draftMetadata?: ShotGroupDraftMetadata | null
         }) => {
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
                 method: 'POST',
@@ -390,6 +392,7 @@ export function useUpdateProjectShotGroup(projectId: string, episodeId: string) 
       mode?: NovelPromotionShotGroupVideoMode
       videoModel?: string | null
       generationOptions?: Record<string, string | number | boolean>
+      draftMetadata?: Partial<ShotGroupDraftMetadata> | null
     }) => {
       return await requestJsonWithError(`/api/novel-promotion/${projectId}/shot-groups`, {
         method: 'PATCH',
@@ -422,15 +425,41 @@ export function useDeleteProjectShotGroup(projectId: string, episodeId: string) 
 export function useGenerateProjectShotGroupImage(projectId: string, episodeId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async ({ shotGroupId }: { shotGroupId: string }) => {
+        mutationFn: async ({ shotGroupId, targetField = 'composite' }: { shotGroupId: string; targetField?: 'reference' | 'composite' }) => {
             const response = await requestTaskResponseWithError(`/api/novel-promotion/${projectId}/generate-shot-group-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ shotGroupId, async: true }),
+                body: JSON.stringify({ shotGroupId, targetField, async: true }),
             }, '生成镜头组分镜稿失败')
             return resolveTaskResponse(response)
         },
-        onSettled: () => {
+        onMutate: ({ shotGroupId }) => {
+            upsertTaskTargetOverlay(queryClient, {
+                projectId,
+                targetType: 'NovelPromotionShotGroup',
+                targetId: shotGroupId,
+                runningTaskType: 'image_shot_group',
+                intent: 'process',
+            })
+        },
+        onError: (_error, { shotGroupId }) => {
+            clearTaskTargetOverlay(queryClient, {
+                projectId,
+                targetType: 'NovelPromotionShotGroup',
+                targetId: shotGroupId,
+            })
+        },
+        onSuccess: async () => {
+            await queryClient.refetchQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
+        },
+        onSettled: (_data, _error, variables) => {
+            if (variables?.shotGroupId) {
+                clearTaskTargetOverlay(queryClient, {
+                    projectId,
+                    targetType: 'NovelPromotionShotGroup',
+                    targetId: variables.shotGroupId,
+                })
+            }
             queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
         },
     })
