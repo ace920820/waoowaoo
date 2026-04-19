@@ -83,6 +83,8 @@ interface VideoDraftState {
   templateKey: NovelPromotionShotGroupTemplateKey
   groupPrompt: string
   videoPrompt: string
+  dialogueText: string
+  embeddedDialogue: string
   mode: NovelPromotionShotGroupVideoMode
   generationOptions: ShotGroupVideoGenerationOptions
   includeDialogue: boolean
@@ -144,6 +146,8 @@ const TEMPLATE_OPTIONS: Array<{ value: NovelPromotionShotGroupTemplateKey; label
   { value: 'grid-9', label: '9 格', helper: '适合完整情绪段落' },
 ]
 const SHOT_GROUP_VISIBLE_CAPABILITY_FIELDS = new Set(['duration', 'resolution', 'generateAudio'])
+const SEEDED_DIALOGUE_HELPER_TEXT = '已从剧本草稿带入，可在生成前直接改写或清空。'
+const EMPTY_DIALOGUE_HELPER_TEXT = '可选。留空时按当前生产单元的默认语音内容处理。'
 
 function resolveStatusLabel(params: {
   hasComposite: boolean
@@ -177,12 +181,6 @@ function resolveTemplateLabel(templateKey: NovelPromotionShotGroupTemplateKey | 
 
 function buildDefaultTitle(templateKey: NovelPromotionShotGroupTemplateKey) {
   return `${resolveTemplateLabel(templateKey)}多镜头视频`
-}
-
-function resolveDialogueLanguageLabel(language: NovelPromotionDialogueLanguage) {
-  if (language === 'en') return '英文'
-  if (language === 'ja') return '日文'
-  return '中文'
 }
 
 function normalizeDialogueLanguage(value: string | null | undefined): NovelPromotionDialogueLanguage {
@@ -225,15 +223,19 @@ function toDraft(
   defaultVideoModel: string,
   capabilityOverrides?: CapabilitySelections,
 ): VideoDraftState {
+  const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
   const savedConfig = parseSavedVideoConfig(group)
   const savedModel = typeof savedConfig.videoModel === 'string' ? savedConfig.videoModel : null
   const videoModel = group.videoModel || savedModel || defaultVideoModel
   const savedGenerationOptions = savedConfig.generationOptions as Record<string, unknown> | undefined
+  const embeddedDialogue = draftMetadata?.embeddedDialogue ?? ''
   return {
     title: group.title || buildDefaultTitle((group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey),
     templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
     groupPrompt: group.groupPrompt || '',
     videoPrompt: group.videoPrompt || '',
+    dialogueText: draftMetadata?.dialogueOverrideText ?? embeddedDialogue,
+    embeddedDialogue,
     mode: resolveShotGroupModeForModel({
       mode: group.videoMode ?? savedConfig.mode,
       omniReferenceEnabled: group.omniReferenceEnabled,
@@ -258,6 +260,37 @@ function toDraft(
     videoModel,
     pendingCompositeFile: null,
   }
+}
+
+export function resolveShotGroupDialogueHelperText(draft: Pick<VideoDraftState, 'embeddedDialogue'>) {
+  return draft.embeddedDialogue.trim() ? SEEDED_DIALOGUE_HELPER_TEXT : EMPTY_DIALOGUE_HELPER_TEXT
+}
+
+export function resolveShotGroupDialogueOverrideText(params: {
+  dialogueText: string
+  embeddedDialogue: string | null | undefined
+}) {
+  const normalizedDialogueText = params.dialogueText.trim()
+  const normalizedEmbeddedDialogue = params.embeddedDialogue?.trim() || ''
+
+  if (!normalizedDialogueText) return null
+  if (normalizedDialogueText === normalizedEmbeddedDialogue) return null
+  return normalizedDialogueText
+}
+
+export function buildShotGroupVideoDraftMetadataPatch(params: {
+  draft: Pick<VideoDraftState, 'dialogueText' | 'embeddedDialogue'>
+  group: Pick<NovelPromotionShotGroup, 'videoReferencesJson'>
+}) {
+  const currentDraftMetadata = parseShotGroupDraftMetadata(params.group.videoReferencesJson)
+  if (!currentDraftMetadata) return null
+
+  return {
+    dialogueOverrideText: resolveShotGroupDialogueOverrideText({
+      dialogueText: params.draft.dialogueText,
+      embeddedDialogue: params.draft.embeddedDialogue,
+    }),
+  } satisfies Partial<ShotGroupDraftMetadata>
 }
 
 function resolveMutationError(error: unknown, fallback: string) {
@@ -1152,6 +1185,10 @@ function ShotGroupVideoReviewSection({
 
 function buildShotGroupPayload(draft: VideoDraftState, episodeId?: string) {
   const effectivePrompt = draft.videoPrompt.trim() || draft.groupPrompt.trim() || null
+  const dialogueOverrideText = resolveShotGroupDialogueOverrideText({
+    dialogueText: draft.dialogueText,
+    embeddedDialogue: draft.embeddedDialogue,
+  })
   const generateAudio = typeof draft.generationOptions.generateAudio === 'boolean'
     ? draft.generationOptions.generateAudio
     : false
@@ -1162,7 +1199,7 @@ function buildShotGroupPayload(draft: VideoDraftState, episodeId?: string) {
     groupPrompt: effectivePrompt,
     videoPrompt: effectivePrompt,
     generateAudio,
-    includeDialogue: draft.includeDialogue,
+    includeDialogue: Boolean(dialogueOverrideText || draft.embeddedDialogue.trim() || draft.includeDialogue),
     dialogueLanguage: draft.dialogueLanguage,
     mode: draft.mode,
     videoModel: draft.videoModel || null,
@@ -1255,6 +1292,20 @@ function renderVideoConfigFields(params: {
         />
       </label>
 
+      <label className="space-y-1 text-sm text-[var(--glass-text-secondary)] block">
+        <span>台词 / 说话内容</span>
+        <textarea
+          value={draft.dialogueText}
+          onChange={(event) => onChange((current) => ({ ...current, dialogueText: event.target.value }))}
+          rows={4}
+          className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+          placeholder="例如：角色低声说“先别回头”，或留空以沿用默认语音内容。"
+        />
+        <p className="text-xs text-[var(--glass-text-tertiary)]">
+          {resolveShotGroupDialogueHelperText(draft)}
+        </p>
+      </label>
+
       <div className="space-y-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-3">
         <div className="text-sm font-medium text-[var(--glass-text-primary)]">视频模型</div>
         <ModelCapabilityDropdown
@@ -1323,35 +1374,6 @@ function renderVideoConfigFields(params: {
         ) : null}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>包含台词</span>
-          <input
-            type="checkbox"
-            checked={draft.includeDialogue}
-            onChange={(event) => onChange((current) => ({ ...current, includeDialogue: event.target.checked }))}
-            className="h-4 w-4"
-          />
-        </label>
-
-        <label className="space-y-1 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
-          <span>台词语言</span>
-          <select
-            value={draft.dialogueLanguage}
-            disabled={!draft.includeDialogue}
-            onChange={(event) => onChange((current) => ({
-              ...current,
-              dialogueLanguage: event.target.value as NovelPromotionDialogueLanguage,
-            }))}
-            className="w-full bg-transparent text-sm text-[var(--glass-text-primary)] outline-none"
-          >
-            <option value="zh">中文</option>
-            <option value="en">英文</option>
-            <option value="ja">日文</option>
-          </select>
-        </label>
-      </div>
-
       {supportsAdvancedReferenceModes ? (
         <div className="space-y-2">
           <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考模式</div>
@@ -1394,8 +1416,24 @@ function renderVideoConfigFields(params: {
         </div>
       )}
 
+      <label className="space-y-1 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-secondary)]">
+        <span>台词语言</span>
+        <select
+          value={draft.dialogueLanguage}
+          onChange={(event) => onChange((current) => ({
+            ...current,
+            dialogueLanguage: event.target.value as NovelPromotionDialogueLanguage,
+          }))}
+          className="w-full bg-transparent text-sm text-[var(--glass-text-primary)] outline-none"
+        >
+          <option value="zh">中文</option>
+          <option value="en">英文</option>
+          <option value="ja">日文</option>
+        </select>
+      </label>
+
       <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
-        当前：音频 {normalizedGenerationOptions.generateAudio === true ? '开启（固定无背景音乐）' : '关闭'}；对白 {draft.includeDialogue ? `开启（${resolveDialogueLanguageLabel(draft.dialogueLanguage)}）` : '关闭'}；模式 {supportsAdvancedReferenceModes ? (draft.mode === 'smart-multi-frame' ? 'Smart multi-frame' : 'Omni reference') : 'Composite storyboard'}。
+        当前：音频 {normalizedGenerationOptions.generateAudio === true ? '开启（固定无背景音乐）' : '关闭'}；对白 {draft.dialogueText.trim() ? '已编辑' : draft.embeddedDialogue.trim() ? '沿用剧本草稿' : '留空'}；模式 {supportsAdvancedReferenceModes ? (draft.mode === 'smart-multi-frame' ? 'Smart multi-frame' : 'Omni reference') : 'Composite storyboard'}。
       </div>
     </div>
   )
@@ -1422,6 +1460,8 @@ function VideoShotGroupSection({
     templateKey: 'grid-9',
     groupPrompt: '',
     videoPrompt: '',
+    dialogueText: '',
+    embeddedDialogue: '',
     mode: 'omni-reference',
     generationOptions: readShotGroupCapabilitySelection(capabilityOverrides, defaultVideoModel),
     includeDialogue: false,
@@ -1469,6 +1509,7 @@ function VideoShotGroupSection({
       for (const group of shotGroups) {
         const existing = next[group.id]
         const fallback = toDraft(group, defaultVideoModel, capabilityOverrides)
+        const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
         next[group.id] = existing
           ? {
             ...existing,
@@ -1476,6 +1517,10 @@ function VideoShotGroupSection({
             templateKey: (group.templateKey || existing.templateKey) as NovelPromotionShotGroupTemplateKey,
             groupPrompt: group.groupPrompt || '',
             videoPrompt: group.videoPrompt || existing.videoPrompt,
+            dialogueText: draftMetadata?.dialogueOverrideText
+              ?? draftMetadata?.embeddedDialogue
+              ?? existing.dialogueText,
+            embeddedDialogue: draftMetadata?.embeddedDialogue ?? existing.embeddedDialogue,
             mode: resolveShotGroupModeForModel({
               ...group,
               modelKey: group.videoModel || existing.videoModel || defaultVideoModel,
@@ -1568,6 +1613,8 @@ function VideoShotGroupSection({
       title: '',
       groupPrompt: '',
       videoPrompt: '',
+      dialogueText: '',
+      embeddedDialogue: '',
       mode: 'omni-reference',
       generationOptions: readShotGroupCapabilitySelection(capabilityOverrides, previous.videoModel || defaultVideoModel),
       includeDialogue: false,
@@ -1581,7 +1628,8 @@ function VideoShotGroupSection({
     if (createFileInputRef.current) createFileInputRef.current.value = ''
   }
 
-  const persistGroupDraft = async (groupId: string, draft: VideoDraftState) => {
+  const persistGroupDraft = async (group: NovelPromotionShotGroup, draft: VideoDraftState) => {
+    const groupId = group.id
     const nextTitle = draft.title.trim() || buildDefaultTitle(draft.templateKey)
     await updateMutation.mutateAsync({
       shotGroupId: groupId,
@@ -1589,6 +1637,7 @@ function VideoShotGroupSection({
         ...draft,
         title: nextTitle,
       }),
+      draftMetadata: buildShotGroupVideoDraftMetadataPatch({ draft, group }),
     })
 
     if (draft.pendingCompositeFile) {
@@ -1612,11 +1661,12 @@ function VideoShotGroupSection({
 
   const handleSaveGroup = async (groupId: string) => {
     const draft = drafts[groupId]
-    if (!draft) return
+    const group = shotGroups.find((entry) => entry.id === groupId)
+    if (!draft || !group) return
     setGroupErrors((previous) => ({ ...previous, [groupId]: null }))
     setSavingGroupId(groupId)
     try {
-      await persistGroupDraft(groupId, draft)
+      await persistGroupDraft(group, draft)
     } catch (error) {
       setGroupErrors((previous) => ({
         ...previous,
@@ -1629,7 +1679,8 @@ function VideoShotGroupSection({
 
   const handleGenerateGroup = async (groupId: string, hasServerComposite: boolean) => {
     const draft = drafts[groupId]
-    if (!draft) return
+    const group = shotGroups.find((entry) => entry.id === groupId)
+    if (!draft || !group) return
     if (!hasServerComposite && !draft.pendingCompositeFile) {
       setGroupErrors((previous) => ({ ...previous, [groupId]: '请先上传分镜参考表。' }))
       return
@@ -1638,7 +1689,7 @@ function VideoShotGroupSection({
     setGroupErrors((previous) => ({ ...previous, [groupId]: null }))
     setGeneratingGroupId(groupId)
     try {
-      await persistGroupDraft(groupId, draft)
+      await persistGroupDraft(group, draft)
       await generateMutation.mutateAsync({
         shotGroupId: groupId,
         videoModel: draft.videoModel || defaultVideoModel,
