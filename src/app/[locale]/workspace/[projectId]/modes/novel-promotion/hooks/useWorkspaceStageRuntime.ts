@@ -14,6 +14,7 @@ interface UseWorkspaceStageRuntimeParams {
   isConfirmingAssets: boolean
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
+  isPreparingMultiShotDrafts: boolean
   videoRatio: string | undefined
   artStyle: string | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]
@@ -31,6 +32,7 @@ interface UseWorkspaceStageRuntimeParams {
   }> | undefined
   handleUpdateEpisode: (key: string, value: unknown) => Promise<void>
   handleUpdateConfig: (key: string, value: unknown) => Promise<void>
+  ensureEpisodeMultiShotDrafts: () => Promise<unknown>
   runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode', operation: () => Promise<void>) => Promise<void>
   runStoryToScriptFlow: () => Promise<void>
   runScriptToStoryboardFlow: () => Promise<void>
@@ -67,6 +69,7 @@ export function useWorkspaceStageRuntime({
   isConfirmingAssets,
   isStartingStoryToScript,
   isStartingScriptToStoryboard,
+  isPreparingMultiShotDrafts,
   videoRatio,
   artStyle,
   storyboardMoodPresets,
@@ -77,6 +80,7 @@ export function useWorkspaceStageRuntime({
   userVideoModels,
   handleUpdateEpisode,
   handleUpdateConfig,
+  ensureEpisodeMultiShotDrafts,
   runWithRebuildConfirm,
   runStoryToScriptFlow,
   runScriptToStoryboardFlow,
@@ -100,6 +104,7 @@ export function useWorkspaceStageRuntime({
     isConfirmingAssets,
     isStartingStoryToScript,
     isStartingScriptToStoryboard,
+    isPreparingMultiShotDrafts,
     videoRatio,
     artStyle,
     storyboardMoodPresets,
@@ -126,10 +131,15 @@ export function useWorkspaceStageRuntime({
       return handleUpdateClip(clipId, data as Record<string, unknown>)
     },
     onOpenAssetLibrary: () => openAssetLibrary(),
-    onRunScriptToStoryboard: () =>
-      episodeProductionMode === 'traditional'
-        ? runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
-        : Promise.resolve(handleStageChange('videos')),
+    onRunScriptToStoryboard: async () => {
+      if (episodeProductionMode === 'traditional') {
+        await runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
+        return
+      }
+
+      await ensureEpisodeMultiShotDrafts()
+      handleStageChange('multi-shot-storyboard')
+    },
     onStageChange: handleStageChange,
     onGenerateVideo: handleGenerateVideo,
     onGenerateAllVideos: handleGenerateAllVideos,
@@ -147,7 +157,9 @@ export function useWorkspaceStageRuntime({
     handleUpdateEpisode,
     handleUpdatePanelVideoModel,
     handleUpdateVideoPrompt,
+    ensureEpisodeMultiShotDrafts,
     isConfirmingAssets,
+    isPreparingMultiShotDrafts,
     isStartingScriptToStoryboard,
     isStartingStoryToScript,
     isSubmittingTTS,

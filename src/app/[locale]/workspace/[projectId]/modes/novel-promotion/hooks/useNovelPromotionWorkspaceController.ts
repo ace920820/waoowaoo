@@ -21,6 +21,7 @@ import { buildWorkspaceControllerViewModel } from './workspace-controller-view-m
 import type { NovelPromotionWorkspaceProps } from '../types'
 import { useRouter } from '@/i18n/navigation'
 import { resolveEpisodeStageArtifacts } from '@/lib/novel-promotion/stage-readiness'
+import { useEnsureEpisodeMultiShotDrafts } from '@/lib/query/hooks'
 
 export function useNovelPromotionWorkspaceController({
   project,
@@ -111,6 +112,7 @@ export function useNovelPromotionWorkspaceController({
     episodeId,
     t,
   })
+  const ensureEpisodeMultiShotDraftsMutation = useEnsureEpisodeMultiShotDrafts(projectId, episodeId || '')
 
   const isStartingStoryToScript = rebuildState.pendingActionType === 'storyToScript'
   const isStartingScriptToStoryboard = rebuildState.pendingActionType === 'scriptToStoryboard'
@@ -148,6 +150,7 @@ export function useNovelPromotionWorkspaceController({
   const capsuleNavItems = useWorkspaceStageNavigation({
     isAnyOperationRunning,
     stageArtifacts,
+    episodeProductionMode: episode?.episodeProductionMode || 'multi_shot',
     t,
   })
 
@@ -158,6 +161,7 @@ export function useNovelPromotionWorkspaceController({
     isConfirmingAssets: execution.isConfirmingAssets,
     isStartingStoryToScript,
     isStartingScriptToStoryboard,
+    isPreparingMultiShotDrafts: ensureEpisodeMultiShotDraftsMutation.isPending,
     videoRatio: projectSnapshot.videoRatio,
     artStyle: projectSnapshot.artStyle,
     storyboardMoodPresets: projectSnapshot.storyboardMoodPresets,
@@ -168,6 +172,7 @@ export function useNovelPromotionWorkspaceController({
     userVideoModels: userModels.userVideoModels || [],
     handleUpdateEpisode: configActions.handleUpdateEpisode,
     handleUpdateConfig: configActions.handleUpdateConfig,
+    ensureEpisodeMultiShotDrafts: () => ensureEpisodeMultiShotDraftsMutation.mutateAsync({ episodeId }),
     runWithRebuildConfirm: rebuildState.runWithRebuildConfirm,
     runStoryToScriptFlow: execution.runStoryToScriptFlow,
     runScriptToStoryboardFlow: execution.runScriptToStoryboardFlow,

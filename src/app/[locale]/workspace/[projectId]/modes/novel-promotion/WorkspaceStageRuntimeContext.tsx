@@ -23,6 +23,7 @@ export interface WorkspaceStageRuntimeValue {
   isConfirmingAssets: boolean
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
+  isPreparingMultiShotDrafts: boolean
   videoRatio: string | null | undefined
   artStyle: string | null | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]

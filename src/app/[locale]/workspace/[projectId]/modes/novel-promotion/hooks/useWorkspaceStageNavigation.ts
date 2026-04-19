@@ -14,12 +14,14 @@ interface CapsuleNavItem {
 interface UseWorkspaceStageNavigationParams {
   isAnyOperationRunning: boolean
   stageArtifacts: StageArtifactReadiness
+  episodeProductionMode: 'multi_shot' | 'traditional'
   t: (key: string) => string
 }
 
 export function useWorkspaceStageNavigation({
   isAnyOperationRunning,
   stageArtifacts,
+  episodeProductionMode,
   t,
 }: UseWorkspaceStageNavigationParams): CapsuleNavItem[] {
   const getStageStatus = (stageId: string): 'empty' | 'active' | 'processing' | 'ready' => {
@@ -45,7 +47,12 @@ export function useWorkspaceStageNavigation({
   return [
     { id: 'config', icon: 'S', label: t('stages.story'), status: getStageStatus('config') },
     { id: 'script', icon: 'A', label: t('stages.script'), status: getStageStatus('assets') },
-    { id: 'storyboard', icon: 'B', label: t('stages.storyboard'), status: getStageStatus('storyboard') },
+    {
+      id: episodeProductionMode === 'multi_shot' ? 'multi-shot-storyboard' : 'storyboard',
+      icon: 'B',
+      label: t('stages.storyboard'),
+      status: getStageStatus('storyboard'),
+    },
     { id: 'videos', icon: 'V', label: t('stages.video'), status: getStageStatus('videos') },
     {
       id: 'editor',
