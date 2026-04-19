@@ -20,8 +20,9 @@ import { useWorkspaceAutoRun } from './useWorkspaceAutoRun'
 import { buildWorkspaceControllerViewModel } from './workspace-controller-view-model'
 import type { NovelPromotionWorkspaceProps } from '../types'
 import { useRouter } from '@/i18n/navigation'
-import { resolveEpisodeStageArtifacts } from '@/lib/novel-promotion/stage-readiness'
+import { resolveEpisodeStageArtifacts, resolveStageArtifactsEpisodeData } from '@/lib/novel-promotion/stage-readiness'
 import { useEnsureEpisodeMultiShotDrafts } from '@/lib/query/hooks'
+import { useWorkspaceEpisodeStageData } from './useWorkspaceEpisodeStageData'
 
 export function useNovelPromotionWorkspaceController({
   project,
@@ -38,6 +39,7 @@ export function useNovelPromotionWorkspaceController({
   const searchParams = useSearchParams()
   const router = useRouter()
   const { onRefresh } = useWorkspaceProvider()
+  const liveEpisodeStageData = useWorkspaceEpisodeStageData()
 
   const projectSnapshot = useWorkspaceProjectSnapshot({ project, episode, urlStage })
   const { currentStage, ...projectSection } = projectSnapshot
@@ -124,7 +126,8 @@ export function useNovelPromotionWorkspaceController({
     execution.scriptToStoryboardStream.isRunning ||
     execution.scriptToStoryboardStream.isRecoveredRunning ||
     execution.scriptToStoryboardStream.status === 'running'
-  const stageArtifacts = resolveEpisodeStageArtifacts(episode)
+  const stageArtifactsEpisode = resolveStageArtifactsEpisodeData(episode, liveEpisodeStageData)
+  const stageArtifacts = resolveEpisodeStageArtifacts(stageArtifactsEpisode)
 
   const isAnyOperationRunning =
     isStartingStoryToScript ||

@@ -1,6 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveEpisodeStageArtifacts, resolveStageArtifactsEpisodeData } from '@/lib/novel-promotion/stage-readiness'
 import { useWorkspaceProjectSnapshot } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceProjectSnapshot'
 import { useWorkspaceStageNavigation } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceStageNavigation'
 import { useWorkspaceStageRuntime } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceStageRuntime'
@@ -330,6 +331,10 @@ describe('multi-shot stage routing', () => {
       'videos',
       'editor',
     ])
+    expect(multiShotNav[2]).toMatchObject({
+      id: 'multi-shot-storyboard',
+      label: 'stages.multiShotStoryboard',
+    })
     expect(traditionalNav.map((item) => item.id)).toEqual([
       'config',
       'script',
@@ -337,8 +342,55 @@ describe('multi-shot stage routing', () => {
       'videos',
       'editor',
     ])
+    expect(traditionalNav[2]).toMatchObject({
+      id: 'storyboard',
+      label: 'stages.storyboard',
+    })
     expect(multiShotMarkup).toContain('multi-shot-storyboard-stage')
     expect(traditionalMarkup).toContain('storyboard-stage')
+  })
+
+  it('treats multi-shot draft metadata as storyboard readiness before any composite image exists', () => {
+    const readiness = resolveEpisodeStageArtifacts({
+      shotGroups: [
+        {
+          compositeImageUrl: null,
+          videoReferencesJson: JSON.stringify({
+            draftMetadata: {
+              segmentKey: 'clip-1:segment-1',
+            },
+          }),
+        },
+      ],
+    })
+
+    expect(readiness.hasStoryboard).toBe(true)
+  })
+
+  it('uses fresh episode shot-groups for shell readiness when the server prop is stale', () => {
+    const mergedEpisode = resolveStageArtifactsEpisodeData(
+      {
+        episodeProductionMode: 'multi_shot',
+        storyboards: [],
+        shotGroups: [],
+      },
+      {
+        episodeProductionMode: 'multi_shot',
+        storyboards: [],
+        shotGroups: [
+          {
+            compositeImageUrl: null,
+            videoReferencesJson: JSON.stringify({
+              draftMetadata: {
+                segmentKey: 'clip-1:segment-1',
+              },
+            }),
+          },
+        ],
+      },
+    )
+
+    expect(resolveEpisodeStageArtifacts(mergedEpisode).hasStoryboard).toBe(true)
   })
 
   it('advances from multi-shot-storyboard to videos only when the continue CTA is pressed', () => {

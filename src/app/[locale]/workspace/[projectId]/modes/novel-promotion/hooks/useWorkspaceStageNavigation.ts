@@ -50,7 +50,9 @@ export function useWorkspaceStageNavigation({
     {
       id: episodeProductionMode === 'multi_shot' ? 'multi-shot-storyboard' : 'storyboard',
       icon: 'B',
-      label: t('stages.storyboard'),
+      label: episodeProductionMode === 'multi_shot'
+        ? t('stages.multiShotStoryboard')
+        : t('stages.storyboard'),
       status: getStageStatus('storyboard'),
     },
     { id: 'videos', icon: 'V', label: t('stages.video'), status: getStageStatus('videos') },
