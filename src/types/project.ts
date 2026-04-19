@@ -1,6 +1,11 @@
 import type { CapabilitySelections } from '@/lib/model-config-contract'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
 import type { PanelSpeechPlan } from '@/lib/novel-promotion/panel-speech-plan'
+import type {
+  ShotGroupAssetBindingReference,
+  ShotGroupAssetBindingWarning,
+  ShotGroupDraftMetadata,
+} from '@/lib/shot-group/draft-metadata'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 
 // ============================================
@@ -129,6 +134,12 @@ export interface AssetLibraryLocation {
   description: string
   imageUrl: string | null
   media?: MediaRef | null
+}
+
+export type {
+  ShotGroupAssetBindingReference,
+  ShotGroupAssetBindingWarning,
+  ShotGroupDraftMetadata,
 }
 
 // ============================================

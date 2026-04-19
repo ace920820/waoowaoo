@@ -9,7 +9,7 @@ import ShotGroupVideoSection from './video-stage/ShotGroupVideoSection'
 export default function MultiShotStoryboardStage() {
   const runtime = useWorkspaceStageRuntime()
   const { projectId, episodeId } = useWorkspaceProvider()
-  const { shotGroups } = useWorkspaceEpisodeStageData()
+  const { shotGroups, storyboardDefaultMoodPresetId } = useWorkspaceEpisodeStageData()
   const onContinueToVideos = () => {
     runtime.onStageChange('videos')
   }
@@ -31,7 +31,7 @@ export default function MultiShotStoryboardStage() {
               多镜头确认
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-black/65">
-              草稿创建已完成，视频生成尚未开始。当前页面只用于确认每个片段的分镜参考、模型可直接使用的提示词、嵌入对白和紧凑镜头节奏；进入 videos 前，必须逐段完成确认。
+              草稿创建已完成，视频生成尚未开始。当前页面只用于确认每个片段的组提示词、资产引用、辅助参考图和分镜参考表；进入 videos 前，必须逐段完成确认。
             </p>
           </div>
 
@@ -66,6 +66,9 @@ export default function MultiShotStoryboardStage() {
         defaultVideoModel={runtime.videoModel || ''}
         videoModelOptions={runtime.userVideoModels}
         capabilityOverrides={runtime.capabilityOverrides}
+        storyboardMoodPresets={runtime.storyboardMoodPresets}
+        projectDefaultMoodPresetId={runtime.storyboardDefaultMoodPresetId || null}
+        episodeDefaultMoodPresetId={storyboardDefaultMoodPresetId}
         mode="review"
       />
     </section>

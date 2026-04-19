@@ -82,6 +82,8 @@ export function useCopyProjectAssetFromGlobal(projectId: string) {
 
 export function useUpdateProjectConfig(projectId: string) {
     const queryClient = useQueryClient()
+    const projectQueryKey = queryKeys.projectData(projectId)
+    const episodeQueryKeyPrefix = ['episode-data', projectId] as const
 
     return useMutation({
         mutationFn: async ({ key, value }: { key: string; value: unknown }) =>
@@ -95,7 +97,6 @@ export function useUpdateProjectConfig(projectId: string) {
                 'Failed to update config',
             ),
         onMutate: async ({ key, value }) => {
-            const projectQueryKey = queryKeys.projectData(projectId)
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
 
@@ -117,8 +118,12 @@ export function useUpdateProjectConfig(projectId: string) {
                 queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
             }
         },
-        onSettled: () => {
-            invalidateQueryTemplates(queryClient, [queryKeys.projectData(projectId)])
+        onSettled: async () => {
+            await invalidateQueryTemplates(queryClient, [projectQueryKey, episodeQueryKeyPrefix])
+            await Promise.all([
+                queryClient.refetchQueries({ queryKey: projectQueryKey, type: 'active' }),
+                queryClient.refetchQueries({ queryKey: episodeQueryKeyPrefix, type: 'active' }),
+            ])
         },
     })
 }

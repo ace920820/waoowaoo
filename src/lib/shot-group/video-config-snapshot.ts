@@ -14,6 +14,7 @@ export function buildShotGroupVideoConfigSnapshot(input: {
   smartMultiFrameEnabled: boolean
   generationOptions?: Record<string, string | number | boolean>
   draftMetadata?: ShotGroupDraftMetadata | null
+  previousDraftMetadata?: ShotGroupDraftMetadata | null
 }) {
   const snapshot = JSON.stringify({
     configVersion: 2,
@@ -30,6 +31,6 @@ export function buildShotGroupVideoConfigSnapshot(input: {
   })
 
   return input.draftMetadata
-    ? mergeShotGroupDraftMetadata(snapshot, input.draftMetadata)
+    ? mergeShotGroupDraftMetadata(snapshot, input.draftMetadata, input.previousDraftMetadata)
     : snapshot
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
+import GlassModalShell from '@/components/ui/primitives/GlassModalShell'
 import { GlassButton } from '@/components/ui/primitives'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import type { CapabilitySelections, CapabilityValue } from '@/lib/model-config-contract'
@@ -22,6 +23,7 @@ import {
 } from '@/lib/shot-group/video-config'
 import {
   useCreateProjectShotGroup,
+  useProjectAssets,
   useGenerateProjectShotGroupImage,
   useDownloadRemoteBlob,
   useGenerateProjectShotGroupVideo,
@@ -33,17 +35,35 @@ import {
 import type { VideoModelOption } from '@/lib/novel-promotion/stages/video-stage-runtime/types'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import type {
+  Character,
+  Location,
   NovelPromotionDialogueLanguage,
   NovelPromotionShotGroup,
   NovelPromotionShotGroupTemplateKey,
   NovelPromotionShotGroupVideoMode,
+  Prop,
 } from '@/types/project'
 import {
   downloadFileFromUrl,
   extractVideoTailFrame,
 } from './video-tail-frame-utils'
 import { saveBlobAsFile } from '@/lib/download/saveBlobAsFile'
-import { parseShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
+import {
+  normalizeShotGroupDraftMetadata,
+  parseShotGroupDraftMetadata,
+  type ShotGroupAssetBindingReference,
+  type ShotGroupDraftMetadata,
+} from '@/lib/shot-group/draft-metadata'
+import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
+import {
+  createDefaultStoryboardModeSettings,
+  DEFAULT_STORYBOARD_MODE_ID,
+  normalizeStoryboardModeSettings,
+  resolveStoryboardModeDefinition,
+  STORYBOARD_MODE_STORAGE_EVENT,
+  STORYBOARD_MODE_STORAGE_KEY,
+  type ShotGroupStoryboardModeSettings,
+} from '@/lib/shot-group/storyboard-mode-config'
 
 interface ShotGroupVideoSectionProps {
   projectId: string
@@ -52,6 +72,9 @@ interface ShotGroupVideoSectionProps {
   defaultVideoModel: string
   videoModelOptions?: VideoModelOption[]
   capabilityOverrides?: CapabilitySelections
+  storyboardMoodPresets?: StoryboardMoodPreset[]
+  projectDefaultMoodPresetId?: string | null
+  episodeDefaultMoodPresetId?: string | null
   mode?: 'review' | 'video'
 }
 
@@ -66,6 +89,53 @@ interface VideoDraftState {
   dialogueLanguage: NovelPromotionDialogueLanguage
   videoModel: string
   pendingCompositeFile: File | null
+}
+
+interface ReviewDraftState {
+  templateKey: NovelPromotionShotGroupTemplateKey
+  referencePromptText: string
+  compositePromptText: string
+  storyboardModeId: string
+  selectedLocationAsset: ShotGroupAssetBindingReference | null
+  selectedCharacterAssets: ShotGroupAssetBindingReference[]
+  selectedPropAssets: ShotGroupAssetBindingReference[]
+  storyboardMoodPresetId: string
+  customMood: string
+}
+
+function areAssetBindingReferencesEqual(
+  left: ShotGroupAssetBindingReference | null | undefined,
+  right: ShotGroupAssetBindingReference | null | undefined,
+) {
+  if (!left && !right) return true
+  if (!left || !right) return false
+  return left.assetType === right.assetType
+    && left.source === right.source
+    && left.assetId === right.assetId
+    && left.label === right.label
+    && left.imageUrl === right.imageUrl
+}
+
+function areAssetBindingReferenceListsEqual(
+  left: ShotGroupAssetBindingReference[] | undefined,
+  right: ShotGroupAssetBindingReference[] | undefined,
+) {
+  if ((left?.length ?? 0) !== (right?.length ?? 0)) return false
+  return (left ?? []).every((asset, index) => areAssetBindingReferencesEqual(asset, right?.[index]))
+}
+
+function areReviewDraftsEqual(left: ReviewDraftState | undefined, right: ReviewDraftState | undefined) {
+  if (!left && !right) return true
+  if (!left || !right) return false
+  return areAssetBindingReferencesEqual(left.selectedLocationAsset, right.selectedLocationAsset)
+    && areAssetBindingReferenceListsEqual(left.selectedCharacterAssets, right.selectedCharacterAssets)
+    && areAssetBindingReferenceListsEqual(left.selectedPropAssets, right.selectedPropAssets)
+    && left.templateKey === right.templateKey
+    && left.referencePromptText === right.referencePromptText
+    && left.compositePromptText === right.compositePromptText
+    && left.storyboardModeId === right.storyboardModeId
+    && left.storyboardMoodPresetId === right.storyboardMoodPresetId
+    && left.customMood === right.customMood
 }
 
 const TEMPLATE_OPTIONS: Array<{ value: NovelPromotionShotGroupTemplateKey; label: string; helper: string }> = [
@@ -160,8 +230,8 @@ function toDraft(
   const videoModel = group.videoModel || savedModel || defaultVideoModel
   const savedGenerationOptions = savedConfig.generationOptions as Record<string, unknown> | undefined
   return {
-    title: group.title || buildDefaultTitle((group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey),
-    templateKey: (group.templateKey || 'grid-4') as NovelPromotionShotGroupTemplateKey,
+    title: group.title || buildDefaultTitle((group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey),
+    templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
     groupPrompt: group.groupPrompt || '',
     videoPrompt: group.videoPrompt || '',
     mode: resolveShotGroupModeForModel({
@@ -200,18 +270,261 @@ function buildPendingFilePreview(file: File | null) {
   return URL.createObjectURL(file)
 }
 
+function pickLocationImageUrl(location: Location) {
+  const selectedImage = location.selectedImageId
+    ? location.images?.find((image) => image.id === location.selectedImageId)
+    : location.images?.find((image) => image.isSelected) || location.images?.find((image) => image.imageUrl) || location.images?.[0]
+  return selectedImage?.imageUrl ?? null
+}
+
+function pickCharacterImageUrl(character: Character) {
+  const primaryAppearance = character.appearances?.find((appearance) => appearance.selectedIndex !== null)
+    || character.appearances?.find((appearance) => appearance.imageUrl)
+    || character.appearances?.[0]
+  return primaryAppearance?.imageUrl ?? null
+}
+
+function pickPropImageUrl(prop: Prop) {
+  const selectedImage = prop.selectedImageId
+    ? prop.images?.find((image) => image.id === prop.selectedImageId)
+    : prop.images?.find((image) => image.isSelected) || prop.images?.find((image) => image.imageUrl) || prop.images?.[0]
+  return selectedImage?.imageUrl ?? null
+}
+
+function toLocationAssetReference(location: Location): ShotGroupAssetBindingReference {
+  return {
+    assetType: 'location',
+    source: 'manual',
+    assetId: location.id,
+    label: location.name,
+    imageUrl: pickLocationImageUrl(location),
+  }
+}
+
+function toCharacterAssetReference(character: Character): ShotGroupAssetBindingReference {
+  return {
+    assetType: 'character',
+    source: 'manual',
+    assetId: character.id,
+    label: character.name,
+    imageUrl: pickCharacterImageUrl(character),
+  }
+}
+
+function toPropAssetReference(prop: Prop): ShotGroupAssetBindingReference {
+  return {
+    assetType: 'prop',
+    source: 'manual',
+    assetId: prop.id,
+    label: prop.name,
+    imageUrl: pickPropImageUrl(prop),
+  }
+}
+
+function createReviewDraft(group: NovelPromotionShotGroup): ReviewDraftState {
+  const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+  return {
+    templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
+    referencePromptText: draftMetadata?.referencePromptText ?? draftMetadata?.narrativePrompt ?? '',
+    compositePromptText: draftMetadata?.compositePromptText
+      ?? group.videoPrompt?.trim()
+      ?? group.groupPrompt?.trim()
+      ?? draftMetadata?.narrativePrompt
+      ?? '',
+    storyboardModeId: draftMetadata?.storyboardModeId ?? DEFAULT_STORYBOARD_MODE_ID,
+    selectedLocationAsset: draftMetadata?.selectedLocationAsset ?? null,
+    selectedCharacterAssets: draftMetadata?.selectedCharacterAssets ?? [],
+    selectedPropAssets: draftMetadata?.selectedPropAssets ?? [],
+    storyboardMoodPresetId: draftMetadata?.storyboardMoodPresetId ?? '',
+    customMood: draftMetadata?.customMood ?? '',
+  }
+}
+
+export function syncReviewDraftsFromShotGroups(
+  previous: Record<string, ReviewDraftState>,
+  groups: NovelPromotionShotGroup[],
+) {
+  let changed = false
+  const next: Record<string, ReviewDraftState> = {}
+
+  for (const group of groups) {
+    const seededDraft = createReviewDraft(group)
+    const previousDraft = previous[group.id]
+    const resolvedDraft = areReviewDraftsEqual(previousDraft, seededDraft)
+      ? (previousDraft ?? seededDraft)
+      : seededDraft
+
+    next[group.id] = resolvedDraft
+
+    if (!areReviewDraftsEqual(previousDraft, resolvedDraft)) {
+      changed = true
+    }
+  }
+
+  if (!changed && Object.keys(previous).length !== groups.length) {
+    changed = true
+  }
+
+  return changed ? next : previous
+}
+
+function sourceBadgeLabel(source: ShotGroupAssetBindingReference['source']) {
+  if (source === 'manual') return '手动覆盖'
+  if (source === 'preselected') return '系统预选'
+  return '剧本回退'
+}
+
+function renderBindingSummary(assets: ShotGroupAssetBindingReference[] | undefined | null, emptyLabel: string) {
+  if (!assets || assets.length === 0) return emptyLabel
+  return assets.map((asset) => `${asset.label}（${sourceBadgeLabel(asset.source)}）`).join('、')
+}
+
+function readStoryboardModesFromBrowser() {
+  if (typeof window === 'undefined') return createDefaultStoryboardModeSettings()
+  try {
+    const rawValue = window.localStorage.getItem(STORYBOARD_MODE_STORAGE_KEY)
+    if (!rawValue) return createDefaultStoryboardModeSettings()
+    return normalizeStoryboardModeSettings(JSON.parse(rawValue) as Partial<ShotGroupStoryboardModeSettings>)
+  } catch {
+    return createDefaultStoryboardModeSettings()
+  }
+}
+
+function resolveInheritedMoodPresetId(
+  episodeDefaultMoodPresetId?: string | null,
+  projectDefaultMoodPresetId?: string | null,
+) {
+  return episodeDefaultMoodPresetId || projectDefaultMoodPresetId || null
+}
+
+export function buildReviewDraftMetadata(
+  group: NovelPromotionShotGroup,
+  draft: ReviewDraftState,
+  storyboardModes?: Partial<ShotGroupStoryboardModeSettings> | null,
+  inheritedMoodPresetId?: string | null,
+): ShotGroupDraftMetadata | null {
+  const currentMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+  if (!currentMetadata) return null
+  const selectedStoryboardMode = resolveStoryboardModeDefinition(storyboardModes, draft.storyboardModeId)
+
+  return normalizeShotGroupDraftMetadata({
+    ...currentMetadata,
+    referencePromptText: draft.referencePromptText.trim() || null,
+    compositePromptText: draft.compositePromptText.trim() || null,
+    storyboardModeId: selectedStoryboardMode.id,
+    storyboardModeLabel: selectedStoryboardMode.label,
+    storyboardModePromptText: selectedStoryboardMode.promptText,
+    selectedLocationAsset: draft.selectedLocationAsset,
+    selectedCharacterAssets: draft.selectedCharacterAssets,
+    selectedPropAssets: draft.selectedPropAssets,
+    storyboardMoodPresetId: draft.storyboardMoodPresetId || inheritedMoodPresetId || null,
+    customMood: draft.customMood.trim() || null,
+  }, currentMetadata)
+}
+
+function resolveMoodPresetLabel(presets: StoryboardMoodPreset[], presetId: string | null | undefined) {
+  if (!presetId) return '未设置'
+  return presets.find((preset) => preset.id === presetId)?.label || '未设置'
+}
+
+export function buildReviewSavePayload(
+  group: NovelPromotionShotGroup,
+  draft: ReviewDraftState,
+  storyboardModes?: Partial<ShotGroupStoryboardModeSettings> | null,
+  inheritedMoodPresetId?: string | null,
+) {
+  const draftMetadata = buildReviewDraftMetadata(group, draft, storyboardModes, inheritedMoodPresetId)
+  return {
+    shotGroupId: group.id,
+    templateKey: draft.templateKey,
+    groupPrompt: draft.compositePromptText.trim() || null,
+    videoPrompt: draft.compositePromptText.trim() || null,
+    draftMetadata,
+  }
+}
+
 function ShotGroupVideoReviewSection({
   projectId,
   episodeId,
   shotGroups = [],
-}: Pick<ShotGroupVideoSectionProps, 'projectId' | 'episodeId' | 'shotGroups'>) {
+  storyboardMoodPresets = [],
+  projectDefaultMoodPresetId = null,
+  episodeDefaultMoodPresetId = null,
+}: Pick<ShotGroupVideoSectionProps, 'projectId' | 'episodeId' | 'shotGroups' | 'storyboardMoodPresets' | 'projectDefaultMoodPresetId' | 'episodeDefaultMoodPresetId'>) {
+  const { data: projectAssets } = useProjectAssets(projectId)
+  const updateMutation = useUpdateProjectShotGroup(projectId, episodeId)
   const uploadMutation = useUploadProjectShotGroupReferenceImage(projectId, episodeId)
   const generateMutation = useGenerateProjectShotGroupImage(projectId, episodeId)
   const referenceFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-  const visibleShotGroups = shotGroups.filter((group) => {
-    const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
-    return group.groupPrompt?.trim() || group.videoPrompt?.trim() || draftMetadata
-  })
+  const compositeFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, ReviewDraftState>>({})
+  const [storyboardModeSettings, setStoryboardModeSettings] = useState<ShotGroupStoryboardModeSettings>(() => createDefaultStoryboardModeSettings())
+  const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
+  const [editingAssetGroupId, setEditingAssetGroupId] = useState<string | null>(null)
+  const [promptViewer, setPromptViewer] = useState<{ title: string; prompt: string } | null>(null)
+  const visibleShotGroups = useMemo(() => (
+    shotGroups.filter((group) => {
+      const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+      return group.groupPrompt?.trim() || group.videoPrompt?.trim() || draftMetadata
+    })
+  ), [shotGroups])
+
+  useEffect(() => {
+    setReviewDrafts((previous) => syncReviewDraftsFromShotGroups(previous, visibleShotGroups))
+  }, [visibleShotGroups])
+
+  useEffect(() => {
+    const syncStoryboardModes = () => {
+      setStoryboardModeSettings(readStoryboardModesFromBrowser())
+    }
+
+    syncStoryboardModes()
+    if (typeof window === 'undefined') return
+
+    window.addEventListener('storage', syncStoryboardModes)
+    window.addEventListener(STORYBOARD_MODE_STORAGE_EVENT, syncStoryboardModes)
+    return () => {
+      window.removeEventListener('storage', syncStoryboardModes)
+      window.removeEventListener(STORYBOARD_MODE_STORAGE_EVENT, syncStoryboardModes)
+    }
+  }, [])
+
+  const updateReviewDraft = (groupId: string, updater: (current: ReviewDraftState) => ReviewDraftState) => {
+    setReviewDrafts((previous) => ({
+      ...previous,
+      [groupId]: updater(previous[groupId] ?? {
+        templateKey: 'grid-9',
+        selectedLocationAsset: null,
+        referencePromptText: '',
+        compositePromptText: '',
+        storyboardModeId: storyboardModeSettings.defaultModeId || DEFAULT_STORYBOARD_MODE_ID,
+        selectedCharacterAssets: [],
+        selectedPropAssets: [],
+        storyboardMoodPresetId: '',
+        customMood: '',
+      }),
+    }))
+  }
+
+  const persistReviewDraft = async (group: NovelPromotionShotGroup, draftOverride?: ReviewDraftState) => {
+    const inheritedMoodPresetId = resolveInheritedMoodPresetId(
+      episodeDefaultMoodPresetId,
+      projectDefaultMoodPresetId,
+    )
+    const payload = buildReviewSavePayload(
+      group,
+      draftOverride ?? reviewDrafts[group.id] ?? createReviewDraft(group),
+      storyboardModeSettings,
+      inheritedMoodPresetId,
+    )
+    if (!payload.draftMetadata) return
+    setSavingGroupId(group.id)
+    try {
+      await updateMutation.mutateAsync(payload)
+    } finally {
+      setSavingGroupId((current) => (current === group.id ? null : current))
+    }
+  }
 
   return (
     <section className="rounded-[28px] border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/75 p-4 space-y-4">
@@ -224,15 +537,15 @@ function ShotGroupVideoReviewSection({
             草稿创建已完成，视频生成尚未开始
           </h3>
           <p className="text-sm leading-6 text-[var(--glass-text-secondary)]">
-            这些片段草稿来自当前剧集的片段结构。每个片段都是一个 15 秒视频生成单元，最多承载 9 个镜头；进入 videos 前，必须逐段确认分镜参考、提示词与节奏说明。
+            这些片段草稿来自当前剧集的片段结构。每个片段都是一个 15 秒视频生成单元，最多承载 9 个镜头；进入 videos 前，逐段确认组提示词、资产引用、辅助参考图和分镜参考表。
           </p>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
             '草稿创建已完成，当前只做确认，不会自动开跑视频。',
-            '每段都保留模型可直接使用的提示词，避免再回到传统分镜剧本文案。',
-            '对白会嵌入动作节拍里，方便后续视频阶段继续微调。',
-            '镜头节奏说明保持紧凑制作口径，不展开成传统 screenplay。',
+            '每段都保留可直接编辑的组提示词，用于后续生成分镜参考表。',
+            '辅助参考图作为母图，优先承接人物、场景、物品和场景氛围约束。',
+            '分镜参考表会依据母图和组提示词继续生成，供 videos 阶段直接使用。',
           ].map((item) => (
             <div
               key={item}
@@ -248,13 +561,35 @@ function ShotGroupVideoReviewSection({
         <div className="grid gap-4 xl:grid-cols-2">
           {visibleShotGroups.map((group, index) => {
             const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
-            const hasReference = Boolean(group.compositeImageUrl || group.referenceImageUrl)
-            const promptText = group.videoPrompt?.trim() || group.groupPrompt?.trim() || draftMetadata?.narrativePrompt || ''
-            const dialogueText = draftMetadata?.embeddedDialogue || '当前片段未写入对白，可在后续视频阶段补充。'
-            const rhythmText = draftMetadata?.shotRhythmGuidance || '保持镜头推进、景别变化和情绪起伏的连续性。'
+            const reviewDraft = reviewDrafts[group.id] ?? createReviewDraft(group)
+            const selectedStoryboardMode = resolveStoryboardModeDefinition(storyboardModeSettings, reviewDraft.storyboardModeId)
+            const inheritedMoodPresetId = resolveInheritedMoodPresetId(
+              episodeDefaultMoodPresetId,
+              projectDefaultMoodPresetId,
+            )
+            const liveDraftMetadata = buildReviewDraftMetadata(
+              group,
+              reviewDraft,
+              storyboardModeSettings,
+              inheritedMoodPresetId,
+            ) ?? draftMetadata
+            const hasAuxReference = Boolean(group.referenceImageUrl)
+            const hasStoryboardBoard = Boolean(group.compositeImageUrl)
+            const hasReference = hasAuxReference || hasStoryboardBoard
             const isPlaceholder = draftMetadata?.sourceStatus === 'placeholder'
+            const isSavingReviewDraft = savingGroupId === group.id || updateMutation.isPending
             const isUploadingReference = uploadMutation.isPending && uploadMutation.variables?.shotGroupId === group.id
-            const isGeneratingBoard = generateMutation.isPending && generateMutation.variables?.shotGroupId === group.id
+            const isGeneratingReference = generateMutation.isPending
+              && generateMutation.variables?.shotGroupId === group.id
+              && generateMutation.variables?.targetField === 'reference'
+            const isGeneratingBoard = generateMutation.isPending
+              && generateMutation.variables?.shotGroupId === group.id
+              && (generateMutation.variables?.targetField === undefined || generateMutation.variables?.targetField === 'composite')
+            const locationValue = reviewDraft.selectedLocationAsset?.assetId || ''
+            const selectedCharacterIds = new Set(reviewDraft.selectedCharacterAssets.map((asset) => asset.assetId).filter(Boolean))
+            const selectedPropIds = new Set(reviewDraft.selectedPropAssets.map((asset) => asset.assetId).filter(Boolean))
+            const effectiveWarnings = liveDraftMetadata?.missingAssetWarnings ?? []
+            const effectiveMoodPresetId = reviewDraft.storyboardMoodPresetId || inheritedMoodPresetId
 
             return (
               <article
@@ -289,7 +624,7 @@ function ShotGroupVideoReviewSection({
                         : 'bg-[var(--glass-tone-warning-bg)] text-[var(--glass-tone-warning-fg)]',
                     ].join(' ')}
                   >
-                    {hasReference ? '参考已就绪，可继续确认' : '参考未确认，需先补齐'}
+                    {hasStoryboardBoard ? '参考表已就绪，可继续确认' : '参考未确认，需先补齐'}
                   </span>
                 </div>
 
@@ -301,24 +636,231 @@ function ShotGroupVideoReviewSection({
 
                 <div className="grid gap-3">
                   <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
-                    <div className="text-xs font-medium text-[var(--glass-text-secondary)]">模型可直接使用的提示词</div>
-                    <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">
-                      {promptText || '当前片段提示词仍待补齐，请先补充后再进入视频阶段。'}
+                    <div className="mb-3 grid gap-3 md:grid-cols-[160px_minmax(0,1fr)] md:items-start">
+                      <label className="space-y-2">
+                        <span className="text-xs font-medium text-[var(--glass-text-secondary)]">分镜表模板</span>
+                        <select
+                          value={reviewDraft.templateKey}
+                          onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                            ...current,
+                            templateKey: event.target.value as NovelPromotionShotGroupTemplateKey,
+                          }))}
+                          className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                        >
+                          {TEMPLATE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs leading-5 text-[var(--glass-text-tertiary)]">
+                        当前模板决定最终输出是 `2×2 / 3×2 / 3×3`。默认建议保持 `9 格`，这样才能与“经典九宫格”等分镜模式保持一致，仅靠提示词里的“3×3 / 9 个分镜”不能覆盖底层模板设置。
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-[var(--glass-text-secondary)]">辅助参考图提示词</div>
+                    <textarea
+                      value={reviewDraft.referencePromptText}
+                      onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                        ...current,
+                        referencePromptText: event.target.value,
+                      }))}
+                      rows={6}
+                      placeholder="输入用于生成辅助参考图（母图）的提示词。"
+                      className="mt-2 w-full resize-y rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-3 text-sm leading-6 text-[var(--glass-text-primary)] outline-none"
+                    />
+                    <div className="mt-2 text-xs text-[var(--glass-text-tertiary)]">
+                      这段提示词只用于生成辅助参考图（母图），用来锁定人物、场景、物品和整体气氛。
                     </div>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
-                      <div className="text-xs font-medium text-[var(--glass-text-secondary)]">嵌入对白</div>
-                      <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">{dialogueText}</div>
+                  <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                    <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)] md:items-start">
+                      <label className="space-y-2">
+                        <span className="text-xs font-medium text-[var(--glass-text-secondary)]">分镜模式</span>
+                        <select
+                          value={selectedStoryboardMode.id}
+                          onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                            ...current,
+                            storyboardModeId: event.target.value,
+                          }))}
+                          className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                        >
+                          {storyboardModeSettings.modes.map((mode) => (
+                            <option key={mode.id} value={mode.id}>
+                              {mode.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-2 text-xs leading-5 text-[var(--glass-text-tertiary)]">
+                        <div className="font-medium text-[var(--glass-text-secondary)]">{selectedStoryboardMode.label}</div>
+                        <div className="mt-1 line-clamp-5 whitespace-pre-wrap">
+                          {selectedStoryboardMode.promptText}
+                        </div>
+                      </div>
                     </div>
-                    <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
-                      <div className="text-xs font-medium text-[var(--glass-text-secondary)]">镜头节奏</div>
-                      <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">{rhythmText}</div>
+                    <div className="mt-3 text-xs font-medium text-[var(--glass-text-secondary)]">剧情内容</div>
+                    <textarea
+                      value={reviewDraft.compositePromptText}
+                      onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                        ...current,
+                        compositePromptText: event.target.value,
+                      }))}
+                      rows={6}
+                      placeholder="输入这一段片段真正发生的剧情内容。"
+                      className="mt-2 w-full resize-y rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-3 text-sm leading-6 text-[var(--glass-text-primary)] outline-none"
+                    />
+                    <div className="mt-2 text-xs text-[var(--glass-text-tertiary)]">
+                      生成分镜参考表时，系统会自动把“分镜模式提示词”与这里的“剧情内容”拼接后再提交。剧情相关文本会保持干净，便于后续在 videos 阶段复用。
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/75 p-3 space-y-3">
+                <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/75 p-3 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2 rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <span className="text-xs font-medium text-[var(--glass-text-secondary)]">场景</span>
+                      <select
+                        value={locationValue}
+                        onChange={(event) => {
+                          const nextLocation = projectAssets?.locations.find((item) => item.id === event.target.value) || null
+                          updateReviewDraft(group.id, (current) => ({
+                            ...current,
+                            selectedLocationAsset: nextLocation ? toLocationAssetReference(nextLocation) : null,
+                          }))
+                        }}
+                        className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                      >
+                        <option value="">跟随系统预选 / 剧本回退</option>
+                        {(projectAssets?.locations ?? []).map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-xs text-[var(--glass-text-tertiary)]">
+                        当前：{renderBindingSummary(liveDraftMetadata?.effectiveLocationAsset ? [liveDraftMetadata.effectiveLocationAsset] : [], '未绑定场景，可继续生成')}
+                      </div>
+                    </label>
+
+                    <label className="space-y-2 rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <span className="text-xs font-medium text-[var(--glass-text-secondary)]">分镜氛围预设</span>
+                      <select
+                        value={effectiveMoodPresetId || ''}
+                        onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                          ...current,
+                          storyboardMoodPresetId: event.target.value,
+                        }))}
+                        className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                      >
+                        <option value="">
+                          {effectiveMoodPresetId
+                            ? `跟随默认氛围预设（${resolveMoodPresetLabel(storyboardMoodPresets, effectiveMoodPresetId)}）`
+                            : '跟随默认氛围预设 / 不设置'}
+                        </option>
+                        {storyboardMoodPresets.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={reviewDraft.customMood}
+                        onChange={(event) => updateReviewDraft(group.id, (current) => ({
+                          ...current,
+                          customMood: event.target.value,
+                        }))}
+                        placeholder="自定义氛围，例如：潮湿压迫、霓虹冷光、空气紧绷"
+                        className="w-full rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-sm text-[var(--glass-text-primary)] outline-none"
+                      />
+                      <div className="text-xs text-[var(--glass-text-tertiary)]">
+                        当前：{reviewDraft.storyboardMoodPresetId
+                          ? `手动设置为 ${resolveMoodPresetLabel(storyboardMoodPresets, reviewDraft.storyboardMoodPresetId)}`
+                          : effectiveMoodPresetId
+                            ? `跟随默认氛围预设 ${resolveMoodPresetLabel(storyboardMoodPresets, effectiveMoodPresetId)}`
+                            : '未设置氛围预设'}
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2 rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-[var(--glass-text-secondary)]">角色</span>
+                        <span className="text-[11px] text-[var(--glass-text-tertiary)]">手动选择会覆盖系统预选</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(projectAssets?.characters ?? []).map((character) => {
+                          const isSelected = selectedCharacterIds.has(character.id)
+                          return (
+                            <button
+                              key={character.id}
+                              type="button"
+                              onClick={() => updateReviewDraft(group.id, (current) => ({
+                                ...current,
+                                selectedCharacterAssets: isSelected
+                                  ? current.selectedCharacterAssets.filter((asset) => asset.assetId !== character.id)
+                                  : [...current.selectedCharacterAssets, toCharacterAssetReference(character)],
+                              }))}
+                              className={[
+                                'rounded-full border px-3 py-1.5 text-xs transition',
+                                isSelected
+                                  ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70 text-[var(--glass-tone-info-fg)]'
+                                  : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)]',
+                              ].join(' ')}
+                            >
+                              {character.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="text-xs text-[var(--glass-text-tertiary)]">
+                        当前：{renderBindingSummary(liveDraftMetadata?.effectiveCharacterAssets, '未绑定角色，可继续生成')}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-[var(--glass-text-secondary)]">物品</span>
+                        <span className="text-[11px] text-[var(--glass-text-tertiary)]">缺失时仍允许继续生成</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(projectAssets?.props ?? []).map((prop) => {
+                          const isSelected = selectedPropIds.has(prop.id)
+                          return (
+                            <button
+                              key={prop.id}
+                              type="button"
+                              onClick={() => updateReviewDraft(group.id, (current) => ({
+                                ...current,
+                                selectedPropAssets: isSelected
+                                  ? current.selectedPropAssets.filter((asset) => asset.assetId !== prop.id)
+                                  : [...current.selectedPropAssets, toPropAssetReference(prop)],
+                              }))}
+                              className={[
+                                'rounded-full border px-3 py-1.5 text-xs transition',
+                                isSelected
+                                  ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70 text-[var(--glass-tone-info-fg)]'
+                                  : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)]',
+                              ].join(' ')}
+                            >
+                              {prop.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="text-xs text-[var(--glass-text-tertiary)]">
+                        当前：{renderBindingSummary(liveDraftMetadata?.effectivePropAssets, '未绑定物品，可继续生成')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {effectiveWarnings.length > 0 ? (
+                    <div className="rounded-2xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-3 text-sm leading-6 text-[var(--glass-tone-warning-fg)]">
+                      缺少 {effectiveWarnings.map((warning) => warning.assetType === 'location' ? '场景' : warning.assetType === 'character' ? '角色' : '物品').join('、')} 绑定，当前卡片仍可继续生成。
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考确认</div>
@@ -340,38 +882,248 @@ function ShotGroupVideoReviewSection({
                     onChange={(event) => {
                       const file = event.target.files?.[0]
                       if (!file) return
-                      uploadMutation.mutate({
-                        file,
-                        shotGroupId: group.id,
-                        labelText: group.title || `片段 ${index + 1} 参考图`,
-                      })
+                      void (async () => {
+                        await persistReviewDraft(group)
+                        uploadMutation.mutate({
+                          file,
+                          shotGroupId: group.id,
+                          labelText: group.title || `片段 ${index + 1} 参考图`,
+                          targetField: 'reference',
+                        })
+                      })()
                       event.currentTarget.value = ''
                     }}
                   />
+                  <input
+                    ref={(node) => {
+                      compositeFileInputRefs.current[group.id] = node
+                    }}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      void (async () => {
+                        await persistReviewDraft(group)
+                        uploadMutation.mutate({
+                          file,
+                          shotGroupId: group.id,
+                          labelText: group.title || `片段 ${index + 1} 分镜参考表`,
+                          targetField: 'composite',
+                        })
+                      })()
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {[
+                      {
+                        key: 'reference',
+                        title: '辅助参考图',
+                        helper: '母图会综合人物、场景、物品和当前片段的大致内容，用作后续生成分镜参考表的基础参考。',
+                        imageUrl: group.referenceImageUrl,
+                        emptyLabel: '还没有辅助参考图',
+                        uploadLabel: hasAuxReference ? '替换辅助参考图' : '上传辅助参考图',
+                        onUpload: () => referenceFileInputRefs.current[group.id]?.click(),
+                        onOpen: () => {
+                          if (typeof window !== 'undefined' && group.referenceImageUrl) {
+                            window.open(group.referenceImageUrl, '_blank', 'noopener,noreferrer')
+                          }
+                        },
+                        onRemove: () => updateMutation.mutateAsync({
+                          shotGroupId: group.id,
+                          referenceImageUrl: null,
+                        }),
+                      },
+                      {
+                        key: 'composite',
+                        title: '分镜参考表',
+                        helper: '九宫格分镜图会依据母图和组提示词生成，作为 videos 阶段的多镜头片段视觉输入。',
+                        imageUrl: group.compositeImageUrl,
+                        emptyLabel: '还没有分镜参考表',
+                        uploadLabel: hasStoryboardBoard ? '替换分镜参考表' : '上传分镜参考表',
+                        onUpload: () => compositeFileInputRefs.current[group.id]?.click(),
+                        onOpen: () => {
+                          if (typeof window !== 'undefined' && group.compositeImageUrl) {
+                            window.open(group.compositeImageUrl, '_blank', 'noopener,noreferrer')
+                          }
+                        },
+                        onRemove: () => updateMutation.mutateAsync({
+                          shotGroupId: group.id,
+                          compositeImageUrl: null,
+                        }),
+                      },
+                    ].map((panel) => (
+                      <div
+                        key={panel.key}
+                        className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3"
+                      >
+                        <div className="mb-3">
+                          <div className="text-sm font-medium text-[var(--glass-text-primary)]">{panel.title}</div>
+                          <div className="mt-1 text-xs leading-5 text-[var(--glass-text-tertiary)]">{panel.helper}</div>
+                        </div>
+                        <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-dashed border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]">
+                          {panel.imageUrl ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={panel.imageUrl}
+                                alt={`${group.title || `片段 ${index + 1}`} ${panel.title}`}
+                                className="h-full w-full object-cover"
+                              />
+                              <div className="absolute inset-0 flex flex-wrap content-start gap-2 bg-black/55 p-3 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={panel.onOpen}
+                                  className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white"
+                                >
+                                  查看大图
+                                </button>
+                                {panel.key === 'composite' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void (async () => {
+                                        await persistReviewDraft(group)
+                                        generateMutation.mutate({ shotGroupId: group.id })
+                                      })()
+                                    }}
+                                    className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white"
+                                  >
+                                    重新生成
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={panel.onUpload}
+                                  className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white"
+                                >
+                                  替换上传
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingAssetGroupId(group.id)}
+                                  className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white"
+                                >
+                                  编辑资产引用
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void panel.onRemove()
+                                  }}
+                                  className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white"
+                                >
+                                  移除当前引用
+                                </button>
+                              </div>
+                              {((panel.key === 'reference' && isGeneratingReference) || (panel.key === 'composite' && isGeneratingBoard)) ? (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
+                                  <div className="rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-medium text-white">
+                                    {panel.key === 'reference' ? '正在重新生成辅助参考图...' : '正在重新生成分镜参考表...'}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-[var(--glass-text-tertiary)]">
+                              {(panel.key === 'reference' && isGeneratingReference) || (panel.key === 'composite' && isGeneratingBoard)
+                                ? (panel.key === 'reference' ? '正在生成辅助参考图...' : '正在生成分镜参考表...')
+                                : panel.emptyLabel}
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={panel.onUpload}
+                            disabled={isUploadingReference || isGeneratingReference || isGeneratingBoard || isSavingReviewDraft}
+                            className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
+                          >
+                            {panel.uploadLabel}
+                          </button>
+                          {panel.key === 'reference' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void (async () => {
+                                  await persistReviewDraft(group)
+                                  generateMutation.mutate({ shotGroupId: group.id, targetField: 'reference' })
+                                })()
+                              }}
+                              disabled={isUploadingReference || isGeneratingReference || isGeneratingBoard || isSavingReviewDraft}
+                              className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
+                            >
+                              {isGeneratingReference ? '处理中...' : hasAuxReference ? '重新生成辅助参考图' : '生成辅助参考图'}
+                            </button>
+                          ) : null}
+                          {panel.key === 'composite' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void (async () => {
+                                  await persistReviewDraft(group)
+                                  generateMutation.mutate({ shotGroupId: group.id, targetField: 'composite' })
+                                })()
+                              }}
+                              disabled={!hasAuxReference || isUploadingReference || isGeneratingReference || isGeneratingBoard || isSavingReviewDraft}
+                              className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
+                            >
+                              {isGeneratingBoard ? '处理中...' : hasStoryboardBoard ? '重新生成分镜参考表' : '生成分镜参考表'}
+                            </button>
+                          ) : null}
+                        </div>
+                        {((panel.key === 'reference'
+                          ? draftMetadata?.submittedReferencePrompt
+                          : draftMetadata?.submittedCompositePrompt)) ? (
+                            <div className="mt-2">
+                              <button
+                                type="button"
+                                onClick={() => setPromptViewer({
+                                  title: panel.key === 'reference' ? '辅助参考图最终提示词' : '分镜参考表最终提示词',
+                                  prompt: panel.key === 'reference'
+                                    ? (draftMetadata?.submittedReferencePrompt || '')
+                                    : (draftMetadata?.submittedCompositePrompt || ''),
+                                })}
+                                className="text-xs font-medium text-[var(--glass-tone-info-fg)] underline underline-offset-4"
+                              >
+                                显示提示词
+                              </button>
+                            </div>
+                          ) : null}
+                        {panel.key === 'composite' && !hasAuxReference ? (
+                          <div className="mt-2 text-xs leading-5 text-[var(--glass-tone-warning-fg)]">
+                            请先上传或生成辅助参考图。当前分镜参考表生成链路会把辅助参考图作为唯一图像参考输入；没有母图时，角色身份、画风和镜头布局都容易失控。
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => referenceFileInputRefs.current[group.id]?.click()}
-                      disabled={isUploadingReference || isGeneratingBoard}
-                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
-                    >
-                      {isUploadingReference ? '上传中...' : hasReference ? '替换参考图' : '上传参考图'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => generateMutation.mutate({ shotGroupId: group.id })}
-                      disabled={isUploadingReference || isGeneratingBoard}
-                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
-                    >
-                      {isGeneratingBoard ? '处理中...' : hasReference ? '替换参考板' : '生成参考板'}
-                    </button>
-                    <button
-                      type="button"
+                      onClick={() => {
+                        void persistReviewDraft(group)
+                      }}
+                      disabled={isSavingReviewDraft}
                       className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-xs font-medium text-[var(--glass-text-secondary)]"
                     >
-                      保存参考设置
+                      {isSavingReviewDraft ? '保存中...' : '保存片段设置'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAssetGroupId((current) => current === group.id ? null : group.id)}
+                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-xs font-medium text-[var(--glass-text-secondary)]"
+                    >
+                      {editingAssetGroupId === group.id ? '收起资产引用' : '编辑资产引用'}
                     </button>
                   </div>
+                  {editingAssetGroupId === group.id ? (
+                    <div className="rounded-2xl border border-dashed border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-3 text-xs leading-6 text-[var(--glass-text-secondary)]">
+                      你可以在上方直接调整场景、角色、物品、分镜氛围预设和自定义氛围。保存后，这些资产引用会沿用到后续参考板生成。
+                    </div>
+                  ) : null}
                 </div>
               </article>
             )
@@ -382,6 +1134,18 @@ function ShotGroupVideoReviewSection({
           当前还没有可确认的多镜头片段草稿。
         </div>
       )}
+
+      <GlassModalShell
+        open={Boolean(promptViewer)}
+        onClose={() => setPromptViewer(null)}
+        title={promptViewer?.title}
+        description="这里展示的是系统最终提交给模型的完整提示词，便于排查和调整。"
+        size="lg"
+      >
+        <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-4 text-xs leading-6 text-[var(--glass-text-primary)]">
+          {promptViewer?.prompt || ''}
+        </pre>
+      </GlassModalShell>
     </section>
   )
 }
@@ -1418,11 +2182,14 @@ function VideoShotGroupSection({
 
 export default function ShotGroupVideoSection(props: ShotGroupVideoSectionProps) {
   if (props.mode === 'review') {
-    return (
+      return (
       <ShotGroupVideoReviewSection
         projectId={props.projectId}
         episodeId={props.episodeId}
         shotGroups={props.shotGroups}
+        storyboardMoodPresets={props.storyboardMoodPresets}
+        projectDefaultMoodPresetId={props.projectDefaultMoodPresetId}
+        episodeDefaultMoodPresetId={props.episodeDefaultMoodPresetId}
       />
     )
   }

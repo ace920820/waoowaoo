@@ -91,6 +91,9 @@ export async function persistEpisodeMultiShotDrafts(params: {
       || existingByLegacySegmentIdentity.get(
         buildLegacySegmentIdentity(draft.sourceClipId, draft.segmentIndexWithinClip),
       )
+    const previousDraftMetadata = existing
+      ? parseShotGroupDraftMetadata(existing.videoReferencesJson)
+      : null
 
     const videoReferencesJson = buildShotGroupVideoConfigSnapshot({
       generateAudio: false,
@@ -99,6 +102,7 @@ export async function persistEpisodeMultiShotDrafts(params: {
       omniReferenceEnabled: false,
       smartMultiFrameEnabled: true,
       generationOptions: {},
+      previousDraftMetadata,
       draftMetadata: {
         segmentOrder: draft.segmentOrder,
         clipId: draft.clipId,
@@ -114,6 +118,22 @@ export async function persistEpisodeMultiShotDrafts(params: {
         expectedShotCount: draft.expectedShotCount,
         sourceStatus: draft.sourceStatus,
         placeholderReason: draft.placeholderReason,
+        selectedLocationAsset: previousDraftMetadata?.selectedLocationAsset ?? null,
+        preselectedLocationAsset: previousDraftMetadata?.preselectedLocationAsset ?? null,
+        selectedCharacterAssets: previousDraftMetadata?.selectedCharacterAssets ?? [],
+        preselectedCharacterAssets: previousDraftMetadata?.preselectedCharacterAssets ?? [],
+        selectedPropAssets: previousDraftMetadata?.selectedPropAssets ?? [],
+        preselectedPropAssets: previousDraftMetadata?.preselectedPropAssets ?? [],
+        scriptDerivedLocationAsset: previousDraftMetadata?.scriptDerivedLocationAsset ?? {
+          assetType: 'location',
+          source: 'scriptDerived',
+          assetId: null,
+          label: draft.sceneLabel,
+        },
+        scriptDerivedCharacterAssets: previousDraftMetadata?.scriptDerivedCharacterAssets ?? [],
+        scriptDerivedPropAssets: previousDraftMetadata?.scriptDerivedPropAssets ?? [],
+        storyboardMoodPresetId: previousDraftMetadata?.storyboardMoodPresetId ?? null,
+        customMood: previousDraftMetadata?.customMood ?? null,
       },
     })
 

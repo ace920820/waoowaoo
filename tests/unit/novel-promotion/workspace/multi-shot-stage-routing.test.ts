@@ -340,7 +340,8 @@ describe('multi-shot stage routing', () => {
       id: 'storyboard',
       label: 'stages.storyboard',
     })
-    expect(multiShotMarkup).toContain('storyboard-stage')
+    expect(multiShotMarkup).toContain('multi-shot-storyboard-stage')
+    expect(multiShotMarkup).not.toContain('data-stage="storyboard-stage"')
     expect(traditionalMarkup).toContain('storyboard-stage')
   })
 

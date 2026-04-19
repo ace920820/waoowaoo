@@ -10,7 +10,15 @@
   },
   "multiShotStoryboard": {
     "summary": "Draft creation is complete and video generation has not started. Confirm each 15-second segment's references, prompt, and shot rhythm here before you continue to videos.",
-    "boundary": "Video generation has not started; continue to videos only after reference confirmation."
+    "boundary": "Video generation has not started; continue to videos only after reference confirmation.",
+    "assetControls": {
+      "location": "Location",
+      "character": "Character",
+      "prop": "Prop",
+      "moodPreset": "Storyboard mood preset",
+      "customMood": "Custom mood",
+      "warningContinue": "Generation can continue even when some asset bindings are missing"
+    }
   },
   "buttons": {
     "assetLibrary": "Asset Library",

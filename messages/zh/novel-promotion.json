@@ -10,7 +10,15 @@
   },
   "multiShotStoryboard": {
     "summary": "草稿创建已完成，视频生成尚未开始。请先确认每个 15 秒片段的参考图/参考板、提示词和镜头节奏，再继续进入 videos。",
-    "boundary": "未开始视频生成，继续后进入视频阶段。"
+    "boundary": "未开始视频生成，继续后进入视频阶段。",
+    "assetControls": {
+      "location": "场景",
+      "character": "角色",
+      "prop": "物品",
+      "moodPreset": "分镜氛围预设",
+      "customMood": "自定义氛围",
+      "warningContinue": "缺少资产绑定时仍可继续生成"
+    }
   },
   "buttons": {
     "assetLibrary": "资产库",

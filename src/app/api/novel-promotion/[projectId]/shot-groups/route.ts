@@ -34,7 +34,7 @@ function normalizeTemplateKey(value: unknown): string {
 }
 
 function getTemplateItemCount(templateKey: string) {
-  return TEMPLATE_ITEM_COUNT[templateKey] ?? TEMPLATE_ITEM_COUNT['grid-4']
+  return TEMPLATE_ITEM_COUNT[templateKey] ?? TEMPLATE_ITEM_COUNT['grid-9']
 }
 
 function normalizeOptionalString(value: unknown): string | null {
@@ -148,7 +148,7 @@ export const POST = apiHandler(async (
   const groupPrompt = normalizeOptionalString(body.groupPrompt)
   const videoPrompt = normalizeOptionalString(body.videoPrompt)
   const dialogueLanguage = normalizeDialogueLanguage(body.dialogueLanguage) || 'zh'
-  const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-4')
+  const templateKey = normalizeTemplateKey(body.templateKey ?? 'grid-9')
   const generateAudio = normalizeOptionalBoolean(body.generateAudio) ?? false
   const includeDialogue = normalizeOptionalBoolean(body.includeDialogue) ?? false
   const videoModel = normalizeOptionalString(body.videoModel)
@@ -279,7 +279,10 @@ export const PATCH = apiHandler(async (
   const previousGenerationOptions = sanitizeShotGroupGenerationOptions(currentVideoConfig.generationOptions)
   const previousDraftMetadata = parseShotGroupDraftMetadata(current.videoReferencesJson)
   const nextDraftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
-    ? body.draftMetadata as ShotGroupDraftMetadata
+    ? {
+      ...(previousDraftMetadata || {}),
+      ...(body.draftMetadata as Partial<ShotGroupDraftMetadata>),
+    } as ShotGroupDraftMetadata
     : previousDraftMetadata
   const nextGenerationOptions = body.generationOptions === undefined
     ? previousGenerationOptions
@@ -321,6 +324,7 @@ export const PATCH = apiHandler(async (
         dialogueLanguage: nextDialogueLanguage,
         ...nextModeFlags,
         generationOptions: nextGenerationOptions,
+        previousDraftMetadata,
         draftMetadata: nextDraftMetadata,
       }),
     } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput

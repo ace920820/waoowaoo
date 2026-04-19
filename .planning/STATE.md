@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 02
-last_updated: "2026-04-19T04:31:12.709Z"
+status: Executing Phase 02.1
+last_updated: "2026-04-19T12:03:19.447Z"
 progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 9
-  completed_plans: 7
-  percent: 78
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 14
+  completed_plans: 13
+  percent: 93
 ---
 
 # STATE
@@ -19,14 +19,21 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-19)
 
 **Core value:** 用户在完成剧本后，必须能用更短路径、更少无效编辑成本进入可生产的视频生成阶段
-**Current focus:** Phase 02 — multi-shot-fast-path
+**Current focus:** Phase 02.1 — multi-shot-asset-injection
 
 ## Current Roadmap Status
 
 - Phase 1: Episode Mode Entry — pending
 - Phase 2: Multi-Shot Fast Path — pending
+- Phase 02.1: Multi-Shot Asset Injection — pending
 - Phase 3: Editable Production Handoff — pending
 - Phase 4: Hardening And Rollout — pending
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 02.1 inserted after Phase 2: Multi-Shot Asset Injection (URGENT)
 
 ## Initialization Notes
 

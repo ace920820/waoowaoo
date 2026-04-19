@@ -60,6 +60,28 @@ function buildShotGroupRecord() {
     title: '动作推进',
     templateKey: 'grid-4',
     groupPrompt: '同一空间内完成建立到收束',
+    videoReferencesJson: JSON.stringify({
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 0,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '站台',
+        narrativePrompt: '旧提示词',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        storyboardModeId: 'classic-nine-grid',
+        storyboardModeLabel: '经典九宫格',
+        storyboardModePromptText: '固定九宫格构图模板',
+        compositePromptText: '同一空间内完成建立到收束',
+      },
+    }),
     referenceImageUrl: 'cos/ref-shot-group.png',
     compositeImageUrl: null,
     dialogueLanguage: 'zh' as const,
@@ -78,7 +100,7 @@ describe('shot-group-image-task-handler', () => {
     prismaMock.novelPromotionShotGroup.findFirst.mockResolvedValue(buildShotGroupRecord())
   })
 
-  it('builds composite prompt from template and group prompt', () => {
+  it('builds composite prompt from storyboard mode and story content', () => {
     const template = getShotGroupTemplateSpec('grid-4')
     const prompt = buildShotGroupCompositePrompt({
       group: {
@@ -92,7 +114,8 @@ describe('shot-group-image-task-handler', () => {
     })
 
     expect(prompt).toContain('动作推进')
-    expect(prompt).toContain('同一空间内完成建立到收束')
+    expect(prompt).toContain('分镜模式提示词：固定九宫格构图模板')
+    expect(prompt).toContain('剧情内容：同一空间内完成建立到收束')
     expect(prompt).toContain('4 宫格')
     expect(prompt).toContain('建立镜头')
     expect(prompt).toContain('画布比例：1:1')
@@ -112,12 +135,12 @@ describe('shot-group-image-task-handler', () => {
         },
       }),
     )
-    expect(prismaMock.novelPromotionShotGroup.update).toHaveBeenCalledWith({
+    expect(prismaMock.novelPromotionShotGroup.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'group-1' },
-      data: {
+      data: expect.objectContaining({
         compositeImageUrl: 'cos/shot-group-composite.png',
-      },
-    })
+      }),
+    }))
   })
 
   it('keeps the same options shape for other storyboard models', async () => {

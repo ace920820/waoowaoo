@@ -94,6 +94,8 @@ describe('multi-shot storyboard stage', () => {
       videoModel: 'model-1',
       capabilityOverrides: {},
       userVideoModels: [],
+      storyboardMoodPresets: [],
+      storyboardDefaultMoodPresetId: null,
     })
     mocks.useWorkspaceProviderMock.mockReturnValue({
       projectId: 'project-1',
@@ -102,11 +104,15 @@ describe('multi-shot storyboard stage', () => {
     mocks.useWorkspaceEpisodeStageDataMock.mockReturnValue({
       shotGroups: [
         createShotGroup({ id: 'group-1', title: '片段 1', compositeImageUrl: null }),
-        createShotGroup({ id: 'group-2', title: '片段 2', compositeImageUrl: '/ref.png' }),
+        {
+          ...createShotGroup({ id: 'group-2', title: '片段 2', compositeImageUrl: '/board.png' }),
+          referenceImageUrl: '/mother.png',
+        },
         createShotGroup({ id: 'group-3', title: '片段 3', compositeImageUrl: null, sourceStatus: 'placeholder' }),
       ],
       clips: [],
       storyboards: [],
+      storyboardDefaultMoodPresetId: null,
     })
   })
 
@@ -116,7 +122,7 @@ describe('multi-shot storyboard stage', () => {
     expect(html).toContain('多镜头确认')
     expect(html).toContain('草稿创建已完成')
     expect(html).toContain('视频生成尚未开始')
-    expect(html).toContain('进入 videos 前，必须逐段确认分镜参考')
+    expect(html).toContain('进入 videos 前，必须逐段完成确认')
     expect(html).toContain('剧本')
     expect(html).toContain('多镜头分镜/参考确认')
     expect(html).toContain('videos')
@@ -128,20 +134,24 @@ describe('multi-shot storyboard stage', () => {
     expect(html).toContain('片段 1')
     expect(html).toContain('片段 2')
     expect(html).toContain('片段 3')
-    expect(html).toContain('上传参考图')
-    expect(html).toContain('生成参考板')
-    expect(html).toContain('替换参考图')
-    expect(html).toContain('替换参考板')
+    expect(html).toContain('辅助参考图')
+    expect(html).toContain('分镜参考表')
+    expect(html).toContain('上传辅助参考图')
+    expect(html).toContain('生成辅助参考图')
+    expect(html).toContain('上传分镜参考表')
+    expect(html).toContain('生成分镜参考表')
   })
 
-  it('explains the segment payload model in review mode and omits generation CTAs', () => {
+  it('explains the segment payload model in review mode and omits dialogue or rhythm blocks', () => {
     const html = renderStage()
 
     expect(html).toContain('每个片段都是一个 15 秒视频生成单元')
     expect(html).toContain('最多承载 9 个镜头')
-    expect(html).toContain('模型可直接使用的提示词')
-    expect(html).toContain('嵌入对白')
-    expect(html).toContain('镜头节奏')
+    expect(html).toContain('辅助参考图提示词')
+    expect(html).toContain('分镜模式')
+    expect(html).toContain('剧情内容')
+    expect(html).not.toContain('>嵌入对白<')
+    expect(html).not.toContain('>镜头节奏<')
     expect(html).not.toContain('创建并开始生成')
     expect(html).not.toContain('生成视频')
     expect(html).not.toContain('重新生成视频')
