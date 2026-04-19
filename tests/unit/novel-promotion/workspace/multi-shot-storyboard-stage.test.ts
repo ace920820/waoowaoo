@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   useWorkspaceStageRuntimeMock: vi.fn(),
   useWorkspaceEpisodeStageDataMock: vi.fn(),
   useWorkspaceProviderMock: vi.fn(),
+  useCreateProjectStoryboardGroupMock: vi.fn(),
 }))
 
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/WorkspaceStageRuntimeContext', async () => {
@@ -28,6 +29,14 @@ vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWor
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/WorkspaceProvider', () => ({
   useWorkspaceProvider: mocks.useWorkspaceProviderMock,
 }))
+
+vi.mock('@/lib/query/hooks', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/query/hooks')>('@/lib/query/hooks')
+  return {
+    ...actual,
+    useCreateProjectStoryboardGroup: mocks.useCreateProjectStoryboardGroupMock,
+  }
+})
 
 function createShotGroup(params: {
   id: string
@@ -83,14 +92,38 @@ function renderStage() {
   )
 }
 
+function findElementByText(node: React.ReactNode, text: string): React.ReactElement | null {
+  if (!React.isValidElement(node)) return null
+
+  const element = node as React.ReactElement<{ children?: React.ReactNode; onClick?: () => Promise<void> | void }>
+
+  const children = React.Children.toArray(element.props.children)
+  if (children.includes(text)) {
+    return element
+  }
+
+  for (const child of children) {
+    const match = findElementByText(child, text)
+    if (match) return match
+  }
+
+  return null
+}
+
 describe('multi-shot storyboard stage', () => {
+  const mutateAsync = vi.fn()
+  const onStageChange = vi.fn()
+
   beforeEach(() => {
     mocks.useWorkspaceStageRuntimeMock.mockReset()
     mocks.useWorkspaceEpisodeStageDataMock.mockReset()
     mocks.useWorkspaceProviderMock.mockReset()
+    mocks.useCreateProjectStoryboardGroupMock.mockReset()
+    mutateAsync.mockReset()
+    onStageChange.mockReset()
 
     mocks.useWorkspaceStageRuntimeMock.mockReturnValue({
-      onStageChange: vi.fn(),
+      onStageChange,
       videoModel: 'model-1',
       capabilityOverrides: {},
       userVideoModels: [],
@@ -111,8 +144,12 @@ describe('multi-shot storyboard stage', () => {
         createShotGroup({ id: 'group-3', title: '片段 3', compositeImageUrl: null, sourceStatus: 'placeholder' }),
       ],
       clips: [],
-      storyboards: [],
+      storyboards: [{ id: 'storyboard-1' }, { id: 'storyboard-2' }],
       storyboardDefaultMoodPresetId: null,
+    })
+    mocks.useCreateProjectStoryboardGroupMock.mockReturnValue({
+      isPending: false,
+      mutateAsync,
     })
   })
 
@@ -163,5 +200,31 @@ describe('multi-shot storyboard stage', () => {
     expect(html).toContain('该片段槽位已预留')
     expect(html).toContain('提示词/参考输入仍不完整')
     expect(html).toContain('请先修复后再进入视频生成')
+  })
+
+  it('shows supplement-only copy on the confirmation stage', () => {
+    const html = renderStage()
+
+    expect(html).toContain('手动补充单镜头')
+    expect(html).toContain('只在需要额外补镜头时使用，不会切回传统整集分镜流程。')
+    expect(html).not.toContain('返回分镜')
+    expect(html).not.toContain('进入传统模式')
+  })
+
+  it('creates the supplement storyboard group at the end and continues to videos', async () => {
+    mutateAsync.mockResolvedValue({ success: true })
+    const element = MultiShotStoryboardStage()
+    const supplementButton = findElementByText(element, '手动补充单镜头')
+
+    expect(supplementButton).not.toBeNull()
+
+    const buttonElement = supplementButton as React.ReactElement<{ onClick: () => Promise<void> | void }>
+    await buttonElement.props.onClick()
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      episodeId: 'episode-1',
+      insertIndex: 2,
+    })
+    expect(onStageChange).toHaveBeenCalledWith('videos')
   })
 })

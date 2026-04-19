@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { useCreateProjectStoryboardGroup } from '@/lib/query/hooks'
 import { useWorkspaceStageRuntime } from '../WorkspaceStageRuntimeContext'
 import { useWorkspaceEpisodeStageData } from '../hooks/useWorkspaceEpisodeStageData'
 import { useWorkspaceProvider } from '../WorkspaceProvider'
@@ -9,8 +10,17 @@ import ShotGroupVideoSection from './video-stage/ShotGroupVideoSection'
 export default function MultiShotStoryboardStage() {
   const runtime = useWorkspaceStageRuntime()
   const { projectId, episodeId } = useWorkspaceProvider()
-  const { shotGroups, storyboardDefaultMoodPresetId } = useWorkspaceEpisodeStageData()
+  const { shotGroups, storyboardDefaultMoodPresetId, storyboards } = useWorkspaceEpisodeStageData()
+  const createStoryboardGroupMutation = useCreateProjectStoryboardGroup(projectId)
   const onContinueToVideos = () => {
+    runtime.onStageChange('videos')
+  }
+  const onAddSingleShotSupplement = async () => {
+    if (!episodeId || createStoryboardGroupMutation.isPending) return
+    await createStoryboardGroupMutation.mutateAsync({
+      episodeId,
+      insertIndex: storyboards.length,
+    })
     runtime.onStageChange('videos')
   }
 
@@ -55,6 +65,23 @@ export default function MultiShotStoryboardStage() {
             >
               Continue to videos
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                void onAddSingleShotSupplement()
+              }}
+              disabled={createStoryboardGroupMutation.isPending}
+              className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white/80 px-5 py-2.5 text-sm font-medium text-black transition hover:border-black/20 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              手动补充单镜头
+            </button>
+          </div>
+
+          <p className="text-sm leading-6 text-black/65">
+            只在需要额外补镜头时使用，不会切回传统整集分镜流程。
+          </p>
+          <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm leading-6 text-black/60">
+            补充的单镜头会追加在当前剧集末尾，创建后直接进入 videos 阶段，继续沿用多镜头生产交接流程。
           </div>
         </div>
       </div>
