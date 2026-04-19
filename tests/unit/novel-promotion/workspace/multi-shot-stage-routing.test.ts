@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkspaceProjectSnapshot } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceProjectSnapshot'
 import { useWorkspaceStageNavigation } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceStageNavigation'
 import { useWorkspaceStageRuntime } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceStageRuntime'
+import MultiShotStoryboardStage from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/MultiShotStoryboardStage'
 import WorkspaceStageContent from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/WorkspaceStageContent'
 import VideoStageRoute from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VideoStageRoute'
 
@@ -24,10 +25,6 @@ vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/S
 
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/StoryboardStage', () => ({
   default: () => React.createElement('div', { 'data-stage': 'storyboard-stage' }),
-}))
-
-vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/MultiShotStoryboardStage', () => ({
-  default: () => React.createElement('div', { 'data-stage': 'multi-shot-storyboard-stage' }),
 }))
 
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VoiceStageRoute', () => ({
@@ -132,12 +129,32 @@ function createStageRuntimeParams(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function findElementByType(node: unknown, type: string): React.ReactElement | null {
+  if (!node || typeof node !== 'object') return null
+  if ('type' in node && (node as React.ReactElement).type === type) {
+    return node as React.ReactElement
+  }
+
+  const children = 'props' in node ? (node as React.ReactElement).props?.children : undefined
+  if (!children) return null
+
+  for (const child of React.Children.toArray(children)) {
+    const match = findElementByType(child, type)
+    if (match) return match
+  }
+
+  return null
+}
+
 describe('multi-shot stage routing', () => {
   beforeEach(() => {
     mocks.capturedVideoStageProps = null
     mocks.useWorkspaceStageRuntimeMock.mockReset()
     mocks.useWorkspaceEpisodeStageDataMock.mockReset()
     mocks.useWorkspaceProviderMock.mockReset()
+    mocks.useWorkspaceStageRuntimeMock.mockReturnValue({
+      onStageChange: vi.fn(),
+    })
   })
 
   it('creates multi-shot drafts before routing to the multi-shot storyboard stage', async () => {
@@ -309,5 +326,25 @@ describe('multi-shot stage routing', () => {
     ])
     expect(multiShotMarkup).toContain('multi-shot-storyboard-stage')
     expect(traditionalMarkup).toContain('storyboard-stage')
+  })
+
+  it('advances from multi-shot-storyboard to videos only when the continue CTA is pressed', () => {
+    const onStageChange = vi.fn()
+    mocks.useWorkspaceStageRuntimeMock.mockReturnValue({
+      onStageChange,
+    })
+
+    renderToStaticMarkup(React.createElement(MultiShotStoryboardStage))
+    expect(onStageChange).not.toHaveBeenCalled()
+
+    const tree = MultiShotStoryboardStage()
+    const continueButton = findElementByType(tree, 'button')
+
+    expect(continueButton).not.toBeNull()
+    expect(typeof continueButton?.props.onClick).toBe('function')
+
+    continueButton?.props.onClick()
+
+    expect(onStageChange).toHaveBeenCalledWith('videos')
   })
 })
