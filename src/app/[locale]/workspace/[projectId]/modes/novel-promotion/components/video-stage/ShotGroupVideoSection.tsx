@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
@@ -42,6 +42,7 @@ import {
   extractVideoTailFrame,
 } from './video-tail-frame-utils'
 import { saveBlobAsFile } from '@/lib/download/saveBlobAsFile'
+import { parseShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 
 interface ShotGroupVideoSectionProps {
   projectId: string
@@ -50,6 +51,7 @@ interface ShotGroupVideoSectionProps {
   defaultVideoModel: string
   videoModelOptions?: VideoModelOption[]
   capabilityOverrides?: CapabilitySelections
+  mode?: 'review' | 'video'
 }
 
 interface VideoDraftState {
@@ -195,6 +197,163 @@ function resolveMutationError(error: unknown, fallback: string) {
 function buildPendingFilePreview(file: File | null) {
   if (!file) return null
   return URL.createObjectURL(file)
+}
+
+function ShotGroupVideoReviewSection({
+  shotGroups = [],
+}: Pick<ShotGroupVideoSectionProps, 'shotGroups'>) {
+  const visibleShotGroups = shotGroups.filter((group) => {
+    const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+    return group.groupPrompt?.trim() || group.videoPrompt?.trim() || draftMetadata
+  })
+
+  return (
+    <section className="rounded-[28px] border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/75 p-4 space-y-4">
+      <div className="rounded-3xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/40 p-5">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--glass-tone-info-fg)]">
+            多镜头确认
+          </p>
+          <h3 className="text-xl font-semibold text-[var(--glass-text-primary)]">
+            草稿创建已完成，视频生成尚未开始
+          </h3>
+          <p className="text-sm leading-6 text-[var(--glass-text-secondary)]">
+            这些片段草稿来自当前剧集的片段结构。每个片段都是一个 15 秒视频生成单元，最多承载 9 个镜头；进入 videos 前，必须逐段确认分镜参考、提示词与节奏说明。
+          </p>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            '草稿创建已完成，当前只做确认，不会自动开跑视频。',
+            '每段都保留模型可直接使用的提示词，避免再回到传统分镜剧本文案。',
+            '对白会嵌入动作节拍里，方便后续视频阶段继续微调。',
+            '镜头节奏说明保持紧凑制作口径，不展开成传统 screenplay。',
+          ].map((item) => (
+            <div
+              key={item}
+              className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 px-3 py-3 text-xs leading-5 text-[var(--glass-text-secondary)]"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {visibleShotGroups.length > 0 ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {visibleShotGroups.map((group, index) => {
+            const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+            const hasReference = Boolean(group.compositeImageUrl || group.referenceImageUrl)
+            const promptText = group.videoPrompt?.trim() || group.groupPrompt?.trim() || draftMetadata?.narrativePrompt || ''
+            const dialogueText = draftMetadata?.embeddedDialogue || '当前片段未写入对白，可在后续视频阶段补充。'
+            const rhythmText = draftMetadata?.shotRhythmGuidance || '保持镜头推进、景别变化和情绪起伏的连续性。'
+            const isPlaceholder = draftMetadata?.sourceStatus === 'placeholder'
+
+            return (
+              <article
+                key={group.id}
+                className="rounded-3xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-4 space-y-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-[var(--glass-tone-info-bg)] px-2 py-1 text-xs text-[var(--glass-tone-info-fg)]">
+                        片段 {draftMetadata?.segmentOrder || index + 1}
+                      </span>
+                      <span className="rounded-lg bg-[var(--glass-bg-muted)] px-2 py-1 text-xs text-[var(--glass-text-secondary)]">
+                        15 秒视频生成单元
+                      </span>
+                      <span className="rounded-lg bg-[var(--glass-bg-muted)] px-2 py-1 text-xs text-[var(--glass-text-secondary)]">
+                        最多 9 个镜头
+                      </span>
+                    </div>
+                    <h4 className="text-base font-semibold text-[var(--glass-text-primary)]">
+                      {group.title || `片段 ${index + 1}`}
+                    </h4>
+                    <p className="text-xs text-[var(--glass-text-tertiary)]">
+                      场景：{draftMetadata?.sceneLabel || '待补充'} · 槽位 {(group.items || []).length || draftMetadata?.expectedShotCount || 0} 个
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      'rounded-full px-3 py-1 text-xs font-medium',
+                      hasReference
+                        ? 'bg-[var(--glass-tone-success-bg)] text-[var(--glass-tone-success-fg)]'
+                        : 'bg-[var(--glass-tone-warning-bg)] text-[var(--glass-tone-warning-fg)]',
+                    ].join(' ')}
+                  >
+                    {hasReference ? '参考已就绪，可继续确认' : '参考未确认，需先补齐'}
+                  </span>
+                </div>
+
+                {isPlaceholder ? (
+                  <div className="rounded-2xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-3 text-sm leading-6 text-[var(--glass-tone-warning-fg)]">
+                    该片段槽位已预留，但提示词/参考输入仍不完整。请先修复后再进入视频生成。
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                    <div className="text-xs font-medium text-[var(--glass-text-secondary)]">模型可直接使用的提示词</div>
+                    <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">
+                      {promptText || '当前片段提示词仍待补齐，请先补充后再进入视频阶段。'}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <div className="text-xs font-medium text-[var(--glass-text-secondary)]">嵌入对白</div>
+                      <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">{dialogueText}</div>
+                    </div>
+                    <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                      <div className="text-xs font-medium text-[var(--glass-text-secondary)]">镜头节奏</div>
+                      <div className="mt-2 text-sm leading-6 text-[var(--glass-text-primary)]">{rhythmText}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/75 p-3 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-[var(--glass-text-primary)]">参考确认</div>
+                      <div className="text-xs text-[var(--glass-text-tertiary)]">
+                        先确认或替换参考图/参考板，再继续进入 videos。
+                      </div>
+                    </div>
+                    <div className="text-xs text-[var(--glass-text-tertiary)]">
+                      当前：{hasReference ? '已存在参考图或参考板' : '还没有确认参考图'}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
+                    >
+                      {hasReference ? '替换参考图' : '上传参考图'}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
+                    >
+                      {hasReference ? '替换参考板' : '生成参考板'}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] px-3 py-2 text-xs font-medium text-[var(--glass-text-secondary)]"
+                    >
+                      保存参考设置
+                    </button>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="rounded-3xl border border-dashed border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/60 px-4 py-8 text-center text-sm text-[var(--glass-text-tertiary)]">
+          当前还没有可确认的多镜头片段草稿。
+        </div>
+      )}
+    </section>
+  )
 }
 
 function buildShotGroupPayload(draft: VideoDraftState, episodeId?: string) {
@@ -448,7 +607,7 @@ function renderVideoConfigFields(params: {
   )
 }
 
-export default function ShotGroupVideoSection({
+function VideoShotGroupSection({
   projectId,
   episodeId,
   shotGroups = [],
@@ -1225,4 +1384,12 @@ export default function ShotGroupVideoSection({
       ) : null}
     </section>
   )
+}
+
+export default function ShotGroupVideoSection(props: ShotGroupVideoSectionProps) {
+  if (props.mode === 'review') {
+    return <ShotGroupVideoReviewSection shotGroups={props.shotGroups} />
+  }
+
+  return <VideoShotGroupSection {...props} />
 }

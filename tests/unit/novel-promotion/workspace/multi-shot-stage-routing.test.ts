@@ -155,6 +155,15 @@ describe('multi-shot stage routing', () => {
     mocks.useWorkspaceStageRuntimeMock.mockReturnValue({
       onStageChange: vi.fn(),
     })
+    mocks.useWorkspaceProviderMock.mockReturnValue({
+      projectId: 'project-1',
+      episodeId: 'episode-1',
+    })
+    mocks.useWorkspaceEpisodeStageDataMock.mockReturnValue({
+      clips: [],
+      storyboards: [],
+      shotGroups: [],
+    })
   })
 
   it('creates multi-shot drafts before routing to the multi-shot storyboard stage', async () => {
