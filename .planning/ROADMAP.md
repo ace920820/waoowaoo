@@ -51,11 +51,12 @@ Plans:
 
 **UI hint:** yes
 
-**Plans:** 2 plans
+**Plans:** 3 plans
 
 Plans:
 - [ ] 02-01-PLAN.md — Build the episode multi-shot draft contract, metadata, and batch creation API
 - [ ] 02-02-PLAN.md — Route multi-shot episodes through a dedicated confirmation stage while preserving the traditional storyboard path
+- [ ] 02-03-PLAN.md — Finish the multi-shot confirmation surface and fast-path copy without regressing the traditional storyboard UI
 
 **Success criteria:**
 1. Traditional mode continues to execute the existing classic chain for users who need frame-by-frame control.

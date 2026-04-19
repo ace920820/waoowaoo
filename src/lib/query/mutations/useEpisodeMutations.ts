@@ -21,6 +21,7 @@ export function useListProjectEpisodes(projectId: string) {
           name?: string
           description?: string
           novelText?: string
+          episodeProductionMode?: 'multi_shot' | 'traditional'
         }>
       }>(`/api/novel-promotion/${projectId}/episodes`, { method: 'GET' }, '获取剧集失败'),
   })
@@ -90,6 +91,7 @@ export function useSaveProjectEpisodesBatch(projectId: string) {
         name: string
         description?: string
         novelText?: string
+        episodeProductionMode?: 'multi_shot' | 'traditional'
       }>
       clearExisting?: boolean
       importStatus?: 'pending' | 'completed'

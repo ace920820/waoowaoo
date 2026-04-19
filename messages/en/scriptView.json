@@ -60,6 +60,38 @@
         "removeCharacter": "Are you sure you want to remove this character from current clip?",
         "removeLocation": "Are you sure you want to remove this location from current clip?"
     },
+    "productionMode": {
+        "title": "Production Mode",
+        "subtitle": "Confirm this episode's production path before you start drawing",
+        "badge": {
+            "multiShot": "Default fast path",
+            "traditional": "Traditional panel path"
+        },
+        "options": {
+            "multiShot": {
+                "label": "Multi-shot Segment Mode",
+                "description": "Skip the long traditional storyboard script and move straight into multi-shot segment production"
+            },
+            "traditional": {
+                "label": "Traditional Mode",
+                "description": "Keep the classic storyboard flow for projects that need shot-by-shot control"
+            }
+        },
+        "helper": {
+            "multiShot": {
+                "title": "This episode will enter multi-shot production directly",
+                "description": "After you click the button below, the workflow skips traditional storyboard generation and opens the multi-shot video stage."
+            },
+            "traditional": {
+                "title": "This episode will enter traditional storyboard generation",
+                "description": "After you click the button below, the workflow continues through the traditional script-to-storyboard path."
+            }
+        },
+        "cta": {
+            "multiShot": "Current mode: Multi-shot Segment Mode. The next step opens multi-shot video production directly.",
+            "traditional": "Current mode: Traditional Mode. The next step generates traditional storyboard content."
+        }
+    },
     "generate": {
         "missingAssets": "{count} referenced characters/locations are still missing images",
         "missingAssetsTip": "You can still generate storyboard text now, but before generating panel images please finish the referenced character and location images in",

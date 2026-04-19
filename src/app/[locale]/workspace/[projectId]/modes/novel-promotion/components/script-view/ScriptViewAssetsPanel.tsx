@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Character, Location, Prop, CharacterAppearance } from '@/types/project'
+import type {
+  Character,
+  Location,
+  NovelPromotionEpisodeProductionMode,
+  Prop,
+  CharacterAppearance,
+} from '@/types/project'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import { SpotlightCharCard, SpotlightLocationCard, getSelectedLocationImage } from './SpotlightCards'
@@ -40,6 +46,8 @@ interface ScriptViewAssetsPanelProps {
   globalCharIds: string[]
   globalLocationIds: string[]
   missingAssetsCount: number
+  episodeProductionMode: NovelPromotionEpisodeProductionMode
+  onEpisodeProductionModeChange?: (value: NovelPromotionEpisodeProductionMode) => Promise<void>
   onGenerateStoryboard?: () => void
   isSubmittingStoryboardBuild: boolean
   canGenerateStoryboardText: boolean
@@ -137,6 +145,8 @@ export default function ScriptViewAssetsPanel({
   globalCharIds,
   globalLocationIds,
   missingAssetsCount,
+  episodeProductionMode,
+  onEpisodeProductionModeChange,
   onGenerateStoryboard,
   isSubmittingStoryboardBuild,
   canGenerateStoryboardText,
@@ -302,6 +312,7 @@ export default function ScriptViewAssetsPanel({
   }, [showAddChar, showAddLoc, showAddProp])
 
   const isAllClipsMode = assetViewMode === 'all'
+  const activeModeKey = episodeProductionMode === 'traditional' ? 'traditional' : 'multiShot'
 
   const hasCharacterLabelChanges = !isAllClipsMode && Array.from(pendingAppearanceKeys).some((key) => {
     const parsed = parseAppearanceKey(key)
@@ -874,6 +885,50 @@ export default function ScriptViewAssetsPanel({
             </p>
           </div>
         )}
+        <div className="mb-3 rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--glass-text-primary)]">{tScript('productionMode.title')}</p>
+              <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">{tScript('productionMode.subtitle')}</p>
+            </div>
+            <span className="rounded-full bg-[var(--glass-tone-info-bg)] px-2.5 py-1 text-[11px] font-medium text-[var(--glass-tone-info-fg)]">
+              {tScript(`productionMode.badge.${activeModeKey}`)}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(['multi_shot', 'traditional'] as const).map((mode) => {
+              const selected = episodeProductionMode === mode
+              const modeKey = mode === 'traditional' ? 'traditional' : 'multiShot'
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => void onEpisodeProductionModeChange?.(mode)}
+                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                    selected
+                      ? 'border-[var(--glass-stroke-focus)] bg-[var(--glass-tone-info-bg)]/60'
+                      : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/40 hover:border-[var(--glass-stroke-focus)]'
+                  }`}
+                >
+                  <div className="text-sm font-medium text-[var(--glass-text-primary)]">
+                    {tScript(`productionMode.options.${modeKey}.label`)}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-[var(--glass-text-tertiary)]">
+                    {tScript(`productionMode.options.${modeKey}.description`)}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/40 px-3 py-2.5">
+            <p className="text-xs font-medium text-[var(--glass-text-secondary)]">
+              {tScript(`productionMode.helper.${activeModeKey}.title`)}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--glass-text-tertiary)]">
+              {tScript(`productionMode.helper.${activeModeKey}.description`)}
+            </p>
+          </div>
+        </div>
         <button
           onClick={onGenerateStoryboard}
           disabled={isSubmittingStoryboardBuild || !canGenerateStoryboardText}
@@ -881,6 +936,9 @@ export default function ScriptViewAssetsPanel({
         >
           {isSubmittingStoryboardBuild ? tScript('generate.generating') : tScript('generate.startGenerate')}
         </button>
+        <p className="mt-3 text-center text-xs leading-5 text-[var(--glass-text-tertiary)]">
+          {tScript(`productionMode.cta.${activeModeKey}`)}
+        </p>
       </div>
     </div>
   )

@@ -86,6 +86,7 @@ export function useNovelPromotionWorkspaceController({
   const rebuildState = useRebuildConfirm({
     episodeId,
     episodeStoryboards: episode?.storyboards,
+    episodeShotGroups: episode?.shotGroups,
     getProjectStoryboardStats: configActions.getProjectStoryboardStats,
     t,
   })
@@ -161,6 +162,7 @@ export function useNovelPromotionWorkspaceController({
     artStyle: projectSnapshot.artStyle,
     storyboardMoodPresets: projectSnapshot.storyboardMoodPresets,
     storyboardDefaultMoodPresetId: projectSnapshot.storyboardDefaultMoodPresetId,
+    episodeProductionMode: episode?.episodeProductionMode || 'multi_shot',
     videoModel: projectSnapshot.videoModel,
     capabilityOverrides: projectSnapshot.capabilityOverrides,
     userVideoModels: userModels.userVideoModels || [],

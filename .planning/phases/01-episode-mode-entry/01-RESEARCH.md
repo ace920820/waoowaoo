@@ -312,17 +312,17 @@ setShowRebuildConfirm(true)
 | A3 | Ad hoc component scans or a new modal state machine would be possible alternatives. [ASSUMED] | Don't Hand-Roll | Low; these are explicitly not recommended. |
 | A4 | Earlier repo history may have used more bespoke episode update calls. [ASSUMED] | State of the Art | Low; this does not affect the Phase 1 plan. |
 
-## Open Questions
+## Resolved Questions
 
 1. **Should shot-group-only episodes count as "started" for switch confirmation, even if they have no storyboard panels?**
-   - What we know: `stage-readiness` counts shot-group composite images/videos as storyboard/video readiness, but the locked migration rule only needs conservative traditional-trace detection. [VERIFIED: `src/lib/novel-promotion/stage-readiness.ts`, `.planning/phases/01-episode-mode-entry/01-CONTEXT.md`]
-   - What's unclear: Product intent for confirmation may be broader than product intent for legacy-default inheritance. [VERIFIED: context + codebase]
-   - Recommendation: Use broader confirmation gating (`storyboards` or `shotGroups` outputs) but narrower migration-to-traditional detection (storyboard panels/panel videos only). [VERIFIED: codebase inference from current helpers]
+   - Decision: **Yes.** Shot-group-only episodes count as started for mode-switch confirmation, because they already contain downstream production artifacts that could become misleading after a path flip. [VERIFIED: `.planning/phases/01-episode-mode-entry/01-CONTEXT.md`, `src/lib/novel-promotion/stage-readiness.ts`]
+   - Implementation rule: use broader confirmation gating for switching (`storyboards`, storyboard panels/videos, or shot-group outputs all count), but keep the migration-to-traditional heuristic narrower. [VERIFIED: codebase inference grounded in current helpers]
+   - Migration rule: only persisted storyboard-panel traces or panel-video traces backfill a legacy episode to `traditional`; shot-group-only traces still migrate to `multi_shot`. [VERIFIED: `.planning/phases/01-episode-mode-entry/01-CONTEXT.md`, `src/lib/novel-promotion/stage-readiness.ts`, `tests/unit/novel-promotion/stage-readiness.test.ts`]
 
 2. **What enum/string names should become the contract?**
-   - What we know: Existing workflow-related fields in the schema often use `String`, including `workflowMode` and `videoGenerationMode`. [VERIFIED: `prisma/schema.prisma`, `src/types/project.ts`]
-   - What's unclear: Whether the team wants `multi_shot` / `traditional` or a different final API vocabulary. [VERIFIED: codebase grep]
-   - Recommendation: Lock values before implementation and propagate them through DB, API, query typing, and i18n in one change. [VERIFIED: planning recommendation grounded in current architecture]
+   - Decision: lock the persisted/API/UI contract to **`multi_shot`** and **`traditional`** under the episode field name **`episodeProductionMode`**. [VERIFIED: `.planning/REQUIREMENTS.md`, `.planning/phases/01-episode-mode-entry/01-CONTEXT.md`]
+   - Reasoning: these values align with the product language already settled in Phase 1 while fitting the repo's existing string-field conventions. [VERIFIED: `prisma/schema.prisma`, `src/types/project.ts`]
+   - Propagation rule: schema, migration, API validation, query typing, workspace runtime, CTA branching, and locale copy must all branch only on these two literals. [VERIFIED: planning recommendation grounded in current architecture]
 
 ## Environment Availability
 

@@ -137,6 +137,7 @@ export interface AssetLibraryLocation {
 
 // 工作流模式
 export type WorkflowMode = 'srt' | 'agent'
+export type NovelPromotionEpisodeProductionMode = 'multi_shot' | 'traditional'
 
 // Clip类型（兼容SRT和Agent两种模式）
 export interface NovelPromotionClip {
@@ -329,6 +330,7 @@ export interface NovelPromotionProject {
     name: string
     description: string | null
     novelText: string | null
+    episodeProductionMode?: NovelPromotionEpisodeProductionMode | null
     storyboardDefaultMoodPresetId?: string | null
     audioUrl: string | null
     srtContent: string | null

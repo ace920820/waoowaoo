@@ -60,7 +60,7 @@ describe('useRebuildConfirm', () => {
   })
 
   it('clicking story to script -> sets pending action before downstream check resolves', async () => {
-    const deferred = createDeferred<{ storyboardCount: number; panelCount: number }>()
+    const deferred = createDeferred<{ storyboardCount: number; panelCount: number; shotGroupCount: number; videoArtifactCount: number }>()
     const getProjectStoryboardStats = vi.fn(() => deferred.promise)
     const action = vi.fn(async () => undefined)
 
@@ -77,14 +77,14 @@ describe('useRebuildConfirm', () => {
     expect(getProjectStoryboardStats).toHaveBeenCalledWith('episode-1')
     expect(action).not.toHaveBeenCalled()
 
-    deferred.resolve({ storyboardCount: 0, panelCount: 0 })
+    deferred.resolve({ storyboardCount: 0, panelCount: 0, shotGroupCount: 0, videoArtifactCount: 0 })
     await pendingRun
 
     expect(action).toHaveBeenCalledTimes(1)
   })
 
   it('story to script without downstream confirm clears pending action after action completes', async () => {
-    const getProjectStoryboardStats = vi.fn(async () => ({ storyboardCount: 0, panelCount: 0 }))
+    const getProjectStoryboardStats = vi.fn(async () => ({ storyboardCount: 0, panelCount: 0, shotGroupCount: 0, videoArtifactCount: 0 }))
     const action = vi.fn(async () => undefined)
 
     const hook = useRebuildConfirm({
@@ -108,18 +108,48 @@ describe('useRebuildConfirm', () => {
     expect(resetCall('storyToScript')).toBeNull()
     expect(resetCall('scriptToStoryboard')).toBe('scriptToStoryboard')
   })
+
+  it('treats shot-group/video artifacts as confirmation-worthy downstream data', () => {
+    expect(hasDownstreamStoryboardData({
+      storyboardCount: 0,
+      panelCount: 0,
+      shotGroupCount: 1,
+      videoArtifactCount: 0,
+    })).toBe(true)
+    expect(hasDownstreamStoryboardData({
+      storyboardCount: 0,
+      panelCount: 0,
+      shotGroupCount: 0,
+      videoArtifactCount: 1,
+    })).toBe(true)
+  })
 })
 
 describe('hasDownstreamStoryboardData', () => {
   it('storyboard and panel counts are both zero -> returns false', () => {
-    expect(hasDownstreamStoryboardData({ storyboardCount: 0, panelCount: 0 })).toBe(false)
+    expect(hasDownstreamStoryboardData({
+      storyboardCount: 0,
+      panelCount: 0,
+      shotGroupCount: 0,
+      videoArtifactCount: 0,
+    })).toBe(false)
   })
 
   it('storyboard count is greater than zero -> returns true', () => {
-    expect(hasDownstreamStoryboardData({ storyboardCount: 1, panelCount: 0 })).toBe(true)
+    expect(hasDownstreamStoryboardData({
+      storyboardCount: 1,
+      panelCount: 0,
+      shotGroupCount: 0,
+      videoArtifactCount: 0,
+    })).toBe(true)
   })
 
   it('panel count is greater than zero -> returns true', () => {
-    expect(hasDownstreamStoryboardData({ storyboardCount: 0, panelCount: 2 })).toBe(true)
+    expect(hasDownstreamStoryboardData({
+      storyboardCount: 0,
+      panelCount: 2,
+      shotGroupCount: 0,
+      videoArtifactCount: 0,
+    })).toBe(true)
   })
 })

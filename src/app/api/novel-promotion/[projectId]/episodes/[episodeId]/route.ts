@@ -8,6 +8,8 @@ import { resolveMediaRefFromLegacyValue } from '@/lib/media/service'
 import { attachSpeechPlanToStoryboards } from '@/lib/novel-promotion/panel-speech-plan'
 import { normalizeStoryboardMoodText } from '@/lib/storyboard-mood-presets'
 
+const EPISODE_PRODUCTION_MODES = new Set(['multi_shot', 'traditional'])
+
 /**
  * GET - 获取单个剧集的完整数据
  */
@@ -90,12 +92,18 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { name, description, novelText, storyboardDefaultMoodPresetId, audioUrl, srtContent } = body
+  const { name, description, novelText, episodeProductionMode, storyboardDefaultMoodPresetId, audioUrl, srtContent } = body
 
   const updateData: Record<string, unknown> = {}
   if (name !== undefined) updateData.name = name.trim()
   if (description !== undefined) updateData.description = description?.trim() || null
   if (novelText !== undefined) updateData.novelText = novelText
+  if (episodeProductionMode !== undefined) {
+    if (typeof episodeProductionMode !== 'string' || !EPISODE_PRODUCTION_MODES.has(episodeProductionMode)) {
+      throw new ApiError('INVALID_PARAMS')
+    }
+    updateData.episodeProductionMode = episodeProductionMode
+  }
   if (storyboardDefaultMoodPresetId !== undefined) {
     updateData.storyboardDefaultMoodPresetId = normalizeStoryboardMoodText(storyboardDefaultMoodPresetId)
   }

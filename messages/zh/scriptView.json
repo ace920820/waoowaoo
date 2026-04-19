@@ -60,6 +60,38 @@
         "removeCharacter": "确定要从当前片段移除该角色吗？",
         "removeLocation": "确定要从当前片段移除该场景吗？"
     },
+    "productionMode": {
+        "title": "生产模式",
+        "subtitle": "请在开始绘制前，确认本集要走的生产路径",
+        "badge": {
+            "multiShot": "默认更快路径",
+            "traditional": "传统逐镜头路径"
+        },
+        "options": {
+            "multiShot": {
+                "label": "多镜头片段模式",
+                "description": "跳过传统冗长分镜剧本，直接进入多镜头片段生产路径"
+            },
+            "traditional": {
+                "label": "传统模式",
+                "description": "保留经典分镜链路，适合需要逐镜头精细控制的项目"
+            }
+        },
+        "helper": {
+            "multiShot": {
+                "title": "当前将直接进入多镜头片段生产",
+                "description": "点击下方按钮后，将跳过传统分镜生成，直接前往多镜头片段视频生产界面。"
+            },
+            "traditional": {
+                "title": "当前将进入传统分镜生成",
+                "description": "点击下方按钮后，将继续执行剧本到分镜的传统生成链路。"
+            }
+        },
+        "cta": {
+            "multiShot": "当前模式：多镜头片段模式，下一步会直接进入多镜头片段视频生产。",
+            "traditional": "当前模式：传统模式，下一步会生成传统分镜内容。"
+        }
+    },
     "generate": {
         "missingAssets": "还有 {count} 个引用角色/场景未补齐形象",
         "missingAssetsTip": "现在仍可继续生成分镜文本；但后续生成分镜图前，仍需先在",

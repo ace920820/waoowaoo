@@ -3,7 +3,7 @@ import { logInfo as _ulogInfo } from '@/lib/logging/core'
 
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Character, Location, Prop } from '@/types/project'
+import type { Character, Location, NovelPromotionEpisodeProductionMode, Prop } from '@/types/project'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import {
@@ -54,6 +54,8 @@ interface ScriptViewProps {
   episodeId?: string
   clips: Clip[]
   storyboards?: Storyboard[]
+  episodeProductionMode: NovelPromotionEpisodeProductionMode
+  onEpisodeProductionModeChange?: (value: NovelPromotionEpisodeProductionMode) => Promise<void>
   onClipEdit?: (clipId: string) => void
   onClipUpdate?: (clipId: string, data: Partial<Clip>) => void
   onClipDelete?: (clipId: string) => void
@@ -70,6 +72,8 @@ function toTranslationValues(values?: Record<string, unknown>) {
 export default function ScriptView({
   projectId,
   clips,
+  episodeProductionMode,
+  onEpisodeProductionModeChange,
   onClipEdit,
   onClipUpdate,
   onClipDelete,
@@ -426,6 +430,8 @@ export default function ScriptView({
         globalCharIds={globalCharIds}
         globalLocationIds={globalLocationIds}
         missingAssetsCount={missingAssetsCount}
+        episodeProductionMode={episodeProductionMode}
+        onEpisodeProductionModeChange={onEpisodeProductionModeChange}
         onGenerateStoryboard={onGenerateStoryboard}
         isSubmittingStoryboardBuild={isSubmittingStoryboardBuild}
         canGenerateStoryboardText={storyboardTextReadiness.isReady}

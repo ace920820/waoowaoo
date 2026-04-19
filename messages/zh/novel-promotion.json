@@ -170,6 +170,10 @@
       "title": "将重建分镜数据",
       "message": "检测到当前剧集已有分镜数据（{storyboardCount} 个分镜，{panelCount} 个镜头面板）。继续执行将清空当前分镜并重新生成，是否继续？"
     },
+    "switchEpisodeProductionMode": {
+      "title": "切换已开始生产的集",
+      "message": "检测到当前剧集已有下游内容（{storyboardCount} 个分镜，{panelCount} 个镜头面板，{shotGroupCount} 个多镜头片段条目，{videoArtifactCount} 个已生成画面/视频结果）。切换后，本集后续将按新的生产路径继续，已有内容可能需要重新执行。确认切换吗？"
+    },
     "confirm": "继续并清空",
     "cancel": "取消"
   }

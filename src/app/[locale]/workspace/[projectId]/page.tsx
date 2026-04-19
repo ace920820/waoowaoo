@@ -30,6 +30,7 @@ interface Episode {
   name: string
   description?: string | null
   novelText?: string | null
+  episodeProductionMode?: 'multi_shot' | 'traditional' | null
   audioUrl?: string | null
   srtContent?: string | null
   createdAt: string

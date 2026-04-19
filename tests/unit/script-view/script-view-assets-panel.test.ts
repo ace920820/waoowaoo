@@ -91,6 +91,8 @@ function renderPanel(propsCount: number) {
       globalCharIds: [],
       globalLocationIds: [],
       missingAssetsCount: 0,
+      episodeProductionMode: 'multi_shot',
+      onEpisodeProductionModeChange: async () => undefined,
       onGenerateStoryboard: () => undefined,
       isSubmittingStoryboardBuild: false,
       canGenerateStoryboardText: true,
