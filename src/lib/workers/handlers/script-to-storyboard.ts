@@ -41,6 +41,7 @@ import {
   parseStoryboardRetryTarget,
   runScriptToStoryboardAtomicRetry,
 } from './script-to-storyboard-atomic-retry'
+import { handleMultiShotScriptToStoryboardTask } from './script-to-storyboard-multi-shot'
 
 type AnyObj = Record<string, unknown>
 const MAX_VOICE_ANALYZE_ATTEMPTS = 2
@@ -148,6 +149,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
   const capabilityReasoningEffort = llmCapabilityOptions.reasoningEffort
   const reasoningEffort = requestedReasoningEffort
     || (isReasoningEffort(capabilityReasoningEffort) ? capabilityReasoningEffort : 'high')
+  const episodeProductionMode = episode.episodeProductionMode === 'traditional' ? 'traditional' : 'multi_shot'
 
   const phase1PlanTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_STORYBOARD_PLAN, job.data.locale)
   const phase2CinematographyTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_CINEMATOGRAPHER, job.data.locale)
@@ -266,6 +268,38 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
         stageLabel: 'progress.stage.scriptToStoryboardPrepare',
         displayMode: 'detail',
       })
+
+      if (episodeProductionMode === 'multi_shot') {
+        return await handleMultiShotScriptToStoryboardTask({
+          job,
+          runId,
+          episodeId,
+          locale: job.data.locale === 'en' ? 'en' : 'zh',
+          clips: selectedClips.map((clip) => ({
+            id: clip.id,
+            content: clip.content,
+            summary: clip.summary,
+            characters: clip.characters,
+            location: clip.location,
+            props: readNullableText(clip as unknown as Record<string, unknown>, 'props'),
+            screenplay: clip.screenplay,
+            shotCount: clip.shotCount,
+            start: clip.start,
+            end: clip.end,
+            duration: clip.duration,
+          })),
+          novelData: {
+            characters: novelData.characters || [],
+            locations: (novelData.locations || []).map((item) => ({
+              name: item.name,
+              summary: item.summary,
+              assetKind: readAssetKind(item as unknown as Record<string, unknown>),
+            })),
+          },
+          runStep,
+          assertRunActive,
+        })
+      }
 
       const orchestratorResult: ScriptToStoryboardOrchestratorResult = await (async () => {
         try {

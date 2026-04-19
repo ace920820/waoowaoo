@@ -10,7 +10,7 @@
 
 This roadmap focuses only on P1: splitting the production workflow into a default multi-shot fast path and a preserved traditional path, configured per episode from the script page before drawing starts.
 
-**4 phases** | **20 v1 requirements mapped** | All v1 requirements covered ✓
+**5 phases** | **20 v1 requirements mapped** | All v1 requirements covered ✓
 
 ## Phases
 
@@ -65,6 +65,18 @@ Plans:
 4. Each multi-shot segment payload supports up to 9 shots worth of motion, framing, and emotion progression inside a single video-generation unit.
 5. Multi-shot mode removes or downgrades now-unnecessary traditional storyboard-script UI and steps from the default path.
 6. Multi-shot mode does not auto-create single-shot storyboards up front.
+
+### Phase 02.1: Multi-Shot Asset Injection (INSERTED)
+
+**Goal:** Make the multi-shot storyboard/reference confirmation step asset-aware so each derived 15-second segment can generate references from persisted character, prop, location, and mood inputs while still remaining card-local, editable, and non-blocking when some assets are missing.
+**Requirements**: AST-01, AST-02, AST-03, AST-04
+**Depends on:** Phase 2
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02.1-01-PLAN.md — Persist segment asset/mood metadata, auto-preselection, and warning state on shot-group drafts
+- [ ] 02.1-02-PLAN.md — Add per-card asset and mood controls to the multi-shot confirmation cards
+- [ ] 02.1-03-PLAN.md — Wire hover preview management and asset-aware reference-board generation
 
 ### Phase 3: Editable Production Handoff
 

@@ -32,7 +32,6 @@ interface UseWorkspaceStageRuntimeParams {
   }> | undefined
   handleUpdateEpisode: (key: string, value: unknown) => Promise<void>
   handleUpdateConfig: (key: string, value: unknown) => Promise<void>
-  ensureEpisodeMultiShotDrafts: () => Promise<unknown>
   runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode', operation: () => Promise<void>) => Promise<void>
   runStoryToScriptFlow: () => Promise<void>
   runScriptToStoryboardFlow: () => Promise<void>
@@ -80,7 +79,6 @@ export function useWorkspaceStageRuntime({
   userVideoModels,
   handleUpdateEpisode,
   handleUpdateConfig,
-  ensureEpisodeMultiShotDrafts,
   runWithRebuildConfirm,
   runStoryToScriptFlow,
   runScriptToStoryboardFlow,
@@ -132,13 +130,7 @@ export function useWorkspaceStageRuntime({
     },
     onOpenAssetLibrary: () => openAssetLibrary(),
     onRunScriptToStoryboard: async () => {
-      if (episodeProductionMode === 'traditional') {
-        await runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
-        return
-      }
-
-      await ensureEpisodeMultiShotDrafts()
-      handleStageChange('multi-shot-storyboard')
+      await runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
     },
     onStageChange: handleStageChange,
     onGenerateVideo: handleGenerateVideo,
@@ -157,7 +149,6 @@ export function useWorkspaceStageRuntime({
     handleUpdateEpisode,
     handleUpdatePanelVideoModel,
     handleUpdateVideoPrompt,
-    ensureEpisodeMultiShotDrafts,
     isConfirmingAssets,
     isPreparingMultiShotDrafts,
     isStartingScriptToStoryboard,

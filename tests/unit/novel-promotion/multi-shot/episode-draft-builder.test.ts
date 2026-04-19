@@ -137,6 +137,8 @@ describe('buildEpisodeMultiShotDrafts', () => {
                 content: [
                   { type: 'dialogue', character: '林夏', lines: '别再躲我了。' },
                   { type: 'dialogue', character: '周沉', lines: '我怕你知道真相。' },
+                  { type: 'dialogue', character: '林夏', lines: '今晚你必须说清楚。' },
+                  { type: 'dialogue', character: '周沉', lines: '再往前一步你就回不了头。' },
                 ],
               },
             ],
@@ -148,9 +150,56 @@ describe('buildEpisodeMultiShotDrafts', () => {
     expect(drafts[0].includeDialogue).toBe(true)
     expect(drafts[0].embeddedDialogue).toContain('林夏: 别再躲我了。')
     expect(drafts[0].embeddedDialogue).toContain('周沉: 我怕你知道真相。')
-    expect(drafts[0].narrativePrompt).toContain('剧情目标：')
-    expect(drafts[0].groupPrompt).toContain('对白嵌入：')
+    expect(drafts[0].narrativePrompt).toContain('当前是这个大片段的第 1/1 个 15 秒多镜头子片段')
+    expect(drafts[0].narrativePrompt).toContain('镜头')
+    expect(drafts[0].groupPrompt).toContain('当动作推进到关键节点时')
     expect(drafts[0].shotRhythmGuidance).toContain('第 1/1 个 15 秒片段')
+  })
+
+  it('splits one coarse clip into four distinct cinematic subsegment prompts', () => {
+    const drafts = buildEpisodeMultiShotDrafts({
+      episodeId: 'episode-1',
+      clips: [
+        buildClip({
+          id: 'clip-arc',
+          start: 0,
+          end: 60,
+          duration: 60,
+          summary: '托尼在机场追查黑色汽车与可疑公文包',
+          location: '机场内部-白天',
+          characters: '托尼, 司机, 副驾驶',
+          props: '公文包, 黑色汽车',
+          content: '镜头从候机大厅外推进到停机坪通道，托尼发现一辆黑色汽车异常靠近。'
+            + ' 他快步追过去，目光始终锁定副驾驶手中的公文包。'
+            + ' 双方在登机口边缘爆发短暂对峙，托尼试图抢下公文包并拦住司机。'
+            + ' 混乱之后，镜头收在托尼压住车门、死盯对方反应的瞬间。',
+          screenplay: JSON.stringify({
+            scenes: [
+              {
+                scene_number: 3,
+                content: [
+                  { type: 'dialogue', character: '托尼', lines: '把包放下。' },
+                  { type: 'dialogue', character: '司机', lines: '你拦不住我们。' },
+                  { type: 'dialogue', character: '托尼', lines: '飞机不能起飞。' },
+                  { type: 'dialogue', character: '副驾驶', lines: '再晚就来不及了。' },
+                ],
+              },
+            ],
+          }),
+        }),
+      ],
+    })
+
+    expect(drafts).toHaveLength(4)
+    expect(new Set(drafts.map((draft) => draft.narrativePrompt)).size).toBe(4)
+    expect(drafts[0].narrativePrompt).toContain('第 1/4 个 15 秒多镜头子片段')
+    expect(drafts[1].narrativePrompt).toContain('第 2/4 个 15 秒多镜头子片段')
+    expect(drafts[2].narrativePrompt).toContain('第 3/4 个 15 秒多镜头子片段')
+    expect(drafts[3].narrativePrompt).toContain('第 4/4 个 15 秒多镜头子片段')
+    expect(drafts[0].narrativePrompt).toContain('机场内部-白天')
+    expect(drafts[0].groupPrompt).toContain('黑色汽车')
+    expect(drafts.some((draft) => (draft.embeddedDialogue || '').includes('托尼: 把包放下。'))).toBe(true)
+    expect(drafts.some((draft) => (draft.embeddedDialogue || '').includes('副驾驶: 再晚就来不及了。'))).toBe(true)
   })
 
   it('creates placeholder segments for each 15-second slot when a coarse clip has no content', () => {

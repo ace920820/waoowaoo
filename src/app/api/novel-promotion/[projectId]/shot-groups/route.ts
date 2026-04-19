@@ -6,7 +6,6 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import {
-  mergeShotGroupDraftMetadata,
   parseShotGroupDraftMetadata,
 } from '@/lib/shot-group/draft-metadata'
 import {
@@ -14,6 +13,7 @@ import {
   resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
 } from '@/lib/shot-group/video-config'
+import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
 import type { ShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 
 const TEMPLATE_ITEM_COUNT: Record<string, number> = {
@@ -86,35 +86,6 @@ function parseShotGroupVideoConfig(value: string | null | undefined): Record<str
   } catch {
     return {}
   }
-}
-
-export function buildShotGroupVideoConfigSnapshot(input: {
-  videoModel?: string | null
-  generateAudio: boolean
-  includeDialogue: boolean
-  dialogueLanguage: 'zh' | 'en' | 'ja'
-  omniReferenceEnabled: boolean
-  smartMultiFrameEnabled: boolean
-  generationOptions?: Record<string, string | number | boolean>
-  draftMetadata?: ShotGroupDraftMetadata | null
-}) {
-  const snapshot = JSON.stringify({
-    configVersion: 2,
-    mode: resolveShotGroupModeForModel({
-      ...input,
-      modelKey: input.videoModel,
-    }),
-    generateAudio: input.generateAudio,
-    bgmEnabled: false,
-    includeDialogue: input.includeDialogue,
-    dialogueLanguage: input.dialogueLanguage,
-    ...(input.videoModel ? { videoModel: input.videoModel } : {}),
-    generationOptions: sanitizeShotGroupGenerationOptions(input.generationOptions),
-  })
-
-  return input.draftMetadata
-    ? mergeShotGroupDraftMetadata(snapshot, input.draftMetadata)
-    : snapshot
 }
 
 async function listShotGroups(projectId: string, episodeId: string) {

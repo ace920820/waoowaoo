@@ -117,7 +117,6 @@ function createStageRuntimeParams(overrides: Record<string, unknown> = {}) {
     videoModel: 'model-1',
     capabilityOverrides: {},
     userVideoModels: [],
-    ensureEpisodeMultiShotDrafts: vi.fn().mockResolvedValue(undefined),
     handleUpdateEpisode: vi.fn().mockResolvedValue(undefined),
     handleUpdateConfig: vi.fn().mockResolvedValue(undefined),
     runWithRebuildConfirm: vi.fn().mockResolvedValue(undefined),
@@ -140,7 +139,9 @@ function findElementByType(node: unknown, type: string): React.ReactElement | nu
     return node as React.ReactElement
   }
 
-  const children = 'props' in node ? (node as React.ReactElement).props?.children : undefined
+  const children = 'props' in node
+    ? ((node as React.ReactElement).props as { children?: React.ReactNode } | null | undefined)?.children
+    : undefined
   if (!children) return null
 
   for (const child of React.Children.toArray(children)) {
@@ -171,14 +172,12 @@ describe('multi-shot stage routing', () => {
     })
   })
 
-  it('creates multi-shot drafts before routing to the multi-shot storyboard stage', async () => {
-    const ensureEpisodeMultiShotDrafts = vi.fn().mockResolvedValue(undefined)
+  it('runs multi-shot mode through the shared script-to-storyboard generation flow', async () => {
     const handleStageChange = vi.fn()
-    const runWithRebuildConfirm = vi.fn()
+    const runWithRebuildConfirm = vi.fn().mockResolvedValue(undefined)
     const runScriptToStoryboardFlow = vi.fn()
     const runtime = captureStageRuntimeValue(createStageRuntimeParams({
       episodeProductionMode: 'multi_shot',
-      ensureEpisodeMultiShotDrafts,
       handleStageChange,
       runWithRebuildConfirm,
       runScriptToStoryboardFlow,
@@ -186,20 +185,16 @@ describe('multi-shot stage routing', () => {
 
     await runtime.onRunScriptToStoryboard()
 
-    expect(ensureEpisodeMultiShotDrafts).toHaveBeenCalledTimes(1)
-    expect(handleStageChange).toHaveBeenCalledWith('multi-shot-storyboard')
-    expect(runWithRebuildConfirm).not.toHaveBeenCalled()
-    expect(runScriptToStoryboardFlow).not.toHaveBeenCalled()
+    expect(runWithRebuildConfirm).toHaveBeenCalledWith('scriptToStoryboard', runScriptToStoryboardFlow)
+    expect(handleStageChange).not.toHaveBeenCalled()
   })
 
   it('preserves the traditional storyboard launch branch', async () => {
-    const ensureEpisodeMultiShotDrafts = vi.fn().mockResolvedValue(undefined)
     const runScriptToStoryboardFlow = vi.fn().mockResolvedValue(undefined)
     const runWithRebuildConfirm = vi.fn().mockResolvedValue(undefined)
     const handleStageChange = vi.fn()
     const runtime = captureStageRuntimeValue(createStageRuntimeParams({
       episodeProductionMode: 'traditional',
-      ensureEpisodeMultiShotDrafts,
       runWithRebuildConfirm,
       runScriptToStoryboardFlow,
       handleStageChange,
@@ -208,7 +203,6 @@ describe('multi-shot stage routing', () => {
     await runtime.onRunScriptToStoryboard()
 
     expect(runWithRebuildConfirm).toHaveBeenCalledWith('scriptToStoryboard', runScriptToStoryboardFlow)
-    expect(ensureEpisodeMultiShotDrafts).not.toHaveBeenCalled()
     expect(handleStageChange).not.toHaveBeenCalled()
   })
 
@@ -346,7 +340,7 @@ describe('multi-shot stage routing', () => {
       id: 'storyboard',
       label: 'stages.storyboard',
     })
-    expect(multiShotMarkup).toContain('multi-shot-storyboard-stage')
+    expect(multiShotMarkup).toContain('storyboard-stage')
     expect(traditionalMarkup).toContain('storyboard-stage')
   })
 
@@ -403,12 +397,12 @@ describe('multi-shot stage routing', () => {
     expect(onStageChange).not.toHaveBeenCalled()
 
     const tree = MultiShotStoryboardStage()
-    const continueButton = findElementByType(tree, 'button')
+    const continueButton = findElementByType(tree, 'button') as React.ReactElement<{ onClick?: () => void }> | null
 
     expect(continueButton).not.toBeNull()
     expect(typeof continueButton?.props.onClick).toBe('function')
 
-    continueButton?.props.onClick()
+    continueButton!.props.onClick!()
 
     expect(onStageChange).toHaveBeenCalledWith('videos')
   })

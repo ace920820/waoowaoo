@@ -65,9 +65,10 @@ function hasDraftSegmentKey(value: string | null | undefined) {
   const strictMetadata = parseShotGroupDraftMetadata(value)
   if (hasNonEmptyText(strictMetadata?.segmentKey)) return true
   if (!hasNonEmptyText(value)) return false
+  const rawValue = value as string
 
   try {
-    const parsed = JSON.parse(value)
+    const parsed = JSON.parse(rawValue)
     const record = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : null

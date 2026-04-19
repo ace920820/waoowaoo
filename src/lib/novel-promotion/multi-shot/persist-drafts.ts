@@ -1,14 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { apiHandler, ApiError } from '@/lib/api-errors'
-import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
-import { attachMediaFieldsToProject } from '@/lib/media/attach'
-import { buildEpisodeInProjectWhere } from '@/lib/novel-promotion/ownership'
-import { buildEpisodeMultiShotDrafts } from '@/lib/novel-promotion/multi-shot/episode-draft-builder'
-import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
+import type { EpisodeMultiShotDraft } from '@/lib/novel-promotion/multi-shot/episode-draft-builder'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import { parseShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
-import type { NovelPromotionClip } from '@/types/project'
+import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
 
 function buildDefaultItems(templateKey: string) {
   const template = getShotGroupTemplateSpec(templateKey)
@@ -24,7 +18,6 @@ function buildLegacySegmentIdentity(sourceClipId: string, segmentIndexWithinClip
 
 type PersistedShotGroup = {
   id: string
-  episodeId: string
   title: string
   templateKey: string
   groupPrompt: string | null
@@ -40,38 +33,18 @@ type PersistedShotGroup = {
   compositeImageUrl: string | null
   videoUrl: string | null
   items: Array<{
-    id?: string
     itemIndex: number
     title: string | null
-    prompt: string | null
-    imageUrl: string | null
-    sourcePanelId: string | null
   }>
 }
 
-export const POST = apiHandler(async (
-  request: NextRequest,
-  context: { params: Promise<{ projectId: string }> },
-) => {
-  const { projectId } = await context.params
-  const authResult = await requireProjectAuthLight(projectId)
-  if (isErrorResponse(authResult)) return authResult
-
-  const body = await request.json().catch(() => ({}))
-  const episodeId = typeof body.episodeId === 'string' ? body.episodeId.trim() : ''
-  if (!episodeId) {
-    throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
-  }
-
-  const episode = await prisma.novelPromotionEpisode.findFirst({
-    where: buildEpisodeInProjectWhere(projectId, episodeId),
+export async function persistEpisodeMultiShotDrafts(params: {
+  episodeId: string
+  drafts: EpisodeMultiShotDraft[]
+}) {
+  const episode = await prisma.novelPromotionEpisode.findUnique({
+    where: { id: params.episodeId },
     include: {
-      clips: {
-        orderBy: [
-          { start: 'asc' },
-          { createdAt: 'asc' },
-        ],
-      },
       shotGroups: {
         include: {
           items: { orderBy: { itemIndex: 'asc' } },
@@ -80,29 +53,10 @@ export const POST = apiHandler(async (
       },
     },
   })
-
   if (!episode) {
-    throw new ApiError('NOT_FOUND')
+    throw new Error('Episode not found for multi-shot draft persistence')
   }
 
-  const drafts = buildEpisodeMultiShotDrafts({
-    episodeId: episode.id,
-    clips: episode.clips.map((clip) => ({
-      ...clip,
-      start: clip.start ?? undefined,
-      end: clip.end ?? undefined,
-      duration: clip.duration ?? undefined,
-      shotCount: clip.shotCount ?? undefined,
-      screenplay: clip.screenplay ?? undefined,
-      startText: clip.startText ?? undefined,
-      endText: clip.endText ?? undefined,
-      location: clip.location ?? undefined,
-      characters: clip.characters ?? undefined,
-      props: clip.props ?? undefined,
-      storyboardMoodPresetId: clip.storyboardMoodPresetId ?? undefined,
-      customMood: clip.customMood ?? undefined,
-    })) as NovelPromotionClip[],
-  })
   const existingBySegmentKey = new Map<string, PersistedShotGroup>()
   const existingByLegacySegmentIdentity = new Map<string, PersistedShotGroup>()
 
@@ -128,7 +82,7 @@ export const POST = apiHandler(async (
   let placeholderCount = 0
   const shotGroups: PersistedShotGroup[] = []
 
-  for (const draft of drafts) {
+  for (const draft of params.drafts) {
     if (draft.sourceStatus === 'placeholder') {
       placeholderCount += 1
     }
@@ -137,6 +91,7 @@ export const POST = apiHandler(async (
       || existingByLegacySegmentIdentity.get(
         buildLegacySegmentIdentity(draft.sourceClipId, draft.segmentIndexWithinClip),
       )
+
     const videoReferencesJson = buildShotGroupVideoConfigSnapshot({
       generateAudio: false,
       includeDialogue: draft.includeDialogue,
@@ -210,7 +165,7 @@ export const POST = apiHandler(async (
     createdCount += 1
     const created = await prisma.novelPromotionShotGroup.create({
       data: {
-        episodeId: episode.id,
+        episodeId: params.episodeId,
         title: draft.title,
         templateKey: draft.templateKey,
         groupPrompt: draft.groupPrompt,
@@ -233,11 +188,13 @@ export const POST = apiHandler(async (
     shotGroups.push(created as PersistedShotGroup)
   }
 
-  const withMedia = await attachMediaFieldsToProject({ shotGroups })
-  const hydratedShotGroups = withMedia.shotGroups || shotGroups
-  const totalSegments = drafts.length
-  return NextResponse.json({
-    shotGroups: hydratedShotGroups,
-    summary: { totalSegments, createdCount, reusedCount, placeholderCount },
-  })
-})
+  return {
+    shotGroups,
+    summary: {
+      totalSegments: params.drafts.length,
+      createdCount,
+      reusedCount,
+      placeholderCount,
+    },
+  }
+}

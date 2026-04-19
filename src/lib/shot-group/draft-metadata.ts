@@ -12,7 +12,7 @@ export interface ShotGroupDraftMetadata {
   shotRhythmGuidance: string | null
   expectedShotCount: number
   sourceStatus: 'ready' | 'placeholder'
-  placeholderReason: 'missing_clip_content' | null
+  placeholderReason: 'missing_clip_content' | 'generation_failed' | null
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -34,7 +34,7 @@ function readSourceStatus(value: unknown): ShotGroupDraftMetadata['sourceStatus'
 }
 
 function readPlaceholderReason(value: unknown): ShotGroupDraftMetadata['placeholderReason'] {
-  return value === 'missing_clip_content' ? value : null
+  return value === 'missing_clip_content' || value === 'generation_failed' ? value : null
 }
 
 export function parseShotGroupDraftMetadata(value: string | null | undefined): ShotGroupDraftMetadata | null {

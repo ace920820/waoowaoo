@@ -6,7 +6,6 @@ import ScriptStage from './ScriptStage'
 import StoryboardStage from './StoryboardStage'
 import VideoStageRoute from './VideoStageRoute'
 import VoiceStageRoute from './VoiceStageRoute'
-import MultiShotStoryboardStage from './MultiShotStoryboardStage'
 
 interface WorkspaceStageContentProps {
   currentStage: string
@@ -21,9 +20,7 @@ export default function WorkspaceStageContent({
 
       {(currentStage === 'script' || currentStage === 'assets') && <ScriptStage />}
 
-      {currentStage === 'storyboard' && <StoryboardStage />}
-
-      {currentStage === 'multi-shot-storyboard' && <MultiShotStoryboardStage />}
+      {(currentStage === 'storyboard' || currentStage === 'multi-shot-storyboard') && <StoryboardStage />}
 
       {currentStage === 'videos' && <VideoStageRoute />}
 

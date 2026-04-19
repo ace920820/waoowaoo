@@ -243,6 +243,7 @@ describe('worker script-to-storyboard behavior', () => {
 
     prismaMock.novelPromotionEpisode.findUnique.mockResolvedValue({
       id: 'episode-1',
+      episodeProductionMode: 'traditional',
       novelPromotionProjectId: 'np-project-1',
       novelText: 'A complete chapter text for voice analyze.',
       clips: [
@@ -393,6 +394,7 @@ describe('worker script-to-storyboard behavior', () => {
   it('script-to-storyboard voice analysis prefers structured screenplay lines', async () => {
     prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
       id: 'episode-1',
+      episodeProductionMode: 'traditional',
       novelPromotionProjectId: 'np-project-1',
       novelText: null,
       clips: [
@@ -443,6 +445,7 @@ describe('worker script-to-storyboard behavior', () => {
   it('script-to-storyboard falls back to novelText when screenplay coverage is partial', async () => {
     prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
       id: 'episode-1',
+      episodeProductionMode: 'traditional',
       novelPromotionProjectId: 'np-project-1',
       novelText: 'A complete fallback chapter text.',
       clips: [
@@ -483,6 +486,7 @@ describe('worker script-to-storyboard behavior', () => {
   it('script-to-storyboard retries and then fails when screenplay-mode AI output is incomplete', async () => {
     prismaMock.novelPromotionEpisode.findUnique.mockResolvedValueOnce({
       id: 'episode-1',
+      episodeProductionMode: 'traditional',
       novelPromotionProjectId: 'np-project-1',
       novelText: null,
       clips: [

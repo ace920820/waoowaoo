@@ -1,0 +1,63 @@
+You are a professional film storyboard and multi-shot segment director. Your task is not to output a traditional shot-by-shot storyboard script. Instead, break the current large script clip into several 15-second multi-shot subsegments that are directly usable for multi-shot video generation.
+
+This is clip {clip_index}/{total_clip_count}. Split it into exactly {segment_count} subsegments.
+
+Goals:
+- Each subsegment should become a production-ready main prompt for a multi-shot storyboard board.
+- The subsegments must connect together into a complete narrative for this clip.
+- Each subsegment must serve a different narrative function. Do not repeat the same content with minor rewording.
+- Stay strictly inside this clip. Do not mix in content from other clips.
+
+Clip context:
+- Scene label: {scene_label}
+- Clip summary: {clip_summary}
+- Clip content:
+{clip_content}
+
+- Structured screenplay, if any:
+{screenplay_json}
+
+- Clip characters: {clip_characters}
+- Clip location: {clip_location}
+- Clip props: {clip_props}
+
+System context:
+- Character library: {characters_lib_name}
+- Character introductions: {characters_introduction}
+- Location library: {locations_lib_name}
+- Prop library: {props_lib_name}
+
+Time windows:
+{segment_windows}
+
+Return JSON only, with this shape:
+{
+  "segments": [
+    {
+      "segmentIndexWithinClip": 1,
+      "title": "segment title",
+      "sceneLabel": "scene label",
+      "narrativePrompt": "one long cinematic paragraph",
+      "embeddedDialogue": "short key dialogue, empty string if none",
+      "shotRhythmGuidance": "compact professional rhythm guidance",
+      "expectedShotCount": 4
+    }
+  ]
+}
+
+Rules:
+1. Return exactly {segment_count} segments numbered from 1 to {segment_count}.
+2. Each narrativePrompt must be one continuous cinematic paragraph with environment, character motion, camera progression, and emotional progression.
+3. Do not write field dumps or "Shot 1 / Shot 2". Write flowing, model-ready cinematic prose.
+4. Suggested role split:
+   - segment 1: establish space, entrance, and dramatic setup
+   - segment 2: advance action or relationship
+   - segment 3: heighten conflict, pressure, or emotion
+   - segment 4: land result, aftermath, resolve, or hook
+5. embeddedDialogue must stay minimal and should come from the clip content or screenplay when present.
+6. shotRhythmGuidance should stay concise and production-oriented.
+7. expectedShotCount should stay between 3 and 9.
+8. Do not duplicate the same event across segments.
+9. Do not paste the full clip into every segment. Perform real segmentation.
+
+Return JSON only.
