@@ -1,6 +1,11 @@
 export interface ShotGroupDraftMetadata {
   segmentOrder: number
   clipId: string
+  segmentKey: string
+  sourceClipId: string
+  segmentIndexWithinClip: number
+  segmentStartSeconds: number
+  segmentEndSeconds: number
   sceneLabel: string
   narrativePrompt: string | null
   embeddedDialogue: string | null
@@ -47,13 +52,30 @@ export function parseShotGroupDraftMetadata(value: string | null | undefined): S
     const expectedShotCount = readNumber(metadata.expectedShotCount)
     const sourceStatus = readSourceStatus(metadata.sourceStatus)
 
-    if (!segmentOrder || !clipId || !sceneLabel || !expectedShotCount || !sourceStatus) {
+    if (
+      !segmentOrder ||
+      !clipId ||
+      !sceneLabel ||
+      !expectedShotCount ||
+      !sourceStatus
+    ) {
       return null
     }
+
+    const sourceClipId = readString(metadata.sourceClipId) || clipId
+    const segmentIndexWithinClip = readNumber(metadata.segmentIndexWithinClip) || segmentOrder
+    const segmentStartSeconds = readNumber(metadata.segmentStartSeconds) ?? ((segmentIndexWithinClip - 1) * 15)
+    const segmentEndSeconds = readNumber(metadata.segmentEndSeconds) ?? (segmentStartSeconds + 15)
+    const segmentKey = readString(metadata.segmentKey) || `${sourceClipId}:${segmentIndexWithinClip}`
 
     return {
       segmentOrder,
       clipId,
+      segmentKey,
+      sourceClipId,
+      segmentIndexWithinClip,
+      segmentStartSeconds,
+      segmentEndSeconds,
       sceneLabel,
       narrativePrompt: readString(metadata.narrativePrompt),
       embeddedDialogue: readString(metadata.embeddedDialogue),

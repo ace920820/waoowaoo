@@ -24,6 +24,7 @@ describe('buildEpisodeMultiShotDrafts', () => {
       clips: [
         buildClip({
           id: 'clip-3',
+          duration: 15,
           shotCount: 3,
         }),
       ],
@@ -33,6 +34,11 @@ describe('buildEpisodeMultiShotDrafts', () => {
     expect(drafts[0]).toMatchObject({
       templateKey: 'grid-4',
       segmentOrder: 1,
+      segmentKey: 'clip-3:1',
+      sourceClipId: 'clip-3',
+      segmentIndexWithinClip: 1,
+      segmentStartSeconds: 0,
+      segmentEndSeconds: 15,
       expectedShotCount: 3,
       sourceStatus: 'ready',
     })
@@ -42,8 +48,8 @@ describe('buildEpisodeMultiShotDrafts', () => {
     const drafts = buildEpisodeMultiShotDrafts({
       episodeId: 'episode-1',
       clips: [
-        buildClip({ id: 'clip-6', shotCount: 6 }),
-        buildClip({ id: 'clip-11', shotCount: 11 }),
+        buildClip({ id: 'clip-6', duration: 15, shotCount: 6 }),
+        buildClip({ id: 'clip-11', duration: 15, shotCount: 11 }),
       ],
     })
 
@@ -57,11 +63,73 @@ describe('buildEpisodeMultiShotDrafts', () => {
     })
   })
 
-  it('embeds screenplay dialogue as speaker lines and marks includeDialogue true', () => {
+  it('builds eight drafts from 2 coarse clips and keeps segmentOrder in sequence', () => {
     const drafts = buildEpisodeMultiShotDrafts({
       episodeId: 'episode-1',
       clips: [
         buildClip({
+          id: 'clip-1',
+          start: 0,
+          end: 60,
+          duration: 60,
+        }),
+        buildClip({
+          id: 'clip-2',
+          start: 60,
+          end: 120,
+          duration: 60,
+          summary: '第二段在天桥继续推进真相冲突',
+          location: '夜色天桥',
+          content: '两人走上空旷天桥，周沉终于开口承认隐瞒的原因。',
+        }),
+      ],
+    })
+
+    expect(drafts).toHaveLength(8)
+    expect(drafts.map((draft) => draft.segmentOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(drafts.filter((draft) => draft.sourceClipId === 'clip-1')).toHaveLength(4)
+    expect(drafts.filter((draft) => draft.sourceClipId === 'clip-2')).toHaveLength(4)
+  })
+
+  it('includes stable segment identity and 15-second windows for derived segments', () => {
+    const drafts = buildEpisodeMultiShotDrafts({
+      episodeId: 'episode-1',
+      clips: [
+        buildClip({
+          id: 'clip-window',
+          start: 0,
+          end: 60,
+          duration: 60,
+        }),
+      ],
+    })
+
+    expect(drafts).toHaveLength(4)
+    expect(drafts[0]).toMatchObject({
+      segmentKey: 'clip-window:1',
+      sourceClipId: 'clip-window',
+      segmentIndexWithinClip: 1,
+      segmentStartSeconds: 0,
+      segmentEndSeconds: 15,
+    })
+    expect(drafts[3]).toMatchObject({
+      segmentKey: 'clip-window:4',
+      sourceClipId: 'clip-window',
+      segmentIndexWithinClip: 4,
+      segmentStartSeconds: 45,
+      segmentEndSeconds: 60,
+    })
+  })
+
+  it('embeds screenplay dialogue as speaker lines and keeps model-ready prompt text', () => {
+    const drafts = buildEpisodeMultiShotDrafts({
+      episodeId: 'episode-1',
+      clips: [
+        buildClip({
+          id: 'clip-dialogue',
+          start: 0,
+          end: 15,
+          duration: 15,
           screenplay: JSON.stringify({
             scenes: [
               {
@@ -80,15 +148,20 @@ describe('buildEpisodeMultiShotDrafts', () => {
     expect(drafts[0].includeDialogue).toBe(true)
     expect(drafts[0].embeddedDialogue).toContain('林夏: 别再躲我了。')
     expect(drafts[0].embeddedDialogue).toContain('周沉: 我怕你知道真相。')
+    expect(drafts[0].narrativePrompt).toContain('剧情目标：')
     expect(drafts[0].groupPrompt).toContain('对白嵌入：')
+    expect(drafts[0].shotRhythmGuidance).toContain('第 1/1 个 15 秒片段')
   })
 
-  it('creates placeholders for clips without content instead of throwing', () => {
+  it('creates placeholder segments for each 15-second slot when a coarse clip has no content', () => {
     const drafts = buildEpisodeMultiShotDrafts({
       episodeId: 'episode-1',
       clips: [
         buildClip({
           id: 'clip-missing',
+          start: 0,
+          end: 60,
+          duration: 60,
           content: '   ',
           location: null,
           screenplay: JSON.stringify({
@@ -98,10 +171,17 @@ describe('buildEpisodeMultiShotDrafts', () => {
       ],
     })
 
+    expect(drafts).toHaveLength(4)
+    expect(drafts.every((draft) => draft.sourceStatus === 'placeholder')).toBe(true)
+    expect(drafts.every((draft) => draft.placeholderReason === 'missing_clip_content')).toBe(true)
+    expect(drafts.map((draft) => draft.segmentKey)).toEqual([
+      'clip-missing:1',
+      'clip-missing:2',
+      'clip-missing:3',
+      'clip-missing:4',
+    ])
     expect(drafts[0]).toMatchObject({
-      clipId: 'clip-missing',
-      sourceStatus: 'placeholder',
-      placeholderReason: 'missing_clip_content',
+      sourceClipId: 'clip-missing',
       groupPrompt: null,
       videoPrompt: null,
       sceneLabel: '场景 5',
