@@ -86,6 +86,13 @@ Plans:
 
 **UI hint:** yes
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Persist editable multi-shot dialogue overrides and inject them into video prompt generation
+- [ ] 03-02-PLAN.md — Expose split video-prompt and dialogue editors on multi-shot production units in the video stage
+- [ ] 03-03-PLAN.md — Add the manual single-shot supplement entry and secondary supplement section without leaving the multi-shot flow
+
 **Success criteria:**
 1. Generated multi-shot prompts can include short dialogue aligned to action beats from the script.
 2. Users can edit or override that dialogue later during video generation rather than being locked to the initial auto-generated text.
