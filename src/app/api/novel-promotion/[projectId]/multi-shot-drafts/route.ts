@@ -137,6 +137,9 @@ export const POST = apiHandler(async (
       || existingByLegacySegmentIdentity.get(
         buildLegacySegmentIdentity(draft.sourceClipId, draft.segmentIndexWithinClip),
       )
+    const previousDraftMetadata = existing
+      ? parseShotGroupDraftMetadata(existing.videoReferencesJson)
+      : null
     const videoReferencesJson = buildShotGroupVideoConfigSnapshot({
       generateAudio: false,
       includeDialogue: draft.includeDialogue,
@@ -144,6 +147,7 @@ export const POST = apiHandler(async (
       omniReferenceEnabled: false,
       smartMultiFrameEnabled: true,
       generationOptions: {},
+      previousDraftMetadata,
       draftMetadata: {
         segmentOrder: draft.segmentOrder,
         clipId: draft.clipId,
@@ -155,11 +159,34 @@ export const POST = apiHandler(async (
         sceneLabel: draft.sceneLabel,
         narrativePrompt: draft.narrativePrompt,
         embeddedDialogue: draft.embeddedDialogue,
-        dialogueOverrideText: null,
+        dialogueOverrideText: previousDraftMetadata?.dialogueOverrideText ?? null,
         shotRhythmGuidance: draft.shotRhythmGuidance,
         expectedShotCount: draft.expectedShotCount,
         sourceStatus: draft.sourceStatus,
         placeholderReason: draft.placeholderReason,
+        selectedLocationAsset: previousDraftMetadata?.selectedLocationAsset ?? null,
+        preselectedLocationAsset: previousDraftMetadata?.preselectedLocationAsset ?? null,
+        selectedCharacterAssets: previousDraftMetadata?.selectedCharacterAssets ?? [],
+        preselectedCharacterAssets: previousDraftMetadata?.preselectedCharacterAssets ?? [],
+        selectedPropAssets: previousDraftMetadata?.selectedPropAssets ?? [],
+        preselectedPropAssets: previousDraftMetadata?.preselectedPropAssets ?? [],
+        scriptDerivedLocationAsset: previousDraftMetadata?.scriptDerivedLocationAsset ?? {
+          assetType: 'location',
+          source: 'scriptDerived',
+          assetId: null,
+          label: draft.sceneLabel,
+        },
+        scriptDerivedCharacterAssets: previousDraftMetadata?.scriptDerivedCharacterAssets ?? [],
+        scriptDerivedPropAssets: previousDraftMetadata?.scriptDerivedPropAssets ?? [],
+        referencePromptText: previousDraftMetadata?.referencePromptText ?? null,
+        compositePromptText: previousDraftMetadata?.compositePromptText ?? null,
+        storyboardModeId: previousDraftMetadata?.storyboardModeId ?? null,
+        storyboardModeLabel: previousDraftMetadata?.storyboardModeLabel ?? null,
+        storyboardModePromptText: previousDraftMetadata?.storyboardModePromptText ?? null,
+        submittedReferencePrompt: previousDraftMetadata?.submittedReferencePrompt ?? null,
+        submittedCompositePrompt: previousDraftMetadata?.submittedCompositePrompt ?? null,
+        storyboardMoodPresetId: previousDraftMetadata?.storyboardMoodPresetId ?? null,
+        customMood: previousDraftMetadata?.customMood ?? null,
       },
     })
 
