@@ -927,6 +927,11 @@ export default function ScriptViewAssetsPanel({
             <p className="mt-1 text-xs leading-5 text-[var(--glass-text-tertiary)]">
               {tScript(`productionMode.helper.${activeModeKey}.description`)}
             </p>
+            {episodeProductionMode === 'multi_shot' ? (
+              <p className="mt-2 text-xs leading-5 text-[var(--glass-tone-info-fg)]">
+                {tScript('productionMode.helper.multiShot.model')}
+              </p>
+            ) : null}
           </div>
         </div>
         <button

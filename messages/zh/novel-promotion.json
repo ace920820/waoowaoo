@@ -3,9 +3,14 @@
     "story": "故事",
     "script": "剧本",
     "storyboard": "分镜",
+    "multiShotStoryboard": "多镜头确认",
     "video": "成片",
     "editor": "AI剪辑",
     "editorComingSoon": "开发中，关注我们获取最新消息"
+  },
+  "multiShotStoryboard": {
+    "summary": "草稿创建已完成，视频生成尚未开始。请先确认每个 15 秒片段的参考图/参考板、提示词和镜头节奏，再继续进入 videos。",
+    "boundary": "未开始视频生成，继续后进入视频阶段。"
   },
   "buttons": {
     "assetLibrary": "资产库",

@@ -3,9 +3,14 @@
     "story": "Story",
     "script": "Script",
     "storyboard": "Storyboard",
+    "multiShotStoryboard": "Multi-shot Confirmation",
     "video": "Video",
     "editor": "AI Editor",
     "editorComingSoon": "Coming soon, follow us for updates"
+  },
+  "multiShotStoryboard": {
+    "summary": "Draft creation is complete and video generation has not started. Confirm each 15-second segment's references, prompt, and shot rhythm here before you continue to videos.",
+    "boundary": "Video generation has not started; continue to videos only after reference confirmation."
   },
   "buttons": {
     "assetLibrary": "Asset Library",

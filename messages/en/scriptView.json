@@ -79,8 +79,9 @@
         },
         "helper": {
             "multiShot": {
-                "title": "This episode will enter multi-shot production directly",
-                "description": "After you click the button below, the workflow skips traditional storyboard generation and opens the multi-shot video stage."
+                "title": "This episode will auto-create segment drafts and open multi-shot confirmation",
+                "description": "After you click the button below, the workflow uses the episode's clip structure to auto-create multi-shot segment drafts, opens the confirmation step, and waits for you to continue to videos.",
+                "model": "This fast path is clip-structure-driven: a typical episode lands around eight 15-second segments, and each segment is one video-generation unit. Confirm references here before you continue to videos."
             },
             "traditional": {
                 "title": "This episode will enter traditional storyboard generation",
@@ -88,7 +89,7 @@
             }
         },
         "cta": {
-            "multiShot": "Current mode: Multi-shot Segment Mode. The next step opens multi-shot video production directly.",
+            "multiShot": "Current mode: Multi-shot Segment Mode. The next step auto-creates segment drafts and opens the multi-shot confirmation step; video generation starts only after you continue to videos.",
             "traditional": "Current mode: Traditional Mode. The next step generates traditional storyboard content."
         }
     },
