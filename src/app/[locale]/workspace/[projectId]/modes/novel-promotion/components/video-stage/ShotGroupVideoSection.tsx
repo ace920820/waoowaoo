@@ -373,9 +373,22 @@ function createReviewDraft(group: NovelPromotionShotGroup): ReviewDraftState {
   }
 }
 
+function stringifyServerSnapshot(value: unknown) {
+  return JSON.stringify(value) ?? ''
+}
+
+function buildReviewDraftServerSnapshot(group: NovelPromotionShotGroup) {
+  return stringifyServerSnapshot(createReviewDraft(group))
+}
+
+export function buildReviewDraftServerSnapshotMap(groups: NovelPromotionShotGroup[]) {
+  return Object.fromEntries(groups.map((group) => [group.id, buildReviewDraftServerSnapshot(group)]))
+}
+
 export function syncReviewDraftsFromShotGroups(
   previous: Record<string, ReviewDraftState>,
   groups: NovelPromotionShotGroup[],
+  previousServerSnapshots: Record<string, string> = {},
 ) {
   let changed = false
   const next: Record<string, ReviewDraftState> = {}
@@ -383,8 +396,9 @@ export function syncReviewDraftsFromShotGroups(
   for (const group of groups) {
     const seededDraft = createReviewDraft(group)
     const previousDraft = previous[group.id]
-    const resolvedDraft = areReviewDraftsEqual(previousDraft, seededDraft)
-      ? (previousDraft ?? seededDraft)
+    const currentServerSnapshot = buildReviewDraftServerSnapshot(group)
+    const resolvedDraft = previousDraft && previousServerSnapshots[group.id] === currentServerSnapshot
+      ? previousDraft
       : seededDraft
 
     next[group.id] = resolvedDraft
@@ -490,6 +504,7 @@ function ShotGroupVideoReviewSection({
   const generateMutation = useGenerateProjectShotGroupImage(projectId, episodeId)
   const referenceFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const compositeFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const reviewServerSnapshotsRef = useRef<Record<string, string>>({})
   const [reviewDrafts, setReviewDrafts] = useState<Record<string, ReviewDraftState>>({})
   const [storyboardModeSettings, setStoryboardModeSettings] = useState<ShotGroupStoryboardModeSettings>(() => createDefaultStoryboardModeSettings())
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
@@ -503,7 +518,10 @@ function ShotGroupVideoReviewSection({
   ), [shotGroups])
 
   useEffect(() => {
-    setReviewDrafts((previous) => syncReviewDraftsFromShotGroups(previous, visibleShotGroups))
+    setReviewDrafts((previous) => (
+      syncReviewDraftsFromShotGroups(previous, visibleShotGroups, reviewServerSnapshotsRef.current)
+    ))
+    reviewServerSnapshotsRef.current = buildReviewDraftServerSnapshotMap(visibleShotGroups)
   }, [visibleShotGroups])
 
   useEffect(() => {
@@ -1439,6 +1457,73 @@ function renderVideoConfigFields(params: {
   )
 }
 
+function buildVideoDraftServerSnapshot(
+  group: NovelPromotionShotGroup,
+  defaultVideoModel: string,
+  capabilityOverrides?: CapabilitySelections,
+) {
+  const seededDraft = toDraft(group, defaultVideoModel, capabilityOverrides)
+  return stringifyServerSnapshot({
+    ...seededDraft,
+    pendingCompositeFile: null,
+  })
+}
+
+export function buildVideoDraftServerSnapshotMap(
+  groups: NovelPromotionShotGroup[],
+  defaultVideoModel: string,
+  capabilityOverrides?: CapabilitySelections,
+) {
+  return Object.fromEntries(groups.map((group) => [
+    group.id,
+    buildVideoDraftServerSnapshot(group, defaultVideoModel, capabilityOverrides),
+  ]))
+}
+
+export function syncVideoDraftsFromShotGroups(params: {
+  previous: Record<string, VideoDraftState>
+  groups: NovelPromotionShotGroup[]
+  defaultVideoModel: string
+  capabilityOverrides?: CapabilitySelections
+  previousServerSnapshots?: Record<string, string>
+}) {
+  const {
+    previous,
+    groups,
+    defaultVideoModel,
+    capabilityOverrides,
+    previousServerSnapshots = {},
+  } = params
+  let changed = false
+  const next: Record<string, VideoDraftState> = {}
+
+  for (const group of groups) {
+    const existing = previous[group.id]
+    const seededDraft = toDraft(group, defaultVideoModel, capabilityOverrides)
+    const currentServerSnapshot = buildVideoDraftServerSnapshot(group, defaultVideoModel, capabilityOverrides)
+    const resolvedDraft = existing && previousServerSnapshots[group.id] === currentServerSnapshot
+      ? existing
+      : existing
+        ? {
+          ...seededDraft,
+          pendingCompositeFile: existing.pendingCompositeFile,
+        }
+        : seededDraft
+
+    next[group.id] = resolvedDraft
+
+    if (previous[group.id] !== resolvedDraft) {
+      changed = true
+    }
+  }
+
+  if (!changed && Object.keys(previous).length !== groups.length) {
+    changed = true
+  }
+
+  return changed ? next : previous
+}
+
 function VideoShotGroupSection({
   projectId,
   episodeId,
@@ -1482,6 +1567,7 @@ function VideoShotGroupSection({
   const createFileInputRef = useRef<HTMLInputElement | null>(null)
   const groupPendingPreviewUrlsRef = useRef<Record<string, string>>({})
   const createPendingPreviewUrlRef = useRef<string | null>(null)
+  const videoServerSnapshotsRef = useRef<Record<string, string>>({})
 
   const resolvedVideoModelOptions = useMemo(
     () => (videoModelOptions.length > 0 ? videoModelOptions : [{ value: defaultVideoModel, label: defaultVideoModel }]),
@@ -1504,36 +1590,18 @@ function VideoShotGroupSection({
   }, [taskStates])
 
   useEffect(() => {
-    setDrafts((previous) => {
-      const next = { ...previous }
-      for (const group of shotGroups) {
-        const existing = next[group.id]
-        const fallback = toDraft(group, defaultVideoModel, capabilityOverrides)
-        const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
-        next[group.id] = existing
-          ? {
-            ...existing,
-            title: group.title || existing.title,
-            templateKey: (group.templateKey || existing.templateKey) as NovelPromotionShotGroupTemplateKey,
-            groupPrompt: group.groupPrompt || '',
-            videoPrompt: group.videoPrompt || existing.videoPrompt,
-            dialogueText: draftMetadata?.dialogueOverrideText
-              ?? draftMetadata?.embeddedDialogue
-              ?? existing.dialogueText,
-            embeddedDialogue: draftMetadata?.embeddedDialogue ?? existing.embeddedDialogue,
-            mode: resolveShotGroupModeForModel({
-              ...group,
-              modelKey: group.videoModel || existing.videoModel || defaultVideoModel,
-            }),
-            generationOptions: existing.generationOptions,
-            includeDialogue: Boolean(group.includeDialogue),
-            dialogueLanguage: normalizeDialogueLanguage(group.dialogueLanguage),
-            videoModel: group.videoModel || existing.videoModel || defaultVideoModel,
-          }
-          : fallback
-      }
-      return next
-    })
+    setDrafts((previous) => syncVideoDraftsFromShotGroups({
+      previous,
+      groups: shotGroups,
+      defaultVideoModel,
+      capabilityOverrides,
+      previousServerSnapshots: videoServerSnapshotsRef.current,
+    }))
+    videoServerSnapshotsRef.current = buildVideoDraftServerSnapshotMap(
+      shotGroups,
+      defaultVideoModel,
+      capabilityOverrides,
+    )
   }, [capabilityOverrides, defaultVideoModel, shotGroups])
 
   useEffect(() => {
