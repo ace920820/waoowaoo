@@ -1,10 +1,11 @@
 ---
 phase: 03
 slug: editable-production-handoff
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-04-19
+reviewed_at: 2026-04-19T00:00:00+08:00
 ---
 
 # Phase 03 — UI Design Contract
@@ -27,6 +28,7 @@ Notes:
 - Source: `components.json` absent on 2026-04-19; shadcn gate executed with default fallback `No`.
 - Source: visual tokens and semantic classes come from `src/styles/ui-tokens-glass.css` and `src/styles/ui-semantic-glass.css`.
 - Contract rule: Phase 3 must extend the existing glass system and must not introduce a second visual language.
+- Focal point: on first entry to the video stage, the expanded first multi-shot production unit should draw the eye before the page heading or the continuation CTA, establishing the multi-shot editing flow as the primary action surface.
 
 ---
 
@@ -44,7 +46,7 @@ Declared values (must be multiples of 4):
 | 2xl | 48px | Major section break before manual supplements |
 | 3xl | 64px | Page-level top/bottom spacing only |
 
-Exceptions: 12px is permitted only for dense chip padding and existing token compatibility; minimum interactive target remains 44px for primary actions and add-supplement triggers.
+Exceptions: 8px is permitted only for dense chip padding and existing token compatibility; minimum interactive target remains 44px for primary actions and add-supplement triggers.
 
 Interaction layout rules:
 - Multi-shot production units appear first as one continuous section.
