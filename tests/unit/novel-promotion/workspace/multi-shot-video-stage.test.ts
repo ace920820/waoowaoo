@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ShotGroupVideoSection, {
+  buildReviewDraftServerSnapshotMap,
   buildShotGroupVideoDraftMetadataPatch,
+  buildVideoDraftServerSnapshotMap,
+  syncReviewDraftsFromShotGroups,
+  syncVideoDraftsFromShotGroups,
 } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/ShotGroupVideoSection'
 import type { NovelPromotionShotGroup } from '@/types/project'
 
@@ -56,16 +60,19 @@ vi.mock('@/components/ui/primitives/GlassModalShell', () => ({
 function createShotGroup(params?: {
   id?: string
   title?: string
+  groupPrompt?: string
+  videoPrompt?: string
   embeddedDialogue?: string | null
   dialogueOverrideText?: string | null
+  updatedAt?: string
 }): NovelPromotionShotGroup {
   return {
     id: params?.id ?? 'group-1',
     episodeId: 'episode-1',
     title: params?.title ?? '片段 1',
     templateKey: 'grid-9',
-    groupPrompt: '镜头从雨夜巷口推进到角色停步回望。',
-    videoPrompt: '镜头从雨夜巷口推进到角色停步回望。',
+    groupPrompt: params?.groupPrompt ?? '镜头从雨夜巷口推进到角色停步回望。',
+    videoPrompt: params?.videoPrompt ?? '镜头从雨夜巷口推进到角色停步回望。',
     includeDialogue: true,
     dialogueLanguage: 'zh',
     videoModel: 'model-1',
@@ -73,7 +80,7 @@ function createShotGroup(params?: {
     referenceImageUrl: '/reference.png',
     videoUrl: null,
     createdAt: '2026-04-19T00:00:00.000Z',
-    updatedAt: '2026-04-19T00:00:00.000Z',
+    updatedAt: params?.updatedAt ?? '2026-04-19T00:00:00.000Z',
     items: new Array(9).fill(null).map((_, index) => ({
       id: `${params?.id ?? 'group-1'}-item-${index + 1}`,
       shotGroupId: params?.id ?? 'group-1',
@@ -211,6 +218,92 @@ describe('multi-shot video stage', () => {
       },
     })).toEqual({
       dialogueOverrideText: null,
+    })
+  })
+
+  it('preserves unsaved review edits across benign rerenders', () => {
+    const initialGroup = createShotGroup()
+    const serverSnapshots = buildReviewDraftServerSnapshotMap([initialGroup])
+    const initialDrafts = syncReviewDraftsFromShotGroups({}, [initialGroup], serverSnapshots)
+    const editedDraft = {
+      ...initialDrafts[initialGroup.id],
+      referencePromptText: '本地修改的母图提示词',
+      compositePromptText: '本地修改的剧情内容',
+      customMood: '压抑且潮湿',
+    }
+
+    const nextDrafts = syncReviewDraftsFromShotGroups(
+      { [initialGroup.id]: editedDraft },
+      [createShotGroup()],
+      serverSnapshots,
+    )
+
+    expect(nextDrafts[initialGroup.id]).toEqual(editedDraft)
+  })
+
+  it('preserves unsaved video edits across benign rerenders', () => {
+    const initialGroup = createShotGroup()
+    const serverSnapshots = buildVideoDraftServerSnapshotMap([initialGroup], 'model-1')
+    const initialDrafts = syncVideoDraftsFromShotGroups({
+      previous: {},
+      groups: [initialGroup],
+      defaultVideoModel: 'model-1',
+      previousServerSnapshots: serverSnapshots,
+    })
+    const editedDraft = {
+      ...initialDrafts[initialGroup.id],
+      title: '本地片段标题',
+      groupPrompt: '本地片段提示词',
+      videoPrompt: '本地视频提示词',
+      dialogueText: '本地台词覆盖',
+    }
+
+    const nextDrafts = syncVideoDraftsFromShotGroups({
+      previous: { [initialGroup.id]: editedDraft },
+      groups: [createShotGroup()],
+      defaultVideoModel: 'model-1',
+      previousServerSnapshots: serverSnapshots,
+    })
+
+    expect(nextDrafts[initialGroup.id]).toEqual(editedDraft)
+  })
+
+  it('reseeds when server data actually changes', () => {
+    const initialGroup = createShotGroup()
+    const serverSnapshots = buildVideoDraftServerSnapshotMap([initialGroup], 'model-1')
+    const initialDrafts = syncVideoDraftsFromShotGroups({
+      previous: {},
+      groups: [initialGroup],
+      defaultVideoModel: 'model-1',
+      previousServerSnapshots: serverSnapshots,
+    })
+    const editedDraft = {
+      ...initialDrafts[initialGroup.id],
+      title: '本地片段标题',
+      groupPrompt: '本地片段提示词',
+      videoPrompt: '本地视频提示词',
+      dialogueText: '本地台词覆盖',
+    }
+    const changedServerGroup = createShotGroup({
+      title: '服务器新标题',
+      groupPrompt: '服务器新的组提示词',
+      videoPrompt: '服务器新的成片提示词',
+      dialogueOverrideText: '服务器新台词',
+      updatedAt: '2026-04-19T00:01:00.000Z',
+    })
+
+    const nextDrafts = syncVideoDraftsFromShotGroups({
+      previous: { [initialGroup.id]: editedDraft },
+      groups: [changedServerGroup],
+      defaultVideoModel: 'model-1',
+      previousServerSnapshots: serverSnapshots,
+    })
+
+    expect(nextDrafts[initialGroup.id]).toMatchObject({
+      title: '服务器新标题',
+      groupPrompt: '服务器新的组提示词',
+      videoPrompt: '服务器新的成片提示词',
+      dialogueText: '服务器新台词',
     })
   })
 })
