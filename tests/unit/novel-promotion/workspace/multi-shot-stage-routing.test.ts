@@ -31,6 +31,10 @@ vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/V
   default: () => React.createElement('div', { 'data-stage': 'voice-stage' }),
 }))
 
+vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/ShotGroupVideoSection', () => ({
+  default: (props: Record<string, unknown>) => React.createElement('div', { 'data-shot-group-mode': props.mode }),
+}))
+
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VideoStage', () => ({
   default: (props: Record<string, unknown>) => {
     mocks.capturedVideoStageProps = props

@@ -1,5 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MultiShotStoryboardStage from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/MultiShotStoryboardStage'
 
@@ -72,7 +73,14 @@ function createShotGroup(params: {
 
 function renderStage() {
   Reflect.set(globalThis, 'React', React)
-  return renderToStaticMarkup(React.createElement(MultiShotStoryboardStage))
+  const queryClient = new QueryClient()
+  return renderToStaticMarkup(
+    React.createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      React.createElement(MultiShotStoryboardStage),
+    ),
+  )
 }
 
 describe('multi-shot storyboard stage', () => {

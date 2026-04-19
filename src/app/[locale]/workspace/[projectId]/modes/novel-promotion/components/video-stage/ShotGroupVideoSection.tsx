@@ -22,6 +22,7 @@ import {
 } from '@/lib/shot-group/video-config'
 import {
   useCreateProjectShotGroup,
+  useGenerateProjectShotGroupImage,
   useDownloadRemoteBlob,
   useGenerateProjectShotGroupVideo,
   useSaveProjectVideoTailFrame,
@@ -200,8 +201,13 @@ function buildPendingFilePreview(file: File | null) {
 }
 
 function ShotGroupVideoReviewSection({
+  projectId,
+  episodeId,
   shotGroups = [],
-}: Pick<ShotGroupVideoSectionProps, 'shotGroups'>) {
+}: Pick<ShotGroupVideoSectionProps, 'projectId' | 'episodeId' | 'shotGroups'>) {
+  const uploadMutation = useUploadProjectShotGroupReferenceImage(projectId, episodeId)
+  const generateMutation = useGenerateProjectShotGroupImage(projectId, episodeId)
+  const referenceFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const visibleShotGroups = shotGroups.filter((group) => {
     const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
     return group.groupPrompt?.trim() || group.videoPrompt?.trim() || draftMetadata
@@ -247,6 +253,8 @@ function ShotGroupVideoReviewSection({
             const dialogueText = draftMetadata?.embeddedDialogue || '当前片段未写入对白，可在后续视频阶段补充。'
             const rhythmText = draftMetadata?.shotRhythmGuidance || '保持镜头推进、景别变化和情绪起伏的连续性。'
             const isPlaceholder = draftMetadata?.sourceStatus === 'placeholder'
+            const isUploadingReference = uploadMutation.isPending && uploadMutation.variables?.shotGroupId === group.id
+            const isGeneratingBoard = generateMutation.isPending && generateMutation.variables?.shotGroupId === group.id
 
             return (
               <article
@@ -322,18 +330,40 @@ function ShotGroupVideoReviewSection({
                       当前：{hasReference ? '已存在参考图或参考板' : '还没有确认参考图'}
                     </div>
                   </div>
+                  <input
+                    ref={(node) => {
+                      referenceFileInputRefs.current[group.id] = node
+                    }}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      uploadMutation.mutate({
+                        file,
+                        shotGroupId: group.id,
+                        labelText: group.title || `片段 ${index + 1} 参考图`,
+                      })
+                      event.currentTarget.value = ''
+                    }}
+                  />
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
+                      onClick={() => referenceFileInputRefs.current[group.id]?.click()}
+                      disabled={isUploadingReference || isGeneratingBoard}
                       className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
                     >
-                      {hasReference ? '替换参考图' : '上传参考图'}
+                      {isUploadingReference ? '上传中...' : hasReference ? '替换参考图' : '上传参考图'}
                     </button>
                     <button
                       type="button"
+                      onClick={() => generateMutation.mutate({ shotGroupId: group.id })}
+                      disabled={isUploadingReference || isGeneratingBoard}
                       className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
                     >
-                      {hasReference ? '替换参考板' : '生成参考板'}
+                      {isGeneratingBoard ? '处理中...' : hasReference ? '替换参考板' : '生成参考板'}
                     </button>
                     <button
                       type="button"
@@ -1388,7 +1418,13 @@ function VideoShotGroupSection({
 
 export default function ShotGroupVideoSection(props: ShotGroupVideoSectionProps) {
   if (props.mode === 'review') {
-    return <ShotGroupVideoReviewSection shotGroups={props.shotGroups} />
+    return (
+      <ShotGroupVideoReviewSection
+        projectId={props.projectId}
+        episodeId={props.episodeId}
+        shotGroups={props.shotGroups}
+      />
+    )
   }
 
   return <VideoShotGroupSection {...props} />
