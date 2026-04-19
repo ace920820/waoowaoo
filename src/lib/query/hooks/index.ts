@@ -244,3 +244,7 @@ export {
     type UserModelOption as QueryUserModelOption,
     type UserModelsPayload as QueryUserModelsPayload,
 } from './useUserModels'
+
+export {
+    useEnsureEpisodeMultiShotDrafts,
+} from '../mutations/multi-shot-draft-mutations'

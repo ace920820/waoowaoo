@@ -147,6 +147,17 @@ function buildShotGroup(overrides?: Partial<ShotGroupRecord>): ShotGroupRecord {
         resolution: '1080p',
         generateAudio: true,
       },
+      draftMetadata: {
+        segmentOrder: 2,
+        clipId: 'clip-2',
+        sceneLabel: '雨夜街口',
+        narrativePrompt: '已有提示词',
+        embeddedDialogue: null,
+        shotRhythmGuidance: '1. 建立',
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+      },
     }),
     videoUrl: null,
     items: [
@@ -192,6 +203,17 @@ describe('api specific - novel promotion shot groups route', () => {
       duration: 10,
       resolution: '1080p',
       generateAudio: true,
+    })
+    expect((savedConfig as { draftMetadata?: Record<string, unknown> }).draftMetadata).toEqual({
+      segmentOrder: 2,
+      clipId: 'clip-2',
+      sceneLabel: '雨夜街口',
+      narrativePrompt: '已有提示词',
+      embeddedDialogue: null,
+      shotRhythmGuidance: '1. 建立',
+      expectedShotCount: 4,
+      sourceStatus: 'ready',
+      placeholderReason: null,
     })
   })
 

@@ -6,10 +6,15 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { buildEpisodeInProjectWhere, buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
 import {
+  mergeShotGroupDraftMetadata,
+  parseShotGroupDraftMetadata,
+} from '@/lib/shot-group/draft-metadata'
+import {
   deriveShotGroupModeFlags,
   resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
 } from '@/lib/shot-group/video-config'
+import type { ShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 
 const TEMPLATE_ITEM_COUNT: Record<string, number> = {
   'grid-4': 4,
@@ -83,7 +88,7 @@ function parseShotGroupVideoConfig(value: string | null | undefined): Record<str
   }
 }
 
-function buildShotGroupVideoConfigSnapshot(input: {
+export function buildShotGroupVideoConfigSnapshot(input: {
   videoModel?: string | null
   generateAudio: boolean
   includeDialogue: boolean
@@ -91,8 +96,9 @@ function buildShotGroupVideoConfigSnapshot(input: {
   omniReferenceEnabled: boolean
   smartMultiFrameEnabled: boolean
   generationOptions?: Record<string, string | number | boolean>
+  draftMetadata?: ShotGroupDraftMetadata | null
 }) {
-  return JSON.stringify({
+  const snapshot = JSON.stringify({
     configVersion: 2,
     mode: resolveShotGroupModeForModel({
       ...input,
@@ -105,6 +111,10 @@ function buildShotGroupVideoConfigSnapshot(input: {
     ...(input.videoModel ? { videoModel: input.videoModel } : {}),
     generationOptions: sanitizeShotGroupGenerationOptions(input.generationOptions),
   })
+
+  return input.draftMetadata
+    ? mergeShotGroupDraftMetadata(snapshot, input.draftMetadata)
+    : snapshot
 }
 
 async function listShotGroups(projectId: string, episodeId: string) {
@@ -177,6 +187,9 @@ export const POST = apiHandler(async (
   })
   const modeFlags = deriveShotGroupModeFlags(mode)
   const generationOptions = sanitizeShotGroupGenerationOptions(body.generationOptions)
+  const draftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
+    ? body.draftMetadata as ShotGroupDraftMetadata
+    : null
 
   if (!episodeId) {
     throw new ApiError('INVALID_PARAMS', { field: 'episodeId' })
@@ -227,6 +240,7 @@ export const POST = apiHandler(async (
         dialogueLanguage,
         ...modeFlags,
         generationOptions,
+        draftMetadata,
       }),
       createdAt: newCreatedAt,
       items: {
@@ -292,6 +306,10 @@ export const PATCH = apiHandler(async (
     ? current.dialogueLanguage
     : (normalizeDialogueLanguage(body.dialogueLanguage) ?? current.dialogueLanguage)
   const previousGenerationOptions = sanitizeShotGroupGenerationOptions(currentVideoConfig.generationOptions)
+  const previousDraftMetadata = parseShotGroupDraftMetadata(current.videoReferencesJson)
+  const nextDraftMetadata = body.draftMetadata && typeof body.draftMetadata === 'object'
+    ? body.draftMetadata as ShotGroupDraftMetadata
+    : previousDraftMetadata
   const nextGenerationOptions = body.generationOptions === undefined
     ? previousGenerationOptions
     : {
@@ -332,6 +350,7 @@ export const PATCH = apiHandler(async (
         dialogueLanguage: nextDialogueLanguage,
         ...nextModeFlags,
         generationOptions: nextGenerationOptions,
+        draftMetadata: nextDraftMetadata,
       }),
     } as unknown as Prisma.NovelPromotionShotGroupUncheckedUpdateInput
 
