@@ -53,6 +53,24 @@ function buildDialogueDirective(group: NovelPromotionShotGroup, locale: string) 
     : `对白策略：如需要对白或口播，仅使用${languageLabel}，内容简洁自然，不要额外字幕。`
 }
 
+function resolveEffectiveDialogueText(group: NovelPromotionShotGroup) {
+  const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+  const overrideText = draftMetadata?.dialogueOverrideText?.trim()
+  if (overrideText) return overrideText
+  return draftMetadata?.embeddedDialogue?.trim() || null
+}
+
+function buildDialogueContentDirective(group: NovelPromotionShotGroup, locale: string) {
+  if (!group.includeDialogue) return null
+
+  const effectiveDialogue = resolveEffectiveDialogueText(group)
+  if (!effectiveDialogue) return null
+
+  return locale === 'en'
+    ? `Dialogue content: ${effectiveDialogue}`
+    : `台词内容：${effectiveDialogue}`
+}
+
 function summarizeBindings(group: NovelPromotionShotGroup) {
   const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
   return {
@@ -234,6 +252,7 @@ export function buildShotGroupVideoPrompt(params: {
   const orderedShots = stringifyItems(params.group.items, params.template)
   const audioDirective = buildAudioDirective(params.group, params.locale)
   const dialogueDirective = buildDialogueDirective(params.group, params.locale)
+  const dialogueContentDirective = buildDialogueContentDirective(params.group, params.locale)
   const mode = normalizeShotGroupVideoMode({
     mode: params.group.videoMode,
     omniReferenceEnabled: params.group.omniReferenceEnabled,
@@ -262,6 +281,7 @@ export function buildShotGroupVideoPrompt(params: {
       `Prompt: ${primaryPrompt}`,
       audioDirective,
       dialogueDirective,
+      ...(dialogueContentDirective ? [dialogueContentDirective] : []),
       referenceDirective,
       multiFrameDirective,
       'Preserve subject identity, wardrobe, environment, lighting, and cinematic continuity across the whole clip.',
@@ -277,6 +297,7 @@ export function buildShotGroupVideoPrompt(params: {
     `提示词：${primaryPrompt}`,
     audioDirective,
     dialogueDirective,
+    ...(dialogueContentDirective ? [dialogueContentDirective] : []),
     referenceDirective,
     multiFrameDirective,
     '要求人物身份、服装、环境、光线和电影感在整段视频中保持一致，不要拆成多段短视频。',
