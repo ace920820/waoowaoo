@@ -4,6 +4,8 @@ import { buildMockRequest } from '../../../helpers/request'
 type ClipRecord = {
   id: string
   start: number
+  end?: number
+  duration?: number
   createdAt: Date
   summary: string
   location: string | null
@@ -43,6 +45,45 @@ type ShotGroupRecord = {
   videoUrl: string | null
   createdAt: Date
   items: ShotGroupItemRecord[]
+}
+
+type ShotGroupCreateData = {
+  episodeId: string
+  title: string
+  templateKey: string
+  groupPrompt?: string | null
+  videoPrompt?: string | null
+  generateAudio?: boolean
+  bgmEnabled?: boolean
+  includeDialogue?: boolean
+  dialogueLanguage?: 'zh' | 'en' | 'ja'
+  omniReferenceEnabled?: boolean
+  smartMultiFrameEnabled?: boolean
+  videoModel?: string | null
+  videoReferencesJson?: string | null
+  items?: {
+    create?: Array<{
+      itemIndex: number
+      title: string | null
+    }>
+  }
+}
+
+type DraftMetadataRecord = {
+  segmentOrder: number
+  clipId: string
+  segmentKey?: string
+  sourceClipId?: string
+  segmentIndexWithinClip?: number
+  segmentStartSeconds?: number
+  segmentEndSeconds?: number
+  sceneLabel: string
+  narrativePrompt: string | null
+  embeddedDialogue: string | null
+  shotRhythmGuidance: string | null
+  expectedShotCount: number
+  sourceStatus: 'ready' | 'placeholder'
+  placeholderReason: 'missing_clip_content' | null
 }
 
 type EpisodeRecord = {
@@ -94,7 +135,7 @@ const prismaMock = vi.hoisted(() => ({
     }),
   },
   novelPromotionShotGroup: {
-    create: vi.fn(async ({ data }: { data: Record<string, any> }) => {
+    create: vi.fn(async ({ data }: { data: ShotGroupCreateData }) => {
       routeState.createCalls.push(data)
       const id = `shot-group-created-${routeState.createCalls.length}`
       const items = ((data.items?.create as Array<Record<string, unknown>> | undefined) || []).map((item, index) => ({
@@ -166,6 +207,8 @@ function buildClip(overrides?: Partial<ClipRecord>): ClipRecord {
   return {
     id: 'clip-1',
     start: 0,
+    end: 60,
+    duration: 60,
     createdAt: new Date('2026-04-19T00:00:00.000Z'),
     summary: '主角在夜色里追上同伴',
     location: '雨夜街口',
@@ -181,6 +224,26 @@ function buildClip(overrides?: Partial<ClipRecord>): ClipRecord {
       ],
     }),
     shotCount: 4,
+    ...(overrides || {}),
+  }
+}
+
+function buildDraftMetadata(overrides?: Partial<DraftMetadataRecord>): DraftMetadataRecord {
+  return {
+    segmentOrder: 1,
+    clipId: 'clip-1',
+    segmentKey: 'clip-1:1',
+    sourceClipId: 'clip-1',
+    segmentIndexWithinClip: 1,
+    segmentStartSeconds: 0,
+    segmentEndSeconds: 15,
+    sceneLabel: '雨夜街口',
+    narrativePrompt: '旧提示词',
+    embeddedDialogue: null,
+    shotRhythmGuidance: '旧节奏',
+    expectedShotCount: 4,
+    sourceStatus: 'ready',
+    placeholderReason: null,
     ...(overrides || {}),
   }
 }
@@ -206,17 +269,7 @@ function buildShotGroup(overrides?: Partial<ShotGroupRecord>): ShotGroupRecord {
       generateAudio: false,
       includeDialogue: false,
       dialogueLanguage: 'zh',
-      draftMetadata: {
-        segmentOrder: 1,
-        clipId: 'clip-1',
-        sceneLabel: '旧场景',
-        narrativePrompt: '旧提示词',
-        embeddedDialogue: null,
-        shotRhythmGuidance: '旧节奏',
-        expectedShotCount: 4,
-        sourceStatus: 'ready',
-        placeholderReason: null,
-      },
+      draftMetadata: buildDraftMetadata({ sceneLabel: '旧场景' }),
     }),
     compositeImageUrl: null,
     videoUrl: null,
@@ -243,14 +296,14 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
     routeState.episode = {
       id: 'episode-1',
       clips: [
-        buildClip({ id: 'clip-1', start: 0 }),
-        buildClip({ id: 'clip-2', start: 15, shotCount: 6, location: '天桥', summary: '第二段推进' }),
+        buildClip({ id: 'clip-1', start: 0, end: 60, duration: 60 }),
+        buildClip({ id: 'clip-2', start: 60, end: 120, duration: 60, shotCount: 6, location: '天桥', summary: '第二段推进' }),
       ],
       shotGroups: [],
     }
   })
 
-  it('returns one shot group per ordered clip and summary.totalSegments equals the clip count', async () => {
+  it('returns 8 derived segment shot groups for 2 coarse clips and summary.totalSegments reflects segment count', async () => {
     const mod = await import('@/app/api/novel-promotion/[projectId]/multi-shot-drafts/route')
     const req = buildMockRequest({
       path: '/api/novel-promotion/project-1/multi-shot-drafts',
@@ -265,23 +318,34 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
     }
 
     expect(res.status).toBe(200)
-    expect(json.shotGroups).toHaveLength(2)
+    expect(json.shotGroups).toHaveLength(8)
     expect(json.summary).toEqual({
-      totalSegments: 2,
-      createdCount: 2,
+      totalSegments: 8,
+      createdCount: 8,
       reusedCount: 0,
       placeholderCount: 0,
     })
-    const firstMetadata = JSON.parse(json.shotGroups[0].videoReferencesJson || '{}').draftMetadata
-    expect(firstMetadata.segmentOrder).toBe(1)
-    expect(firstMetadata.clipId).toBe('clip-1')
+    const metadataList = json.shotGroups.map((group) => JSON.parse(group.videoReferencesJson || '{}').draftMetadata as DraftMetadataRecord)
+    expect(metadataList.map((metadata) => metadata.segmentOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(metadataList.map((metadata) => metadata.segmentKey)).toEqual([
+      'clip-1:1',
+      'clip-1:2',
+      'clip-1:3',
+      'clip-1:4',
+      'clip-2:1',
+      'clip-2:2',
+      'clip-2:3',
+      'clip-2:4',
+    ])
+    expect(metadataList.filter((metadata) => metadata.sourceClipId === 'clip-1')).toHaveLength(4)
+    expect(metadataList.filter((metadata) => metadata.sourceClipId === 'clip-2')).toHaveLength(4)
   })
 
-  it('creates placeholder shot groups for invalid clips and increments placeholderCount', async () => {
+  it('creates placeholder shot groups per 15-second segment slot and increments placeholderCount', async () => {
     routeState.episode = {
       id: 'episode-1',
       clips: [
-        buildClip({ id: 'clip-placeholder', start: 0, content: '   ', location: null, screenplay: null }),
+        buildClip({ id: 'clip-placeholder', start: 0, end: 60, duration: 60, content: '   ', location: null, screenplay: null }),
       ],
       shotGroups: [],
     }
@@ -300,20 +364,27 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
     }
 
     expect(res.status).toBe(200)
-    expect(json.summary.placeholderCount).toBe(1)
+    expect(json.shotGroups).toHaveLength(4)
+    expect(json.summary.placeholderCount).toBe(4)
     expect(json.shotGroups[0].groupPrompt).toBeNull()
     expect(json.shotGroups[0].videoPrompt).toBeNull()
-    const metadata = JSON.parse(json.shotGroups[0].videoReferencesJson || '{}').draftMetadata
-    expect(metadata.sourceStatus).toBe('placeholder')
-    expect(metadata.placeholderReason).toBe('missing_clip_content')
+    const metadataList = json.shotGroups.map((group) => JSON.parse(group.videoReferencesJson || '{}').draftMetadata as DraftMetadataRecord)
+    expect(metadataList.every((metadata) => metadata.sourceStatus === 'placeholder')).toBe(true)
+    expect(metadataList.every((metadata) => metadata.placeholderReason === 'missing_clip_content')).toBe(true)
+    expect(metadataList.map((metadata) => metadata.segmentKey)).toEqual([
+      'clip-placeholder:1',
+      'clip-placeholder:2',
+      'clip-placeholder:3',
+      'clip-placeholder:4',
+    ])
   })
 
-  it('reuses populated shot groups and avoids storyboard creation or duplicate draft groups', async () => {
+  it('reuses only exact derived segments and keeps 4 segment rows per coarse clip distinct', async () => {
     routeState.episode = {
       id: 'episode-1',
       clips: [
-        buildClip({ id: 'clip-1', start: 0 }),
-        buildClip({ id: 'clip-2', start: 15 }),
+        buildClip({ id: 'clip-1', start: 0, end: 60, duration: 60 }),
+        buildClip({ id: 'clip-2', start: 60, end: 120, duration: 60 }),
       ],
       shotGroups: [
         buildShotGroup({
@@ -325,17 +396,16 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
             generateAudio: false,
             includeDialogue: false,
             dialogueLanguage: 'zh',
-            draftMetadata: {
-              segmentOrder: 1,
+            draftMetadata: buildDraftMetadata({
               clipId: 'clip-1',
+              sourceClipId: 'clip-1',
+              segmentKey: 'clip-1:1',
+              segmentIndexWithinClip: 1,
+              segmentOrder: 1,
+              segmentStartSeconds: 0,
+              segmentEndSeconds: 15,
               sceneLabel: '雨夜街口',
-              narrativePrompt: '旧提示词',
-              embeddedDialogue: null,
-              shotRhythmGuidance: '旧节奏',
-              expectedShotCount: 4,
-              sourceStatus: 'ready',
-              placeholderReason: null,
-            },
+            }),
           }),
         }),
         buildShotGroup({
@@ -347,17 +417,16 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
             generateAudio: false,
             includeDialogue: false,
             dialogueLanguage: 'zh',
-            draftMetadata: {
-              segmentOrder: 2,
+            draftMetadata: buildDraftMetadata({
               clipId: 'clip-2',
+              segmentKey: undefined,
+              sourceClipId: undefined,
+              segmentIndexWithinClip: 1,
+              segmentOrder: 5,
+              segmentStartSeconds: undefined,
+              segmentEndSeconds: undefined,
               sceneLabel: '旧天桥',
-              narrativePrompt: '旧提示词',
-              embeddedDialogue: null,
-              shotRhythmGuidance: '旧节奏',
-              expectedShotCount: 4,
-              sourceStatus: 'ready',
-              placeholderReason: null,
-            },
+            }),
           }),
         }),
       ],
@@ -378,14 +447,18 @@ describe('api specific - novel promotion multi-shot drafts route', () => {
 
     expect(res.status).toBe(200)
     expect(json.summary).toEqual({
-      totalSegments: 2,
-      createdCount: 0,
+      totalSegments: 8,
+      createdCount: 6,
       reusedCount: 1,
       placeholderCount: 0,
     })
-    expect(routeState.createCalls).toHaveLength(0)
-    expect(routeState.updateCalls).toHaveLength(1)
+    expect(routeState.createCalls).toHaveLength(6)
+    expect(routeState.updateCalls).toHaveLength(2)
     expect(routeState.storyboardCreateCalls).toBe(0)
-    expect(routeState.episode?.shotGroups).toHaveLength(2)
+    expect(json.shotGroups).toHaveLength(8)
+    const metadataList = json.shotGroups.map((group) => JSON.parse(group.videoReferencesJson || '{}').draftMetadata as DraftMetadataRecord)
+    expect(new Set(metadataList.map((metadata) => metadata.segmentKey)).size).toBe(8)
+    expect(metadataList.filter((metadata) => metadata.clipId === 'clip-1')).toHaveLength(4)
+    expect(metadataList.filter((metadata) => metadata.clipId === 'clip-2')).toHaveLength(4)
   })
 })

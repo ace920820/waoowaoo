@@ -17,6 +17,10 @@ function buildDefaultItems(templateKey: string) {
   }))
 }
 
+function buildLegacySegmentIdentity(sourceClipId: string, segmentIndexWithinClip: number): string {
+  return `${sourceClipId}:${segmentIndexWithinClip}`
+}
+
 type PersistedShotGroup = {
   id: string
   episodeId: string
@@ -82,14 +86,32 @@ export const POST = apiHandler(async (
 
   const drafts = buildEpisodeMultiShotDrafts({
     episodeId: episode.id,
-    clips: episode.clips,
+    clips: episode.clips.map((clip) => ({
+      ...clip,
+      start: clip.start ?? undefined,
+      end: clip.end ?? undefined,
+      duration: clip.duration ?? undefined,
+      shotCount: clip.shotCount ?? undefined,
+      screenplay: clip.screenplay ?? undefined,
+    })),
   })
-  const existingByClipId = new Map<string, PersistedShotGroup>()
+  const existingBySegmentKey = new Map<string, PersistedShotGroup>()
+  const existingByLegacySegmentIdentity = new Map<string, PersistedShotGroup>()
 
   for (const shotGroup of episode.shotGroups as PersistedShotGroup[]) {
     const draftMetadata = parseShotGroupDraftMetadata(shotGroup.videoReferencesJson)
-    if (draftMetadata?.clipId && !existingByClipId.has(draftMetadata.clipId)) {
-      existingByClipId.set(draftMetadata.clipId, shotGroup)
+    if (!draftMetadata) continue
+
+    if (!existingBySegmentKey.has(draftMetadata.segmentKey)) {
+      existingBySegmentKey.set(draftMetadata.segmentKey, shotGroup)
+    }
+
+    const legacySegmentIdentity = buildLegacySegmentIdentity(
+      draftMetadata.sourceClipId,
+      draftMetadata.segmentIndexWithinClip,
+    )
+    if (!existingByLegacySegmentIdentity.has(legacySegmentIdentity)) {
+      existingByLegacySegmentIdentity.set(legacySegmentIdentity, shotGroup)
     }
   }
 
@@ -103,13 +125,10 @@ export const POST = apiHandler(async (
       placeholderCount += 1
     }
 
-    const existing = existingByClipId.get(draft.clipId)
-    if (existing?.compositeImageUrl || existing?.videoUrl) {
-      reusedCount += 1
-      shotGroups.push(existing)
-      continue
-    }
-
+    const existing = existingBySegmentKey.get(draft.segmentKey)
+      || existingByLegacySegmentIdentity.get(
+        buildLegacySegmentIdentity(draft.sourceClipId, draft.segmentIndexWithinClip),
+      )
     const videoReferencesJson = buildShotGroupVideoConfigSnapshot({
       generateAudio: false,
       includeDialogue: draft.includeDialogue,
@@ -120,6 +139,11 @@ export const POST = apiHandler(async (
       draftMetadata: {
         segmentOrder: draft.segmentOrder,
         clipId: draft.clipId,
+        segmentKey: draft.segmentKey,
+        sourceClipId: draft.sourceClipId,
+        segmentIndexWithinClip: draft.segmentIndexWithinClip,
+        segmentStartSeconds: draft.segmentStartSeconds,
+        segmentEndSeconds: draft.segmentEndSeconds,
         sceneLabel: draft.sceneLabel,
         narrativePrompt: draft.narrativePrompt,
         embeddedDialogue: draft.embeddedDialogue,
@@ -129,6 +153,23 @@ export const POST = apiHandler(async (
         placeholderReason: draft.placeholderReason,
       },
     })
+
+    if (existing?.compositeImageUrl || existing?.videoUrl) {
+      const reused = existing.videoReferencesJson === videoReferencesJson
+        ? existing
+        : await prisma.novelPromotionShotGroup.update({
+          where: { id: existing.id },
+          data: {
+            videoReferencesJson,
+          },
+          include: {
+            items: { orderBy: { itemIndex: 'asc' } },
+          },
+        }) as PersistedShotGroup
+      reusedCount += 1
+      shotGroups.push(reused)
+      continue
+    }
 
     if (existing) {
       const updated = await prisma.novelPromotionShotGroup.update({
