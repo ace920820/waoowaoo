@@ -1,5 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveEpisodeStageArtifacts, resolveStageArtifactsEpisodeData } from '@/lib/novel-promotion/stage-readiness'
 import { useWorkspaceProjectSnapshot } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceProjectSnapshot'
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   useWorkspaceStageRuntimeMock: vi.fn(),
   useWorkspaceEpisodeStageDataMock: vi.fn(),
   useWorkspaceProviderMock: vi.fn(),
+  useCreateProjectStoryboardGroupMock: vi.fn(),
 }))
 
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/ConfigStage', () => ({
@@ -61,6 +63,14 @@ vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWor
 vi.mock('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/WorkspaceProvider', () => ({
   useWorkspaceProvider: mocks.useWorkspaceProviderMock,
 }))
+
+vi.mock('@/lib/query/hooks', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/query/hooks')>('@/lib/query/hooks')
+  return {
+    ...actual,
+    useCreateProjectStoryboardGroup: mocks.useCreateProjectStoryboardGroupMock,
+  }
+})
 
 function captureStageRuntimeValue(params: Record<string, unknown>) {
   let captured: ReturnType<typeof useWorkspaceStageRuntime> | undefined
@@ -133,6 +143,13 @@ function createStageRuntimeParams(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function renderWithQueryClient(node: React.ReactElement) {
+  const queryClient = new QueryClient()
+  return renderToStaticMarkup(
+    React.createElement(QueryClientProvider, { client: queryClient }, node),
+  )
+}
+
 function findElementByType(node: unknown, type: string): React.ReactElement | null {
   if (!node || typeof node !== 'object') return null
   if ('type' in node && (node as React.ReactElement).type === type) {
@@ -160,6 +177,10 @@ describe('multi-shot stage routing', () => {
     mocks.useWorkspaceProviderMock.mockReset()
     mocks.useWorkspaceStageRuntimeMock.mockReturnValue({
       onStageChange: vi.fn(),
+    })
+    mocks.useCreateProjectStoryboardGroupMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(async (payload: unknown) => payload),
     })
     mocks.useWorkspaceProviderMock.mockReturnValue({
       projectId: 'project-1',
@@ -285,6 +306,21 @@ describe('multi-shot stage routing', () => {
     expect(onStageChange).toHaveBeenCalledWith('storyboard')
   })
 
+  it('renders the multi-shot video-stage branch with mode: video', async () => {
+    const ShotGroupVideoSection = (await import('@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video-stage/ShotGroupVideoSection')).default
+    const markup = renderToStaticMarkup(
+      React.createElement(ShotGroupVideoSection, {
+        projectId: 'project-1',
+        episodeId: 'episode-1',
+        shotGroups: [],
+        defaultVideoModel: 'model-1',
+        mode: 'video',
+      } as never),
+    )
+
+    expect(markup).toContain('data-shot-group-mode="video"')
+  })
+
   it('keeps traditional storyboard navigation reachable while exposing the multi-shot stage', () => {
     const multiShotNav = useWorkspaceStageNavigation({
       isAnyOperationRunning: false,
@@ -311,10 +347,10 @@ describe('multi-shot stage routing', () => {
       t: (key) => key,
     })
 
-    const multiShotMarkup = renderToStaticMarkup(
+    const multiShotMarkup = renderWithQueryClient(
       React.createElement(WorkspaceStageContent, { currentStage: 'multi-shot-storyboard' }),
     )
-    const traditionalMarkup = renderToStaticMarkup(
+    const traditionalMarkup = renderWithQueryClient(
       React.createElement(WorkspaceStageContent, { currentStage: 'storyboard' }),
     )
 
@@ -394,7 +430,7 @@ describe('multi-shot stage routing', () => {
       onStageChange,
     })
 
-    renderToStaticMarkup(React.createElement(MultiShotStoryboardStage))
+    renderWithQueryClient(React.createElement(MultiShotStoryboardStage))
     expect(onStageChange).not.toHaveBeenCalled()
 
     const tree = MultiShotStoryboardStage()
