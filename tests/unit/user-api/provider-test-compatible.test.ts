@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type FetchStub = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
 const openAIState = vi.hoisted(() => ({
   create: vi.fn(async () => ({
     choices: [{ message: { content: 'pong' } }],
@@ -7,7 +9,7 @@ const openAIState = vi.hoisted(() => ({
 }))
 
 const fetchMock = vi.hoisted(() =>
-  vi.fn<typeof fetch>(async () => new Response('not-found', { status: 404 })),
+  vi.fn<FetchStub>(async () => new Response('not-found', { status: 404 })),
 )
 
 vi.mock('openai', () => ({
@@ -25,7 +27,7 @@ import { testProviderConnection } from '@/lib/user-api/provider-test'
 describe('provider test connection compatible probes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
   })
 
   it('asks user to configure llm when free probes are unsupported', async () => {
@@ -73,7 +75,7 @@ describe('provider test connection compatible probes', () => {
   })
 
   it('marks success when any free probe endpoint passes', async () => {
-    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input)
       if (url.endsWith('/v1/models')) {
         return new Response(JSON.stringify({ data: [{ id: 'm1' }, { id: 'm2' }] }), { status: 200 })

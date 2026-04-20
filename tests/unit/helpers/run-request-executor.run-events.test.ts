@@ -13,7 +13,7 @@ function jsonResponse(payload: unknown, status = 200) {
 
 describe('run-request-executor run events path', () => {
   it('uses /api/runs/:runId/events when async response includes runId', async () => {
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi.fn()
     fetchMock
       .mockResolvedValueOnce(jsonResponse({
         success: true,
@@ -79,7 +79,7 @@ describe('run-request-executor run events path', () => {
       }))
 
     const originalFetch = globalThis.fetch
-    globalThis.fetch = fetchMock
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     try {
       const captured: RunStreamEvent[] = []
@@ -105,7 +105,7 @@ describe('run-request-executor run events path', () => {
   })
 
   it('surfaces run-events fetch errors instead of swallowing them', async () => {
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi.fn()
     fetchMock
       .mockResolvedValueOnce(jsonResponse({
         success: true,
@@ -120,7 +120,7 @@ describe('run-request-executor run events path', () => {
       }, 503))
 
     const originalFetch = globalThis.fetch
-    globalThis.fetch = fetchMock
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     try {
       const controller = new AbortController()
@@ -139,7 +139,7 @@ describe('run-request-executor run events path', () => {
 
   it('uses idle timeout and resets the timer when new events arrive', async () => {
     vi.useFakeTimers()
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi.fn()
     let eventsRequestCount = 0
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -183,7 +183,7 @@ describe('run-request-executor run events path', () => {
     })
 
     const originalFetch = globalThis.fetch
-    globalThis.fetch = fetchMock
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     try {
       const controller = new AbortController()
@@ -216,7 +216,7 @@ describe('run-request-executor run events path', () => {
 
   it('reconciles terminal failed run status when events stream has no new rows', async () => {
     vi.useFakeTimers()
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi.fn()
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/story-to-script-stream')) {
@@ -243,7 +243,7 @@ describe('run-request-executor run events path', () => {
     })
 
     const originalFetch = globalThis.fetch
-    globalThis.fetch = fetchMock
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     try {
       const captured: RunStreamEvent[] = []

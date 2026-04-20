@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '@/lib/api-fetch'
 
+type FetchStub = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
 describe('apiFetch locale header injection', () => {
   const originalFetch = globalThis.fetch
 
@@ -11,8 +13,8 @@ describe('apiFetch locale header injection', () => {
   })
 
   it('injects Accept-Language for internal /api requests', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
-    globalThis.fetch = fetchMock
+    const fetchMock = vi.fn<FetchStub>(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     await apiFetch('/api/tasks?status=running', { method: 'GET' })
 
@@ -28,8 +30,8 @@ describe('apiFetch locale header injection', () => {
       },
     })
 
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
-    globalThis.fetch = fetchMock
+    const fetchMock = vi.fn<FetchStub>(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     await apiFetch('/api/projects', {
       method: 'POST',
@@ -46,8 +48,8 @@ describe('apiFetch locale header injection', () => {
   })
 
   it('does not inject locale header for non-internal URLs', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
-    globalThis.fetch = fetchMock
+    const fetchMock = vi.fn<FetchStub>(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
 
     await apiFetch('https://example.com/health', { method: 'GET' })
 

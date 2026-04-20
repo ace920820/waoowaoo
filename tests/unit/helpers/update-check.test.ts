@@ -35,19 +35,19 @@ describe('update-check semver helpers', () => {
 
 describe('checkGithubReleaseUpdate', () => {
   it('returns no-release when GitHub has no releases yet', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 404 }))
+    const fetchMock = vi.fn(async () => new Response(null, { status: 404 }))
 
     const result = await checkGithubReleaseUpdate({
       repository: 'owner/repo',
       currentVersion: '0.2.0',
-      fetchImpl: fetchMock,
+      fetchImpl: fetchMock as unknown as typeof fetch,
     })
 
     expect(result).toEqual({ kind: 'no-release' })
   })
 
   it('returns update-available when latest release is newer', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+    const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({
         tag_name: 'v0.3.0',
         html_url: 'https://github.com/owner/repo/releases/tag/v0.3.0',
@@ -60,7 +60,7 @@ describe('checkGithubReleaseUpdate', () => {
     const result = await checkGithubReleaseUpdate({
       repository: 'owner/repo',
       currentVersion: '0.2.0',
-      fetchImpl: fetchMock,
+      fetchImpl: fetchMock as unknown as typeof fetch,
     })
 
     expect(result.kind).toBe('update-available')
@@ -73,7 +73,7 @@ describe('checkGithubReleaseUpdate', () => {
   })
 
   it('returns no-update when latest release equals current version', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+    const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({
         tag_name: 'v0.2.0',
         html_url: 'https://github.com/owner/repo/releases/tag/v0.2.0',
@@ -86,7 +86,7 @@ describe('checkGithubReleaseUpdate', () => {
     const result = await checkGithubReleaseUpdate({
       repository: 'owner/repo',
       currentVersion: '0.2.0',
-      fetchImpl: fetchMock,
+      fetchImpl: fetchMock as unknown as typeof fetch,
     })
 
     expect(result.kind).toBe('no-update')
@@ -98,7 +98,7 @@ describe('checkGithubReleaseUpdate', () => {
   })
 
   it('returns error when release tag is not valid semver', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+    const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({
         tag_name: 'release-2026-03-03',
         html_url: 'https://github.com/owner/repo/releases/tag/release-2026-03-03',
@@ -109,7 +109,7 @@ describe('checkGithubReleaseUpdate', () => {
     const result = await checkGithubReleaseUpdate({
       repository: 'owner/repo',
       currentVersion: '0.2.0',
-      fetchImpl: fetchMock,
+      fetchImpl: fetchMock as unknown as typeof fetch,
     })
 
     expect(result.kind).toBe('error')

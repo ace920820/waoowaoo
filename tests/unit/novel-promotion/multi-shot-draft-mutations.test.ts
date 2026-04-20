@@ -31,7 +31,7 @@ describe('useEnsureEpisodeMultiShotDrafts', () => {
 
   it('posts to the batch route and invalidates episode data after completion', async () => {
     const { useEnsureEpisodeMultiShotDrafts } = await import('@/lib/query/mutations/multi-shot-draft-mutations')
-    const mutation = useEnsureEpisodeMultiShotDrafts('project-1', 'episode-1') as {
+    const mutation = useEnsureEpisodeMultiShotDrafts('project-1', 'episode-1') as unknown as {
       mutationFn: (payload: { episodeId: string }) => Promise<unknown>
       onSettled: () => void
     }

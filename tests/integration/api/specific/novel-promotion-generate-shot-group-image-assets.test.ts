@@ -11,6 +11,8 @@ type ShotGroupRecord = {
   referenceImageUrl: string | null
   videoReferencesJson: string | null
   items?: Array<{
+    id: string
+    shotGroupId: string
     itemIndex: number
     title: string | null
     prompt: string | null
@@ -140,6 +142,8 @@ function buildShotGroup(): ShotGroupRecord {
       },
     }),
     items: new Array(9).fill(null).map((_, index) => ({
+      id: `shot-group-1-item-${index + 1}`,
+      shotGroupId: 'shot-group-1',
       itemIndex: index,
       title: `镜头 ${index + 1}`,
       prompt: null,
