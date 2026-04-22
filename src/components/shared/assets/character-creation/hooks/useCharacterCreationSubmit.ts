@@ -9,11 +9,15 @@ import {
   useCreateAssetHubCharacter,
   useCreateProjectCharacter,
   useGenerateCharacterImage,
+  useGenerateCharacterImageFromReference,
   useGenerateProjectCharacterImage,
+  useGenerateProjectCharacterImageFromReference,
   useCreateProjectCharacterAppearance,
   useExtractAssetHubReferenceCharacterDescription,
   useExtractProjectReferenceCharacterDescription,
+  useUploadCharacterImage,
   useUploadAssetHubTempMedia,
+  useUploadProjectCharacterImage,
   useUploadProjectTempMedia,
 } from '@/lib/query/hooks'
 import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
@@ -42,6 +46,22 @@ interface UseCharacterCreationSubmitParams {
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message
   return fallback
+}
+
+const base64ToFile = (base64: string, filename: string) => {
+  const [header, body] = base64.split(',')
+  if (!header || !body) {
+    throw new Error('Invalid base64 image')
+  }
+  const mimeMatch = header.match(/data:(.*?);base64/)
+  const mime = mimeMatch?.[1] || 'image/png'
+  const binary = atob(body)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  const extension = mime.split('/')[1] || 'png'
+  return new File([bytes], `${filename}.${extension}`, { type: mime })
 }
 
 export function useCharacterCreationSubmit({
@@ -77,6 +97,10 @@ export function useCharacterCreationSubmit({
   const createProjectCharacter = useCreateProjectCharacter(projectId ?? '')
   const generateAssetHubCharacterImage = useGenerateCharacterImage()
   const generateProjectCharacterImage = useGenerateProjectCharacterImage(projectId ?? '')
+  const generateAssetHubCharacterImageFromReference = useGenerateCharacterImageFromReference()
+  const generateProjectCharacterImageFromReference = useGenerateProjectCharacterImageFromReference(projectId ?? '')
+  const uploadAssetHubCharacterImage = useUploadCharacterImage()
+  const uploadProjectCharacterImage = useUploadProjectCharacterImage(projectId ?? '')
   const createProjectAppearance = useCreateProjectCharacterAppearance(projectId ?? '')
   const {
     count: characterGenerationCount,
@@ -153,23 +177,44 @@ export function useCharacterCreationSubmit({
       }
 
       if (mode === 'asset-hub') {
-        await createAssetHubCharacter.mutateAsync({
+        const result = await createAssetHubCharacter.mutateAsync({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
           folderId: folderId ?? null,
           artStyle,
-          generateFromReference: true,
-          referenceImageUrls,
+        }) as CreatedCharacterResponse
+        const createdCharacterId = result.character?.id
+        const createdAppearance = result.character?.appearances?.[0]
+        if (!createdCharacterId || !createdAppearance?.id) {
+          throw new Error(t('errors.createFailed'))
+        }
+        await generateAssetHubCharacterImageFromReference.mutateAsync({
+          characterId: createdCharacterId,
+          appearanceId: createdAppearance.id,
+          appearanceIndex: createdAppearance.appearanceIndex,
+          characterName: name.trim(),
+          artStyle,
           customDescription: referenceSubMode === 'extract' ? finalDescription : undefined,
+          referenceImageUrls,
           count: referenceCharacterGenerationCount,
         })
       } else {
-        await createProjectCharacter.mutateAsync({
+        const result = await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
-          generateFromReference: true,
-          referenceImageUrls,
+        }) as CreatedCharacterResponse
+        const createdCharacterId = result.character?.id
+        const createdAppearanceId = result.character?.appearances?.[0]?.id
+        if (!createdCharacterId || !createdAppearanceId) {
+          throw new Error(t('errors.createFailed'))
+        }
+        await generateProjectCharacterImageFromReference.mutateAsync({
+          characterId: createdCharacterId,
+          appearanceId: createdAppearanceId,
+          characterName: name.trim(),
+          artStyle,
           customDescription: referenceSubMode === 'extract' ? finalDescription : undefined,
+          referenceImageUrls,
           count: referenceCharacterGenerationCount,
         })
       }
@@ -195,10 +240,82 @@ export function useCharacterCreationSubmit({
     name,
     onClose,
     onSuccess,
+    generateAssetHubCharacterImageFromReference,
+    generateProjectCharacterImageFromReference,
     referenceImagesBase64.length,
     referenceSubMode,
     t,
     uploadReferenceImages,
+  ])
+
+  const handleUploadTriptych = useCallback(async () => {
+    if (!name.trim() || referenceImagesBase64.length === 0) return
+
+    try {
+      setIsSubmitting(true)
+      const firstReferenceImage = referenceImagesBase64[0]
+      const uploadFile = base64ToFile(firstReferenceImage, `${name.trim()}-triptych`)
+      const finalDescription = description.trim() || t('character.defaultDescription', { name: name.trim() })
+
+      if (mode === 'asset-hub') {
+        const result = await createAssetHubCharacter.mutateAsync({
+          name: name.trim(),
+          description: finalDescription,
+          folderId: folderId ?? null,
+          artStyle,
+        }) as CreatedCharacterResponse
+        const createdCharacterId = result.character?.id
+        const createdAppearance = result.character?.appearances?.[0]
+        if (!createdCharacterId || createdAppearance?.appearanceIndex === undefined) {
+          throw new Error(t('errors.createFailed'))
+        }
+        await uploadAssetHubCharacterImage.mutateAsync({
+          file: uploadFile,
+          characterId: createdCharacterId,
+          appearanceIndex: createdAppearance.appearanceIndex,
+          labelText: `${name.trim()} 三视图`,
+        })
+      } else {
+        const result = await createProjectCharacter.mutateAsync({
+          name: name.trim(),
+          description: finalDescription,
+        }) as CreatedCharacterResponse
+        const createdCharacterId = result.character?.id
+        const createdAppearanceId = result.character?.appearances?.[0]?.id
+        if (!createdCharacterId || !createdAppearanceId) {
+          throw new Error(t('errors.createFailed'))
+        }
+        await uploadProjectCharacterImage.mutateAsync({
+          file: uploadFile,
+          characterId: createdCharacterId,
+          appearanceId: createdAppearanceId,
+          labelText: `${name.trim()} triptych`,
+        })
+      }
+
+      onSuccess()
+      onClose()
+    } catch (error: unknown) {
+      if (shouldShowError(error)) {
+        alert(getErrorMessage(error, t('errors.createFailed')))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [
+    artStyle,
+    createAssetHubCharacter,
+    createProjectCharacter,
+    description,
+    folderId,
+    mode,
+    name,
+    onClose,
+    onSuccess,
+    referenceImagesBase64,
+    t,
+    uploadAssetHubCharacterImage,
+    uploadProjectCharacterImage,
   ])
 
   const handleAiDesign = useCallback(async () => {
@@ -370,6 +487,7 @@ export function useCharacterCreationSubmit({
     setReferenceCharacterGenerationCount,
     handleExtractDescription,
     handleCreateWithReference,
+    handleUploadTriptych,
     handleAiDesign,
     handleSubmit,
     handleSubmitAndGenerate,

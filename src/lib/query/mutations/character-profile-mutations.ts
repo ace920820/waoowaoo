@@ -144,6 +144,59 @@ export function useExtractProjectReferenceCharacterDescription(projectId: string
     })
 }
 
+export function useGenerateProjectCharacterImageFromReference(projectId: string) {
+    const queryClient = useQueryClient()
+    const invalidateProjectAssets = () =>
+        invalidateProjectAssetCaches(queryClient, projectId)
+
+    return useMutation({
+        mutationFn: async ({
+            characterId,
+            appearanceId,
+            characterName,
+            artStyle,
+            customDescription,
+            referenceImageUrls,
+            count,
+        }: {
+            characterId: string
+            appearanceId: string
+            characterName: string
+            artStyle?: string | null
+            customDescription?: string
+            referenceImageUrls: string[]
+            count?: number
+        }) => {
+            const response = await requestTaskResponseWithError(
+                `/api/novel-promotion/${projectId}/reference-to-character`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        characterId,
+                        appearanceId,
+                        characterName,
+                        artStyle,
+                        customDescription,
+                        referenceImageUrls,
+                        count,
+                        isBackgroundJob: true,
+                    }),
+                },
+                'Failed to generate project character image from reference',
+            )
+            return await response.json().catch(() => ({}))
+        },
+        onMutate: ({ appearanceId }) => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.all(projectId),
+            })
+            return appearanceId
+        },
+        onSettled: invalidateProjectAssets,
+    })
+}
+
 /**
  * 创建项目角色
  */

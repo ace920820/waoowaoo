@@ -276,7 +276,7 @@ export function mapGlobalCharacterToAsset(character: GlobalCharacterRecord): Cha
         {
           targetType: 'GlobalCharacterAppearance',
           targetId: appearance.id,
-          types: ['asset_hub_modify'],
+          types: ['asset_hub_modify', 'asset_hub_reference_to_character'],
         },
       ],
     })

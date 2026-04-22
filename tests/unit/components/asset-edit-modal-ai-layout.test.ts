@@ -21,6 +21,9 @@ vi.mock('@/lib/query/hooks', () => ({
   useUpdateCharacterName: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateProjectCharacterName: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateCharacterAppearanceDescription: () => ({ mutateAsync: vi.fn() }),
+  useGenerateCharacterImageFromReference: () => ({ mutateAsync: vi.fn() }),
+  useUploadCharacterImage: () => ({ mutateAsync: vi.fn() }),
+  useUploadAssetHubTempMedia: () => ({ mutateAsync: vi.fn() }),
   useUpdateProjectAppearanceDescription: () => ({ mutateAsync: vi.fn() }),
   useUpdateProjectCharacterIntroduction: () => ({ mutateAsync: vi.fn() }),
   useAiModifyCharacterDescription: () => ({ mutateAsync: vi.fn() }),
@@ -37,6 +40,13 @@ vi.mock('@/lib/query/hooks', () => ({
     update: vi.fn(),
     updateVariant: vi.fn(),
     generate: vi.fn(),
+  }),
+}))
+
+vi.mock('@/lib/image-generation/use-image-generation-count', () => ({
+  useImageGenerationCount: () => ({
+    count: 3,
+    setCount: vi.fn(),
   }),
 }))
 
@@ -64,6 +74,16 @@ const messages = {
       editCharacter: '编辑角色',
       editLocation: '编辑场景',
       editProp: '编辑道具',
+      referenceImagesTitle: '人物概念图',
+      referenceImagesHint: '上传概念图后，保存时会结合当前角色描述与画风重新生成设定图和三视图。',
+      referenceGenerateCount: '生成张数',
+      referenceImageAlt: '概念图',
+      referenceSelectedCount: '已选择 {count}/5 张概念图',
+      referenceDropOrClick: '点击上传或拖拽人物概念图',
+      referenceMaxImages: '最多上传 5 张概念图',
+      saveAndUploadTriptych: '保存并上传三视图',
+      saveAndGenerateFromReference: '保存并根据概念图生成',
+      artStyle: '画面风格',
       namePlaceholder: '输入名称',
       appearancePrompt: '形象描述提示词',
       descPlaceholder: '输入描述',
@@ -86,6 +106,9 @@ const messages = {
     errors: {
       saveFailed: '保存失败',
       failed: '失败',
+    },
+    image: {
+      uploadFailed: '上传失败',
     },
   },
 } as const
@@ -130,6 +153,29 @@ describe('asset edit modal AI layout', () => {
     expect(html).toContain('AI修改描述')
     expect(html).not.toContain('改成黑色西装')
     expect(html).not.toContain('智能修改')
+  })
+
+  it('renders concept-image generation controls for asset-hub character editing', async () => {
+    Reflect.set(globalThis, 'React', React)
+    const { CharacterEditModal } = await import('@/components/shared/assets/CharacterEditModal')
+    const html = renderWithMessages(
+      createElement(CharacterEditModal, {
+        mode: 'asset-hub',
+        characterId: 'character-1',
+        characterName: '沈烬',
+        description: '冷峻禁欲的男性角色形象描述',
+        appearanceId: 'appearance-1',
+        appearanceIndex: 0,
+        artStyle: 'american-comic',
+        changeReason: '初始形象',
+        onClose: () => undefined,
+        onSave: () => undefined,
+      }),
+    )
+
+    expect(html).toContain('人物概念图')
+    expect(html).toContain('保存并生成')
+    expect(html).toContain('保存并上传三视图')
   })
 
   it('renders prop AI modify action with the prop-specific placeholder', async () => {

@@ -10,6 +10,7 @@ import type { GlobalCharacter } from '../hooks/useGlobalAssets'
 import { collapseCharacterSelection } from '@/lib/assets/image-selection-state'
 import {
   requestJsonWithError,
+  requestTaskResponseWithError,
   requestVoidWithError,
 } from './mutation-shared'
 import {
@@ -129,6 +130,68 @@ export function useGenerateCharacterImage() {
       })
     },
     onSettled: invalidateCharacters,
+  })
+}
+
+export function useGenerateCharacterImageFromReference() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      characterId,
+      appearanceId,
+      appearanceIndex,
+      characterName,
+      artStyle,
+      customDescription,
+      referenceImageUrls,
+      count,
+    }: {
+      characterId: string
+      appearanceId: string
+      appearanceIndex: number
+      characterName: string
+      artStyle?: string | null
+      customDescription?: string
+      referenceImageUrls: string[]
+      count?: number
+    }) => {
+      const response = await requestTaskResponseWithError(
+        '/api/asset-hub/reference-to-character',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterId,
+            appearanceId,
+            appearanceIndex,
+            characterName,
+            artStyle,
+            customDescription,
+            referenceImageUrls,
+            count,
+            isBackgroundJob: true,
+          }),
+        },
+        'Failed to generate character image from reference',
+      )
+      return await response.json().catch(() => ({}))
+    },
+    onMutate: ({ appearanceId }) => {
+      upsertTaskTargetOverlay(queryClient, {
+        projectId: GLOBAL_ASSET_PROJECT_ID,
+        targetType: 'GlobalCharacterAppearance',
+        targetId: appearanceId,
+        intent: 'generate',
+      })
+    },
+    onError: (_error, { appearanceId }) => {
+      clearTaskTargetOverlay(queryClient, {
+        projectId: GLOBAL_ASSET_PROJECT_ID,
+        targetType: 'GlobalCharacterAppearance',
+        targetId: appearanceId,
+      })
+    },
   })
 }
 

@@ -202,6 +202,10 @@ export default function CharacterCreationForm({
             <span className="text-xs text-[var(--glass-text-tertiary)]">{t('character.pasteHint')}</span>
           </div>
 
+          <p className="text-xs text-[var(--glass-text-secondary)]">
+            {t('character.referenceUsageHint')}
+          </p>
+
           <div className="glass-surface flex items-center gap-2 p-2 rounded-lg">
             <span className="text-xs text-[var(--glass-text-secondary)] shrink-0">{t('character.generationMode')}：</span>
             <SegmentedControl

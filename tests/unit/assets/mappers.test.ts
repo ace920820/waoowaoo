@@ -116,6 +116,13 @@ describe('asset mappers', () => {
       id: 'appearance-1',
       artStyle: 'realistic',
     }))
+    expect(asset.variants[0]?.taskRefs).toEqual([
+      expect.objectContaining({
+        targetType: 'GlobalCharacterAppearance',
+        targetId: 'appearance-1',
+        types: ['asset_hub_modify', 'asset_hub_reference_to_character'],
+      }),
+    ])
   })
 
   it('keeps persisted location artStyle in the unified asset contract', () => {

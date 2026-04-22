@@ -163,7 +163,7 @@ describe('worker reference-to-character', () => {
     await expect(handleReferenceToCharacterTask(job)).rejects.toThrow('Unsupported task type')
   })
 
-  it('uses suffix prompt and disables reference-image injection when customDescription is provided', async () => {
+  it('uses suffix prompt and keeps reference-image injection when customDescription is provided', async () => {
     const job = buildJob(
       {
         referenceImageUrls: ['https://example.com/ref-a.png', 'https://example.com/ref-b.png'],
@@ -184,7 +184,7 @@ describe('worker reference-to-character', () => {
     expect(prompt).toContain('冷静黑发角色')
     expect(prompt).toContain(CHARACTER_PROMPT_SUFFIX)
     expect(options.aspectRatio).toBe(CHARACTER_IMAGE_BANANA_RATIO)
-    expect(options.referenceImages).toBeUndefined()
+    expect(options.referenceImages).toEqual(['https://example.com/ref-a.png', 'https://example.com/ref-b.png'])
   })
 
   it('keeps three-view suffix in template flow and writes extracted description in background mode', async () => {
@@ -240,6 +240,26 @@ describe('worker reference-to-character', () => {
     const cosKeys = (result as { cosKeys?: string[] }).cosKeys
     expect(cosKeys).toHaveLength(5)
     expect(cosKeys?.every((item) => item.startsWith('cos/reference-key-'))).toBe(true)
+  })
+
+  it('does not require fal config when the image provider returns sync results', async () => {
+    apiConfigMock.getProviderConfig.mockImplementationOnce(async () => {
+      throw new Error('PROVIDER_API_KEY_MISSING: fal')
+    })
+
+    const job = buildJob(
+      {
+        referenceImageUrls: ['https://example.com/ref-a.png'],
+        characterName: 'Hero',
+        count: 1,
+      },
+      TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER,
+    )
+
+    const result = await handleReferenceToCharacterTask(job)
+
+    expect(result).toEqual(expect.objectContaining({ success: true }))
+    expect(generatorApiMock.generateImage).toHaveBeenCalledTimes(1)
   })
 
   it('adds project label bars only for project reference generation', async () => {

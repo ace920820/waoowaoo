@@ -34,7 +34,6 @@ async function generateReferenceImage(params: {
   imageModel: string
   prompt: string
   referenceImages?: string[]
-  falApiKey?: string | null
   keyPrefix: string
   labelText?: string
 }): Promise<string | null> {
@@ -45,7 +44,6 @@ async function generateReferenceImage(params: {
     imageModel,
     prompt,
     referenceImages,
-    falApiKey,
     keyPrefix,
     labelText,
   } = params
@@ -66,6 +64,7 @@ async function generateReferenceImage(params: {
     const requestId = typeof result.requestId === 'string' ? result.requestId : ''
     const endpoint = typeof result.endpoint === 'string' ? result.endpoint : ''
     if (result.async && requestId && endpoint) {
+      const { apiKey: falApiKey } = await getProviderConfig(userId, 'fal')
       if (!falApiKey) {
         throw new Error('reference_to_character async result requires falApiKey')
       }
@@ -208,8 +207,7 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
     prompt = `${prompt}，${artStylePrompt}`
   }
 
-  const useReferenceImages = !customDescription
-  const { apiKey: falApiKey } = await getProviderConfig(job.data.userId, 'fal')
+  const useReferenceImages = allReferenceImages.length > 0
   const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
   const count = normalizeImageGenerationCount('reference-to-character', payload.count)
 
@@ -227,7 +225,6 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
       imageModel,
       prompt,
       referenceImages: useReferenceImages ? allReferenceImages : undefined,
-      falApiKey,
       keyPrefix,
       ...(isProject ? { labelText: characterName } : {}),
     }),

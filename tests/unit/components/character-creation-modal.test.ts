@@ -22,6 +22,7 @@ vi.mock('@/components/shared/assets/character-creation/hooks/useCharacterCreatio
     setReferenceCharacterGenerationCount: vi.fn(),
     handleExtractDescription: vi.fn(),
     handleCreateWithReference: vi.fn(),
+    handleUploadTriptych: vi.fn(),
     handleAiDesign: vi.fn(),
     handleSubmit: vi.fn(),
     handleSubmitAndGenerate: vi.fn(),
@@ -51,9 +52,11 @@ const messages = {
       appearancesCount: '{count} 个形象',
       changeReason: '形象变化原因',
       changeReasonPlaceholder: '例如',
+      directUploadTriptych: '直接上传三视图',
       useReferenceGeneratePrefix: '使用参考图生成',
       generateCountSuffix: '张图片',
       selectReferenceGenerateCount: '选择参考图生成数量',
+      referenceUsageHint: '你可以上传概念图让系统参考生成，也可以直接上传已经做好的三视图作为最终人物图。',
     },
     artStyle: { title: '画面风格' },
     aiDesign: {
@@ -113,4 +116,5 @@ describe('CharacterCreationModal', () => {
     expect(html).toContain('添加并生成')
     expect(html).toContain('取消')
   })
+
 })

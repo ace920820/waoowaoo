@@ -1,14 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { shouldShowError } from '@/lib/error-utils'
+import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import { ART_STYLES } from '@/lib/constants'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import {
     useAiModifyCharacterDescription,
+    useGenerateCharacterImageFromReference,
+    useUploadCharacterImage,
+    useUploadAssetHubTempMedia,
     useAiModifyProjectAppearanceDescription,
     useUpdateCharacterAppearanceDescription,
     useUpdateCharacterName,
@@ -16,6 +20,7 @@ import {
     useUpdateProjectCharacterIntroduction,
     useUpdateProjectCharacterName,
 } from '@/lib/query/hooks'
+import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
 import { AiModifyDescriptionField } from './AiModifyDescriptionField'
 
 export interface CharacterEditModalProps {
@@ -108,11 +113,73 @@ export function CharacterEditModal({
     const updateProjectIntroduction = useUpdateProjectCharacterIntroduction(projectId ?? '')
     const aiModifyAssetHub = useAiModifyCharacterDescription()
     const aiModifyProject = useAiModifyProjectAppearanceDescription(projectId ?? '')
+    const uploadAssetHubTempMedia = useUploadAssetHubTempMedia()
+    const generateAssetHubCharacterImageFromReference = useGenerateCharacterImageFromReference()
+    const uploadAssetHubCharacterImage = useUploadCharacterImage()
+    const {
+        count: referenceCharacterGenerationCount,
+        setCount: setReferenceCharacterGenerationCount,
+    } = useImageGenerationCount('reference-to-character')
+    const [referenceImagesBase64, setReferenceImagesBase64] = useState<string[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const getErrorMessage = (error: unknown, fallback: string) => {
         if (error instanceof Error && error.message) return error.message
         return fallback
     }
+
+    const base64ToFile = (base64: string, filename: string) => {
+        const [header, body] = base64.split(',')
+        if (!header || !body) {
+            throw new Error('Invalid base64 image')
+        }
+        const mimeMatch = header.match(/data:(.*?);base64/)
+        const mime = mimeMatch?.[1] || 'image/png'
+        const binary = atob(body)
+        const bytes = new Uint8Array(binary.length)
+        for (let index = 0; index < binary.length; index += 1) {
+            bytes[index] = binary.charCodeAt(index)
+        }
+        const extension = mime.split('/')[1] || 'png'
+        return new File([bytes], `${filename}.${extension}`, { type: mime })
+    }
+
+    const handleFileSelect = useCallback(async (files: FileList | File[]) => {
+        const fileArray = Array.from(files).filter((file) => file.type.startsWith('image/'))
+        if (fileArray.length === 0) return
+
+        const remaining = 5 - referenceImagesBase64.length
+        const toAdd = fileArray.slice(0, remaining)
+        for (const file of toAdd) {
+            const reader = new FileReader()
+            reader.onload = (event) => {
+                const base64 = event.target?.result as string
+                setReferenceImagesBase64((previous) => {
+                    if (!base64 || previous.includes(base64) || previous.length >= 5) return previous
+                    return [...previous, base64]
+                })
+            }
+            reader.readAsDataURL(file)
+        }
+    }, [referenceImagesBase64.length])
+
+    const handleClearReference = (index?: number) => {
+        if (typeof index === 'number') {
+            setReferenceImagesBase64((previous) => previous.filter((_value, currentIndex) => currentIndex !== index))
+            return
+        }
+        setReferenceImagesBase64([])
+    }
+
+    const uploadReferenceImages = useCallback(async () => {
+        return await Promise.all(referenceImagesBase64.map(async (imageBase64) => {
+            const data = await uploadAssetHubTempMedia.mutateAsync({ imageBase64 })
+            if (!data.url) {
+                throw new Error(t('image.uploadFailed'))
+            }
+            return data.url
+        }))
+    }, [referenceImagesBase64, t, uploadAssetHubTempMedia])
 
     const persistNameIfNeeded = async () => {
         const nextName = editingName.trim()
@@ -239,6 +306,7 @@ export function CharacterEditModal({
     const handleSaveAndGenerate = async () => {
         const savedDescription = editingDescription
         const savedAppearanceKey = appearanceKey
+        const shouldGenerateFromReference = mode === 'asset-hub' && referenceImagesBase64.length > 0
         onClose()
 
         ; (async () => {
@@ -249,6 +317,20 @@ export function CharacterEditModal({
 
                 onUpdate?.(savedDescription)
                 onRefresh?.()
+                if (shouldGenerateFromReference && appearanceId) {
+                    const referenceImageUrls = await uploadReferenceImages()
+                    await generateAssetHubCharacterImageFromReference.mutateAsync({
+                        characterId,
+                        appearanceId,
+                        appearanceIndex: appearanceIndex ?? 0,
+                        characterName: editingName.trim() || characterName,
+                        artStyle: editingArtStyle,
+                        customDescription: savedDescription.trim() || undefined,
+                        referenceImageUrls,
+                        count: referenceCharacterGenerationCount,
+                    })
+                    return
+                }
                 onSave(characterId, savedAppearanceKey, {
                     artStyle: editingArtStyle,
                     appearanceIndex: appearanceIndex ?? 0,
@@ -260,6 +342,40 @@ export function CharacterEditModal({
             }
         })()
     }
+
+    const handleSaveAndUploadTriptych = async () => {
+        if (mode !== 'asset-hub' || referenceImagesBase64.length === 0) return
+
+        const savedDescription = editingDescription
+        const uploadSource = referenceImagesBase64[0]
+        onClose()
+
+        ; (async () => {
+            try {
+                await persistNameIfNeeded()
+                await persistDescription()
+                await persistIntroductionIfNeeded()
+
+                onUpdate?.(savedDescription)
+                onRefresh?.()
+                await uploadAssetHubCharacterImage.mutateAsync({
+                    file: base64ToFile(uploadSource, `${editingName.trim() || characterName}-triptych`),
+                    characterId,
+                    appearanceIndex: appearanceIndex ?? 0,
+                    labelText: `${editingName.trim() || characterName} 三视图`,
+                })
+            } catch (error: unknown) {
+                if (shouldShowError(error)) {
+                    alert(getErrorMessage(error, t('errors.saveFailed')))
+                }
+            }
+        })()
+    }
+
+    const showReferenceGeneration = mode === 'asset-hub'
+    const canSaveAndGenerate = isSaving
+        || isTaskRunning
+        || (!editingDescription.trim() && referenceImagesBase64.length === 0)
 
     return (
         <div className="fixed inset-0 glass-overlay flex items-center justify-center z-50 p-4">
@@ -353,6 +469,99 @@ export function CharacterEditModal({
                         </div>
                     )}
 
+                    {showReferenceGeneration && (
+                        <div className="space-y-3 glass-surface-soft rounded-xl p-4 border border-[var(--glass-stroke-base)]">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <label className="glass-field-label block">
+                                        {t('modal.referenceImagesTitle')}
+                                    </label>
+                                    <p className="glass-field-hint mt-1">
+                                        {t('modal.referenceImagesHint')}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-[var(--glass-text-secondary)]">
+                                        {t('modal.referenceGenerateCount')}
+                                    </span>
+                                    <select
+                                        value={referenceCharacterGenerationCount}
+                                        onChange={(event) => setReferenceCharacterGenerationCount(Number(event.target.value))}
+                                        className="glass-select-base px-2 py-1 text-sm"
+                                    >
+                                        {[1, 2, 3, 4, 5].map((count) => (
+                                            <option key={count} value={count}>{count}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div
+                                className="border-2 border-dashed border-[var(--glass-stroke-base)] rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:border-[var(--glass-stroke-focus)] hover:bg-[var(--glass-tone-info-bg)] transition-all relative min-h-[120px]"
+                                onDrop={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    if (event.dataTransfer.files.length > 0) {
+                                        void handleFileSelect(event.dataTransfer.files)
+                                    }
+                                }}
+                                onDragOver={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                }}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(event) => {
+                                        if (event.target.files) {
+                                            void handleFileSelect(event.target.files)
+                                        }
+                                    }}
+                                />
+
+                                {referenceImagesBase64.length > 0 ? (
+                                    <div className="w-full">
+                                        <div className="grid grid-cols-3 gap-2 mb-2">
+                                            {referenceImagesBase64.map((base64, index) => (
+                                                <div key={`${index}-${base64.slice(0, 16)}`} className="relative aspect-square">
+                                                    <MediaImageWithLoading
+                                                        src={base64}
+                                                        alt={`${t('modal.referenceImageAlt')} ${index + 1}`}
+                                                        containerClassName="w-full h-full rounded"
+                                                        className="w-full h-full object-cover rounded"
+                                                    />
+                                                    <button
+                                                        onClick={(event) => {
+                                                            event.stopPropagation()
+                                                            handleClearReference(index)
+                                                        }}
+                                                        className="glass-btn-base glass-btn-tone-danger absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-center text-[var(--glass-text-secondary)]">
+                                            {t('modal.referenceSelectedCount', { count: referenceImagesBase64.length })}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <AppIcon name="image" className="w-10 h-10 text-[var(--glass-text-tertiary)] mb-2" />
+                                        <p className="text-sm text-[var(--glass-text-secondary)]">{t('modal.referenceDropOrClick')}</p>
+                                        <p className="text-xs text-[var(--glass-text-tertiary)] mt-1">{t('modal.referenceMaxImages')}</p>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <AiModifyDescriptionField
                         label={t('modal.appearancePrompt')}
                         description={editingDescription}
@@ -389,15 +598,26 @@ export function CharacterEditModal({
                             t('modal.saveOnly')
                         )}
                     </button>
+                    {showReferenceGeneration && (
+                        <button
+                            onClick={handleSaveAndUploadTriptych}
+                            disabled={isSaving || isTaskRunning || referenceImagesBase64.length === 0}
+                            className="glass-btn-base glass-btn-secondary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {t('modal.saveAndUploadTriptych')}
+                        </button>
+                    )}
                     <button
                         onClick={handleSaveAndGenerate}
-                        disabled={isSaving || isTaskRunning || !editingDescription.trim()}
+                        disabled={canSaveAndGenerate}
                         className="glass-btn-base glass-btn-primary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {isTaskRunning ? (
                             <TaskStatusInline state={taskRunningState} className="text-white [&>span]:text-white [&_svg]:text-white" />
                         ) : (
-                            t('modal.saveAndGenerate')
+                            referenceImagesBase64.length > 0 && mode === 'asset-hub'
+                                ? t('modal.saveAndGenerateFromReference')
+                                : t('modal.saveAndGenerate')
                         )}
                     </button>
                 </div>

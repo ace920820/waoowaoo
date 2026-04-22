@@ -32,6 +32,7 @@ export {
 } from './useGlobalAssets'
 export {
     useGenerateCharacterImage,
+    useGenerateCharacterImageFromReference,
     useModifyCharacterImage,
     useSelectCharacterImage,
     useUndoCharacterImage,
@@ -105,6 +106,7 @@ export {
     useAiCreateProjectCharacter,
     useUploadProjectTempMedia,
     useExtractProjectReferenceCharacterDescription,
+    useGenerateProjectCharacterImageFromReference,
     useCreateProjectCharacter,
     useCreateProjectCharacterAppearance,
     useAnalyzeProjectGlobalAssets,

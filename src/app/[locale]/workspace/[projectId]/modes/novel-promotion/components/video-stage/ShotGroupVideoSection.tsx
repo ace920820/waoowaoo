@@ -641,6 +641,16 @@ function ShotGroupVideoReviewSection({
             const selectedPropIds = new Set(reviewDraft.selectedPropAssets.map((asset) => asset.assetId).filter(Boolean))
             const effectiveWarnings = liveDraftMetadata?.missingAssetWarnings ?? []
             const effectiveMoodPresetId = reviewDraft.storyboardMoodPresetId || inheritedMoodPresetId
+            const referencePromptForViewer = liveDraftMetadata?.submittedReferencePrompt
+              || reviewDraft.referencePromptText.trim()
+              || ''
+            const compositePromptFallback = [
+              selectedStoryboardMode.promptText.trim(),
+              reviewDraft.compositePromptText.trim(),
+            ].filter(Boolean).join('\n\n')
+            const compositePromptForViewer = liveDraftMetadata?.submittedCompositePrompt
+              || compositePromptFallback
+              || ''
 
             return (
               <article
@@ -1126,16 +1136,16 @@ function ShotGroupVideoReviewSection({
                           ) : null}
                         </div>
                         {((panel.key === 'reference'
-                          ? draftMetadata?.submittedReferencePrompt
-                          : draftMetadata?.submittedCompositePrompt)) ? (
+                          ? referencePromptForViewer
+                          : compositePromptForViewer)) ? (
                             <div className="mt-2">
                               <button
                                 type="button"
                                 onClick={() => setPromptViewer({
                                   title: panel.key === 'reference' ? '辅助参考图最终提示词' : '分镜参考表最终提示词',
                                   prompt: panel.key === 'reference'
-                                    ? (draftMetadata?.submittedReferencePrompt || '')
-                                    : (draftMetadata?.submittedCompositePrompt || ''),
+                                    ? referencePromptForViewer
+                                    : compositePromptForViewer,
                                 })}
                                 className="text-xs font-medium text-[var(--glass-tone-info-fg)] underline underline-offset-4"
                               >
