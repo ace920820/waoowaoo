@@ -6,6 +6,12 @@ import type { CapabilitySelections, ModelCapabilities } from '@/lib/model-config
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from '../components/video'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
+import type {
+  StoryboardPackageImportCommitRequest,
+  StoryboardPackageImportCommitResult,
+  StoryboardPackageImportPreviewRequest,
+  StoryboardPackageImportPreviewResult,
+} from '@/lib/query/hooks'
 
 interface UseWorkspaceStageRuntimeParams {
   assetsLoading: boolean
@@ -15,6 +21,8 @@ interface UseWorkspaceStageRuntimeParams {
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
   isPreparingMultiShotDrafts: boolean
+  isPreviewingStoryboardPackageImport: boolean
+  isCommittingStoryboardPackageImport: boolean
   videoRatio: string | undefined
   artStyle: string | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]
@@ -35,6 +43,8 @@ interface UseWorkspaceStageRuntimeParams {
   runWithRebuildConfirm: (action: 'storyToScript' | 'scriptToStoryboard' | 'switchEpisodeProductionMode', operation: () => Promise<void>) => Promise<void>
   runStoryToScriptFlow: () => Promise<void>
   runScriptToStoryboardFlow: () => Promise<void>
+  previewStoryboardPackageImport: (payload: StoryboardPackageImportPreviewRequest) => Promise<StoryboardPackageImportPreviewResult>
+  commitStoryboardPackageImport: (payload: StoryboardPackageImportCommitRequest) => Promise<StoryboardPackageImportCommitResult>
   handleUpdateClip: (clipId: string, updates: Record<string, unknown>) => Promise<void>
   openAssetLibrary: (characterId?: string | null, refreshAssets?: boolean) => void
   handleStageChange: (stage: string) => void
@@ -69,6 +79,8 @@ export function useWorkspaceStageRuntime({
   isStartingStoryToScript,
   isStartingScriptToStoryboard,
   isPreparingMultiShotDrafts,
+  isPreviewingStoryboardPackageImport,
+  isCommittingStoryboardPackageImport,
   videoRatio,
   artStyle,
   storyboardMoodPresets,
@@ -82,6 +94,8 @@ export function useWorkspaceStageRuntime({
   runWithRebuildConfirm,
   runStoryToScriptFlow,
   runScriptToStoryboardFlow,
+  previewStoryboardPackageImport,
+  commitStoryboardPackageImport,
   handleUpdateClip,
   openAssetLibrary,
   handleStageChange,
@@ -103,6 +117,8 @@ export function useWorkspaceStageRuntime({
     isStartingStoryToScript,
     isStartingScriptToStoryboard,
     isPreparingMultiShotDrafts,
+    isPreviewingStoryboardPackageImport,
+    isCommittingStoryboardPackageImport,
     videoRatio,
     artStyle,
     storyboardMoodPresets,
@@ -132,6 +148,12 @@ export function useWorkspaceStageRuntime({
     onRunScriptToStoryboard: async () => {
       await runWithRebuildConfirm('scriptToStoryboard', runScriptToStoryboardFlow)
     },
+    onPreviewStoryboardPackageImport: previewStoryboardPackageImport,
+    onCommitStoryboardPackageImport: async (payload) => {
+      const result = await commitStoryboardPackageImport(payload)
+      handleStageChange('multi-shot-storyboard')
+      return result
+    },
     onStageChange: handleStageChange,
     onGenerateVideo: handleGenerateVideo,
     onGenerateAllVideos: handleGenerateAllVideos,
@@ -151,11 +173,15 @@ export function useWorkspaceStageRuntime({
     handleUpdateVideoPrompt,
     isConfirmingAssets,
     isPreparingMultiShotDrafts,
+    isPreviewingStoryboardPackageImport,
+    isCommittingStoryboardPackageImport,
     isStartingScriptToStoryboard,
     isStartingStoryToScript,
     isSubmittingTTS,
     isTransitioning,
     openAssetLibrary,
+    previewStoryboardPackageImport,
+    commitStoryboardPackageImport,
     runScriptToStoryboardFlow,
     runStoryToScriptFlow,
     runWithRebuildConfirm,

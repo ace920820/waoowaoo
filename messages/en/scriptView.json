@@ -99,5 +99,34 @@
         "missingAssetsTipLink": "",
         "generating": "Generating...",
         "startGenerate": "Confirm and Start Drawing →"
+    },
+    "storyboardPackageImport": {
+        "actions": {
+            "upload": "Upload Storyboard",
+            "previewing": "Previewing...",
+            "cancel": "Cancel",
+            "confirm": "Confirm Import",
+            "importing": "Importing..."
+        },
+        "preview": {
+            "title": "Storyboard Import Preview",
+            "unknownFile": "Unnamed file",
+            "loading": "Parsing storyboard package...",
+            "segments": "Segments",
+            "create": "Create",
+            "update": "Overwrite",
+            "warnings": "Warnings",
+            "overwrite": "This will create {create} segments and overwrite {update} previously imported segments. Existing generated media is preserved by default.",
+            "actionCreate": "Create new segment",
+            "actionUpdate": "Overwrite imported segment",
+            "shots": "{count} shots",
+            "assetMatched": "Matched",
+            "assetFallback": "Script fallback",
+            "mediaPreserved": "Existing generated media will be preserved by default."
+        },
+        "errors": {
+            "previewFailed": "Preview failed. Please check the file and try again.",
+            "commitFailed": "Import failed. Please try again."
+        }
     }
 }

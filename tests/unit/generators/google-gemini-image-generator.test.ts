@@ -111,6 +111,23 @@ describe('GoogleGeminiImageGenerator Nano Banana 2 adaptation', () => {
     }))
   })
 
+  it('omits unsupported 0.5K imageSize for Nano Banana 2 image-conditioned requests', async () => {
+    const generator = new GoogleGeminiImageGenerator('gemini-3.1-flash-image-preview')
+
+    await generator.generate({
+      userId: 'user-1',
+      prompt: 'draw storyboard panel',
+      referenceImages: ['raw-base64-reference'],
+      options: {
+        modelKey: 'google::gemini-3.1-flash-image-preview',
+        aspectRatio: '4:3',
+        resolution: '0.5K',
+      },
+    })
+
+    expect(generateContentMock.mock.calls[0]?.[0]?.config).not.toHaveProperty('imageConfig')
+  })
+
   it('keeps aspectRatio for Nano Banana 2 text-only generation', async () => {
     const generator = new GoogleGeminiImageGenerator('gemini-3.1-flash-image-preview')
 

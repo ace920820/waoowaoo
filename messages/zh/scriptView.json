@@ -99,5 +99,34 @@
         "missingAssetsTipLink": "中补齐当前引用角色和场景的参考图",
         "generating": "正在生成画面...",
         "startGenerate": "确认并开始绘制 →"
+    },
+    "storyboardPackageImport": {
+        "actions": {
+            "upload": "上传分镜表",
+            "previewing": "正在预览...",
+            "cancel": "取消",
+            "confirm": "确认导入",
+            "importing": "正在导入..."
+        },
+        "preview": {
+            "title": "导入分镜表预览",
+            "unknownFile": "未命名文件",
+            "loading": "正在解析分镜表...",
+            "segments": "片段",
+            "create": "新建",
+            "update": "覆盖",
+            "warnings": "提醒",
+            "overwrite": "将新建 {create} 个片段，覆盖 {update} 个已导入片段；默认保留已有生成媒体。",
+            "actionCreate": "创建新片段",
+            "actionUpdate": "覆盖已导入片段",
+            "shots": "{count} 个镜头",
+            "assetMatched": "已匹配",
+            "assetFallback": "剧本回退",
+            "mediaPreserved": "已有生成媒体将默认保留。"
+        },
+        "errors": {
+            "previewFailed": "预览失败，请检查文件后重试。",
+            "commitFailed": "导入失败，请稍后重试。"
+        }
     }
 }

@@ -50,15 +50,26 @@ function isNanoBanana2Model(modelId: string, options: GoogleGeminiImageOptions):
         || options.modelKey === `google::${NANO_BANANA_2_MODEL_ID}`
 }
 
+function shouldOmitNanoBanana2ImageSize(
+    modelId: string,
+    options: GoogleGeminiImageOptions,
+    referenceImageCount: number,
+): boolean {
+    return isNanoBanana2Model(modelId, options)
+        && referenceImageCount > 0
+        && options.resolution === '0.5K'
+}
+
 function buildImageConfig(
     modelId: string,
     options: GoogleGeminiImageOptions,
     referenceImageCount: number,
 ): { aspectRatio?: string; imageSize?: string } | undefined {
     const omitAspectRatio = isNanoBanana2Model(modelId, options) && referenceImageCount > 0
+    const omitImageSize = shouldOmitNanoBanana2ImageSize(modelId, options, referenceImageCount)
     const imageConfig = {
         ...(options.aspectRatio && !omitAspectRatio ? { aspectRatio: options.aspectRatio } : {}),
-        ...(options.resolution ? { imageSize: options.resolution } : {}),
+        ...(options.resolution && !omitImageSize ? { imageSize: options.resolution } : {}),
     }
 
     return Object.keys(imageConfig).length > 0 ? imageConfig : undefined

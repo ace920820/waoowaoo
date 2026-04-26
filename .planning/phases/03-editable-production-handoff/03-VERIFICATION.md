@@ -1,7 +1,7 @@
 ---
 phase: 03-editable-production-handoff
 verified: 2026-04-19T23:30:00+08:00
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
 re_verification:
@@ -16,6 +16,8 @@ re_verification:
 human_verification:
   - test: "在真实 multi_shot 剧集里编辑多镜头片段的“视频提示词 / 台词 / 说话内容”，触发页面刷新或重新准备草稿后检查编辑内容是否仍保留"
     expected: "未保存的本地编辑不会被无关 refetch 直接覆盖；已保存的 dialogue override、资产绑定、分镜模式、氛围设置在重新准备 multi-shot drafts 后仍然存在"
+    result: passed
+    accepted_by_user: 2026-04-24
     why_human: "当前代码评审已发现状态保真风险，真实 workspace 中还需要确认 React Query 刷新、重新准备草稿、以及表单交互的最终行为"
 ---
 
@@ -23,7 +25,8 @@ human_verification:
 
 **Phase Goal:** Ensure multi-shot outputs remain usable in real production by supporting dialogue override/editing in downstream video generation and allowing manual single-shot additions where needed.
 **Verified:** 2026-04-19T23:30:00+08:00
-**Status:** human_needed
+**Status:** passed
+**User Acceptance:** passed on 2026-04-24
 
 ## Goal Achievement
 
@@ -88,14 +91,14 @@ human_verification:
 
 Phase 3 的代码级 gap 已经闭合：多镜头 production handoff 现在不仅具备双输入框编辑、manual single-shot supplement 入口、以及多镜头优先 / 单镜头补充次级展示结构，也已经补齐了之前缺失的“状态保真”保护。重新准备 multi-shot drafts 时会保留已有 editable metadata，而 benign refresh 不会再覆盖 review/video 模式下未保存的本地编辑。
 
-因此，本 phase 现在不再是 `gaps_found`，而是进入 `human_needed`：自动验证已经满足，但仍建议做一次真实 workspace 里的人工体验确认，尤其检查实际页面刷新、重新准备草稿、和手工编辑交互在真实壳层中的表现。
+因此，本 phase 现在不再是 `gaps_found` 或 `human_needed`：自动验证已经满足，且真实 workspace 中的刷新、重新准备草稿、和手工编辑交互已由用户确认暂时没有问题。
 
-### Human Verification Required
+### Human Verification Completed
 
 1. **Editable handoff survives real workspace refresh/rebuild**
    - Test: 在真实 `multi_shot` 剧集中编辑多镜头片段的 `视频提示词`、`台词 / 说话内容`、以及确认页的参考设置，分别触发页面 refetch 和重新准备 multi-shot drafts。
    - Expected: 未保存的本地编辑不会被无关刷新直接覆盖；已保存的 override / asset / mood metadata 在 draft rebuild 后仍保留。
-   - Why human: 这涉及真实 React Query 刷新时序、真实工作区重建流程和用户交互节奏，当前静态代码与单测只证明主链路存在，不能替代最终体验确认。
+   - Result: passed, accepted by user on 2026-04-24.
 
 ---
 

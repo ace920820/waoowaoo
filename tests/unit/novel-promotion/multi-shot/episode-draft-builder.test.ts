@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildEpisodeMultiShotDrafts } from '@/lib/novel-promotion/multi-shot/episode-draft-builder'
+import { mergeClipSegments } from '@/lib/workers/handlers/script-to-storyboard-multi-shot'
 import type { NovelPromotionClip } from '@/types/project'
 
 function buildClip(overrides?: Partial<NovelPromotionClip>): NovelPromotionClip {
@@ -236,4 +237,71 @@ describe('buildEpisodeMultiShotDrafts', () => {
       sceneLabel: '场景 5',
     })
   })
+  it('merges rich cinematic LLM rows while preserving legacy prompt compatibility', () => {
+    const [defaultDraft] = buildEpisodeMultiShotDrafts({
+      episodeId: 'episode-1',
+      clips: [buildClip({ id: 'clip-rich', duration: 15, shotCount: 4 })],
+    })
+
+    const merged = mergeClipSegments({
+      segmentDefaults: [defaultDraft],
+      generatedRows: [
+        {
+          segmentIndexWithinClip: 1,
+          title: '书房里的异常清单',
+          sceneLabel: '深夜书房',
+          narrativePrompt: '李默在深夜书房发现异常清单，情绪从冷静转为被窥视般紧张。',
+          referencePrompt: '单张深夜书房概念图，台灯暖光与窗外冷光冲突，人物被文件夹包围。',
+          storyboardPrompt: '四格分镜参考表，展示从空间建立到异常清单特写的压迫递进。',
+          videoPrompt: '15秒连续视频，镜头从书房全景缓慢推进到李默眼神与清单特写。',
+          embeddedDialogue: '李默: 这不是普通档案。',
+          shotRhythmGuidance: '0-3s 建立空间；3-7s 推近；7-12s 特写；12-15s 留钩子。',
+          expectedShotCount: 4,
+          emotionalIntent: {
+            dominantMood: '压抑、窥视',
+            audienceFeeling: '观众像站在门缝外偷看',
+          },
+          visualStrategy: {
+            colorAndLight: '台灯暖光与窗外冷光冲突',
+            compositionMotif: '框中框与负空间',
+          },
+          shots: [
+            {
+              index: 1,
+              durationSec: 3,
+              title: '建立书房',
+              shotSize: '全景',
+              angle: '轻微俯视',
+              cameraMovement: '缓慢推进',
+              composition: '门框形成前景遮挡',
+              lighting: '低调光',
+              blocking: '李默坐在桌前',
+              emotionalBeat: '孤立感',
+              imagePrompt: '深夜书房全景，门框遮挡，李默被文件包围，低调光。',
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(merged[0]).toMatchObject({
+      sourceStatus: 'ready',
+      title: '书房里的异常清单',
+      sceneLabel: '深夜书房',
+      referencePromptText: '单张深夜书房概念图，台灯暖光与窗外冷光冲突，人物被文件夹包围。',
+      compositePromptText: '四格分镜参考表，展示从空间建立到异常清单特写的压迫递进。',
+      groupPrompt: '四格分镜参考表，展示从空间建立到异常清单特写的压迫递进。',
+      videoPrompt: '15秒连续视频，镜头从书房全景缓慢推进到李默眼神与清单特写。',
+    })
+    expect(merged[0].cinematicPlan?.emotionalIntent).toMatchObject({ dominantMood: '压抑、窥视' })
+    expect(merged[0].shotItems).toHaveLength(1)
+    expect(merged[0].shotItems?.[0]).toMatchObject({
+      itemIndex: 0,
+      title: '建立书房',
+      prompt: '深夜书房全景，门框遮挡，李默被文件包围，低调光。',
+      shotSize: '全景',
+      cameraMovement: '缓慢推进',
+    })
+  })
+
 })

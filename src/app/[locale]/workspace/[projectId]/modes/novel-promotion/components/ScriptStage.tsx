@@ -22,6 +22,10 @@ export default function ScriptStage() {
       onClipUpdate={runtime.onClipUpdate}
       onOpenAssetLibrary={runtime.onOpenAssetLibrary}
       onGenerateStoryboard={runtime.onRunScriptToStoryboard}
+      onPreviewStoryboardPackageImport={runtime.onPreviewStoryboardPackageImport}
+      onCommitStoryboardPackageImport={runtime.onCommitStoryboardPackageImport}
+      isPreviewingStoryboardPackageImport={runtime.isPreviewingStoryboardPackageImport}
+      isCommittingStoryboardPackageImport={runtime.isCommittingStoryboardPackageImport}
       isSubmittingStoryboardBuild={
         runtime.isConfirmingAssets
         || runtime.isStartingScriptToStoryboard

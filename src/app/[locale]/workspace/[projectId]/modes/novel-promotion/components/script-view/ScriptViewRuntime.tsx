@@ -5,6 +5,11 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Character, Location, NovelPromotionEpisodeProductionMode, Prop } from '@/types/project'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
+import type {
+  StoryboardPackageImportCommitRequest,
+  StoryboardPackageImportPreviewRequest,
+  StoryboardPackageImportPreviewResult,
+} from '@/lib/query/hooks'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import {
   fuzzyMatchLocation as fuzzyMatchLocationFromModule,
@@ -60,7 +65,11 @@ interface ScriptViewProps {
   onClipUpdate?: (clipId: string, data: Partial<Clip>) => void
   onClipDelete?: (clipId: string) => void
   onGenerateStoryboard?: () => void
+  onPreviewStoryboardPackageImport?: (payload: StoryboardPackageImportPreviewRequest) => Promise<StoryboardPackageImportPreviewResult>
+  onCommitStoryboardPackageImport?: (payload: StoryboardPackageImportCommitRequest) => Promise<unknown>
   isSubmittingStoryboardBuild?: boolean
+  isPreviewingStoryboardPackageImport?: boolean
+  isCommittingStoryboardPackageImport?: boolean
   assetsLoading?: boolean
   onOpenAssetLibrary?: () => void
 }
@@ -78,7 +87,11 @@ export default function ScriptView({
   onClipUpdate,
   onClipDelete,
   onGenerateStoryboard,
+  onPreviewStoryboardPackageImport,
+  onCommitStoryboardPackageImport,
   isSubmittingStoryboardBuild = false,
+  isPreviewingStoryboardPackageImport = false,
+  isCommittingStoryboardPackageImport = false,
   assetsLoading = false,
   onOpenAssetLibrary,
 }: ScriptViewProps) {
@@ -433,7 +446,11 @@ export default function ScriptView({
         episodeProductionMode={episodeProductionMode}
         onEpisodeProductionModeChange={onEpisodeProductionModeChange}
         onGenerateStoryboard={onGenerateStoryboard}
+        onPreviewStoryboardPackageImport={onPreviewStoryboardPackageImport}
+        onCommitStoryboardPackageImport={onCommitStoryboardPackageImport}
         isSubmittingStoryboardBuild={isSubmittingStoryboardBuild}
+        isPreviewingStoryboardPackageImport={isPreviewingStoryboardPackageImport}
+        isCommittingStoryboardPackageImport={isCommittingStoryboardPackageImport}
         canGenerateStoryboardText={storyboardTextReadiness.isReady}
         getSelectedAppearances={(char) => getSelectedAppearances(char, selectedAppearanceKeys)}
         tScript={(key, values) => tScript(key, toTranslationValues(values))}

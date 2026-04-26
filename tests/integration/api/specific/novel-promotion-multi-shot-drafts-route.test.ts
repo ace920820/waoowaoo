@@ -65,6 +65,7 @@ type ShotGroupCreateData = {
     create?: Array<{
       itemIndex: number
       title: string | null
+      prompt?: string | null
     }>
   }
 }
@@ -109,6 +110,7 @@ type DraftMetadataRecord = {
   storyboardModeLabel?: string | null
   storyboardMoodPresetId?: string | null
   customMood?: string | null
+  cinematicPlan?: Record<string, unknown> | null
 }
 
 type EpisodeRecord = {
@@ -168,7 +170,7 @@ const prismaMock = vi.hoisted(() => ({
         shotGroupId: id,
         itemIndex: Number(item.itemIndex),
         title: typeof item.title === 'string' ? item.title : null,
-        prompt: null,
+        prompt: typeof item.prompt === 'string' ? item.prompt : null,
         imageUrl: null,
         sourcePanelId: null,
       }))
@@ -207,7 +209,7 @@ const prismaMock = vi.hoisted(() => ({
           shotGroupId: current.id,
           itemIndex: Number(item.itemIndex),
           title: typeof item.title === 'string' ? item.title : null,
-          prompt: null,
+          prompt: typeof item.prompt === 'string' ? item.prompt : null,
           imageUrl: null,
           sourcePanelId: null,
         }))

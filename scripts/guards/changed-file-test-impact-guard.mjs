@@ -7,7 +7,7 @@ const RULES = [
   {
     name: 'api',
     source: /^src\/app\/api\//,
-    tests: [/^tests\/integration\/api\/contract\//, /^tests\/system\//, /^tests\/regression\//],
+    tests: [/^tests\/integration\/api\/(contract|specific)\//, /^tests\/system\//, /^tests\/regression\//],
     message: 'changing src/app/api/** requires a matching contract, system, or regression test change',
   },
   {
@@ -31,7 +31,7 @@ const RULES = [
   {
     name: 'provider',
     source: /^src\/lib\/(generator-api|generators|model-gateway|lipsync|providers)\//,
-    tests: [/^tests\/unit\/(providers|model-gateway|llm)\//, /^tests\/integration\/provider\//, /^tests\/system\//, /^tests\/regression\//],
+    tests: [/^tests\/unit\/(providers|model-gateway|llm|generators)\//, /^tests\/integration\/provider\//, /^tests\/system\//, /^tests\/regression\//],
     message: 'changing provider/gateway code requires provider contract, system, or regression test change',
   },
 ]

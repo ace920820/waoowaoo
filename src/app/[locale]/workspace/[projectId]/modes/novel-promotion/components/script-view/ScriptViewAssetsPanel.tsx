@@ -14,6 +14,12 @@ import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import { SpotlightCharCard, SpotlightLocationCard, getSelectedLocationImage } from './SpotlightCards'
 import type { TaskPresentationState } from '@/lib/task/presentation'
 import { AppIcon } from '@/components/ui/icons'
+import StoryboardPackageImportDialog from './StoryboardPackageImportDialog'
+import type {
+  StoryboardPackageImportCommitRequest,
+  StoryboardPackageImportPreviewRequest,
+  StoryboardPackageImportPreviewResult,
+} from '@/lib/query/hooks'
 
 interface Clip {
   id: string
@@ -49,7 +55,11 @@ interface ScriptViewAssetsPanelProps {
   episodeProductionMode: NovelPromotionEpisodeProductionMode
   onEpisodeProductionModeChange?: (value: NovelPromotionEpisodeProductionMode) => Promise<void>
   onGenerateStoryboard?: () => void
+  onPreviewStoryboardPackageImport?: (payload: StoryboardPackageImportPreviewRequest) => Promise<StoryboardPackageImportPreviewResult>
+  onCommitStoryboardPackageImport?: (payload: StoryboardPackageImportCommitRequest) => Promise<unknown>
   isSubmittingStoryboardBuild: boolean
+  isPreviewingStoryboardPackageImport?: boolean
+  isCommittingStoryboardPackageImport?: boolean
   canGenerateStoryboardText: boolean
   getSelectedAppearances: (char: Character) => CharacterAppearance[]
   tScript: (key: string, values?: Record<string, unknown>) => string
@@ -148,7 +158,11 @@ export default function ScriptViewAssetsPanel({
   episodeProductionMode,
   onEpisodeProductionModeChange,
   onGenerateStoryboard,
+  onPreviewStoryboardPackageImport,
+  onCommitStoryboardPackageImport,
   isSubmittingStoryboardBuild,
+  isPreviewingStoryboardPackageImport = false,
+  isCommittingStoryboardPackageImport = false,
   canGenerateStoryboardText,
   getSelectedAppearances,
   tScript,
@@ -167,6 +181,12 @@ export default function ScriptViewAssetsPanel({
   const [pendingLocationLabels, setPendingLocationLabels] = useState<Record<string, string>>({})
   const [initialLocationLabels, setInitialLocationLabels] = useState<Record<string, string>>({})
   const [isSavingCharacterSelection, setIsSavingCharacterSelection] = useState(false)
+  const [storyboardPackagePreview, setStoryboardPackagePreview] = useState<StoryboardPackageImportPreviewResult | null>(null)
+  const [storyboardPackagePayload, setStoryboardPackagePayload] = useState<StoryboardPackageImportCommitRequest | null>(null)
+  const [storyboardPackageFilename, setStoryboardPackageFilename] = useState<string | null>(null)
+  const [storyboardPackagePreviewError, setStoryboardPackagePreviewError] = useState<string | null>(null)
+  const [storyboardPackageCommitError, setStoryboardPackageCommitError] = useState<string | null>(null)
+  const storyboardPackageInputRef = useRef<HTMLInputElement | null>(null)
   const [isSavingLocationSelection, setIsSavingLocationSelection] = useState(false)
   const [pendingPropIds, setPendingPropIds] = useState<Set<string>>(new Set())
   const [isSavingPropSelection, setIsSavingPropSelection] = useState(false)
@@ -436,6 +456,53 @@ export default function ScriptViewAssetsPanel({
     }
   }
 
+
+  const resetStoryboardPackageImport = () => {
+    setStoryboardPackagePreview(null)
+    setStoryboardPackagePayload(null)
+    setStoryboardPackageFilename(null)
+    setStoryboardPackagePreviewError(null)
+    setStoryboardPackageCommitError(null)
+  }
+
+  const handleStoryboardPackageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null
+    event.target.value = ''
+    if (!file || !onPreviewStoryboardPackageImport) return
+
+    setStoryboardPackageCommitError(null)
+    setStoryboardPackagePreviewError(null)
+    setStoryboardPackageFilename(file.name)
+    try {
+      const content = await file.text()
+      const payload: StoryboardPackageImportPreviewRequest = {
+        content,
+        filename: file.name,
+        contentType: file.type || null,
+        overwriteStrategy: 'replace-imported',
+        preserveGeneratedMedia: true,
+      }
+      setStoryboardPackagePayload(payload)
+      const preview = await onPreviewStoryboardPackageImport(payload)
+      setStoryboardPackagePreview(preview)
+    } catch (error) {
+      setStoryboardPackagePayload(null)
+      setStoryboardPackagePreview(null)
+      setStoryboardPackagePreviewError(error instanceof Error ? error.message : tScript('storyboardPackageImport.errors.previewFailed'))
+    }
+  }
+
+  const handleConfirmStoryboardPackageImport = async (payload: StoryboardPackageImportCommitRequest) => {
+    if (!onCommitStoryboardPackageImport) return
+    setStoryboardPackageCommitError(null)
+    try {
+      await onCommitStoryboardPackageImport(payload)
+      resetStoryboardPackageImport()
+    } catch (error) {
+      setStoryboardPackageCommitError(error instanceof Error ? error.message : tScript('storyboardPackageImport.errors.commitFailed'))
+    }
+  }
+
   return (
     <div className="col-span-12 lg:col-span-4 flex flex-col min-h-[300px] lg:h-full gap-4">
       <div className="relative z-20 flex flex-col gap-2 px-2">
@@ -510,7 +577,8 @@ export default function ScriptViewAssetsPanel({
                 {characters.map((c) => {
                   const appearances = c.appearances || []
                   const sortedAppearances = [...appearances].sort((a, b) => a.appearanceIndex - b.appearanceIndex)
-                  return (
+
+  return (
                     <div key={c.id} className="space-y-2">
                       <div className="text-xs font-semibold text-[var(--glass-text-primary)]">{c.name}</div>
                       <div className="grid grid-cols-3 gap-2">
@@ -519,7 +587,8 @@ export default function ScriptViewAssetsPanel({
                           const appearanceKey = `${c.id}::${currentAppearanceName}`
                           const isThisAppearanceSelected = pendingAppearanceKeys.has(appearanceKey)
                           const previewUrl = getAppearancePreviewUrl(appearance)
-                          return (
+
+  return (
                             <div key={`${c.id}-${appearance.appearanceIndex}`} className="space-y-1">
                               <button
                                 onClick={() => {
@@ -608,7 +677,8 @@ export default function ScriptViewAssetsPanel({
                   .flatMap((char) => {
                     const selectedApps = getSelectedAppearances(char)
                     if (selectedApps.length === 0) {
-                      return (
+
+  return (
                         <div key={`${char.id}-missing`} className="min-w-0">
                           <SpotlightCharCard
                             char={char}
@@ -667,7 +737,8 @@ export default function ScriptViewAssetsPanel({
                   {locations.map((location) => {
                     const isSelected = pendingLocationIds.has(location.id)
                     const previewImage = getSelectedLocationImage(location)?.imageUrl || null
-                    return (
+
+  return (
                       <div key={location.id} className="space-y-1">
                         <button
                           onClick={() => {
@@ -791,7 +862,8 @@ export default function ScriptViewAssetsPanel({
                   {props.map((prop) => {
                     const isSelected = pendingPropIds.has(prop.id)
                     const previewImage = getSelectedLocationImage(prop as unknown as Location)?.imageUrl || null
-                    return (
+
+  return (
                       <button
                         key={prop.id}
                         onClick={() => {
@@ -899,7 +971,8 @@ export default function ScriptViewAssetsPanel({
             {(['multi_shot', 'traditional'] as const).map((mode) => {
               const selected = episodeProductionMode === mode
               const modeKey = mode === 'traditional' ? 'traditional' : 'multiShot'
-              return (
+
+  return (
                 <button
                   key={mode}
                   type="button"
@@ -934,17 +1007,52 @@ export default function ScriptViewAssetsPanel({
             ) : null}
           </div>
         </div>
-        <button
-          onClick={onGenerateStoryboard}
-          disabled={isSubmittingStoryboardBuild || !canGenerateStoryboardText}
-          className="glass-btn-base glass-btn-primary w-full py-4 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          {isSubmittingStoryboardBuild ? tScript('generate.generating') : tScript('generate.startGenerate')}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={onGenerateStoryboard}
+            disabled={isSubmittingStoryboardBuild || !canGenerateStoryboardText}
+            className="glass-btn-base glass-btn-primary flex-1 py-4 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {isSubmittingStoryboardBuild ? tScript('generate.generating') : tScript('generate.startGenerate')}
+          </button>
+          {episodeProductionMode === 'multi_shot' ? (
+            <>
+              <input
+                ref={storyboardPackageInputRef}
+                type="file"
+                accept=".md,.json,application/json,text/markdown,text/plain"
+                className="hidden"
+                onChange={(event) => void handleStoryboardPackageFileChange(event)}
+              />
+              <button
+                type="button"
+                disabled={isPreviewingStoryboardPackageImport || isCommittingStoryboardPackageImport || !onPreviewStoryboardPackageImport}
+                className="glass-btn-base glass-btn-secondary px-5 py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => storyboardPackageInputRef.current?.click()}
+              >
+                {isPreviewingStoryboardPackageImport
+                  ? tScript('storyboardPackageImport.actions.previewing')
+                  : tScript('storyboardPackageImport.actions.upload')}
+              </button>
+            </>
+          ) : null}
+        </div>
         <p className="mt-3 text-center text-xs leading-5 text-[var(--glass-text-tertiary)]">
           {tScript(`productionMode.cta.${activeModeKey}`)}
         </p>
       </div>
+      <StoryboardPackageImportDialog
+        preview={storyboardPackagePreview}
+        filename={storyboardPackageFilename}
+        isPreviewing={isPreviewingStoryboardPackageImport}
+        isCommitting={isCommittingStoryboardPackageImport}
+        previewError={storyboardPackagePreviewError}
+        commitError={storyboardPackageCommitError}
+        onCancel={resetStoryboardPackageImport}
+        onConfirm={(payload) => void handleConfirmStoryboardPackageImport(payload)}
+        commitPayload={storyboardPackagePayload}
+        tScript={tScript}
+      />
     </div>
   )
 }

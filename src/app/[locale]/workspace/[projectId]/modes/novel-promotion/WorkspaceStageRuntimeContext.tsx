@@ -6,6 +6,12 @@ import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
 import type { BatchVideoGenerationParams, VideoGenerationOptions } from './components/video'
 import type { StoryboardMoodPreset } from '@/lib/storyboard-mood-presets'
 import type { NovelPromotionEpisodeProductionMode } from '@/types/project'
+import type {
+  StoryboardPackageImportCommitRequest,
+  StoryboardPackageImportCommitResult,
+  StoryboardPackageImportPreviewRequest,
+  StoryboardPackageImportPreviewResult,
+} from '@/lib/query/hooks'
 
 export interface WorkspaceStageVideoModelOption {
   value: string
@@ -24,6 +30,8 @@ export interface WorkspaceStageRuntimeValue {
   isStartingStoryToScript: boolean
   isStartingScriptToStoryboard: boolean
   isPreparingMultiShotDrafts: boolean
+  isPreviewingStoryboardPackageImport: boolean
+  isCommittingStoryboardPackageImport: boolean
   videoRatio: string | null | undefined
   artStyle: string | null | undefined
   storyboardMoodPresets: StoryboardMoodPreset[]
@@ -41,6 +49,8 @@ export interface WorkspaceStageRuntimeValue {
   onClipUpdate: (clipId: string, data: unknown) => Promise<void>
   onOpenAssetLibrary: () => void
   onRunScriptToStoryboard: () => Promise<void>
+  onPreviewStoryboardPackageImport: (payload: StoryboardPackageImportPreviewRequest) => Promise<StoryboardPackageImportPreviewResult>
+  onCommitStoryboardPackageImport: (payload: StoryboardPackageImportCommitRequest) => Promise<StoryboardPackageImportCommitResult>
   onStageChange: (stage: string) => void
   onGenerateVideo: (
     storyboardId: string,

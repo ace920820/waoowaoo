@@ -5,7 +5,12 @@ import { logError as _ulogError, logInfo as _ulogInfo } from '@/lib/logging/core
 import { createArtifact } from '@/lib/run-runtime/service'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { reportTaskProgress } from '@/lib/workers/shared'
-import { buildEpisodeMultiShotDrafts, type EpisodeMultiShotDraft } from '@/lib/novel-promotion/multi-shot/episode-draft-builder'
+import {
+  buildEpisodeMultiShotDrafts,
+  type EpisodeMultiShotCinematicPlan,
+  type EpisodeMultiShotDraft,
+  type EpisodeMultiShotDraftItem,
+} from '@/lib/novel-promotion/multi-shot/episode-draft-builder'
 import { persistEpisodeMultiShotDrafts } from '@/lib/novel-promotion/multi-shot/persist-drafts'
 import type { TaskJobData } from '@/lib/task/types'
 
@@ -96,11 +101,71 @@ function readString(value: Record<string, unknown>, key: string): string | null 
   return typeof field === 'string' && field.trim() ? field.trim() : null
 }
 
+function readStringAlias(value: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const result = readString(value, key)
+    if (result) return result
+  }
+  return null
+}
+
+function readRecordAlias(value: Record<string, unknown>, ...keys: string[]): Record<string, unknown> | null {
+  for (const key of keys) {
+    const field = value[key]
+    if (field && typeof field === 'object' && !Array.isArray(field)) {
+      return field as Record<string, unknown>
+    }
+  }
+  return null
+}
+
+function readArrayAlias(value: Record<string, unknown>, ...keys: string[]): unknown[] {
+  for (const key of keys) {
+    const field = value[key]
+    if (Array.isArray(field)) return field
+  }
+  return []
+}
+
 function readNumber(value: Record<string, unknown>, key: string): number | null {
   const field = value[key]
   return typeof field === 'number' && Number.isFinite(field)
     ? Math.floor(field)
     : null
+}
+
+function readShotDuration(value: Record<string, unknown>) {
+  const duration = readNumber(value, 'durationSec') ?? readNumber(value, 'duration_sec')
+  return duration && duration > 0 ? duration : null
+}
+
+function normalizeGeneratedShots(row: Record<string, unknown>, expectedShotCount: number): EpisodeMultiShotDraftItem[] {
+  return readArrayAlias(row, 'shots', 'shotBeats', 'shot_beats')
+    .map((raw, index): EpisodeMultiShotDraftItem | null => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+      const record = raw as Record<string, unknown>
+      const rawIndex = readNumber(record, 'index') ?? readNumber(record, 'itemIndex') ?? readNumber(record, 'item_index')
+      const itemIndex = Math.max(0, Math.min(expectedShotCount - 1, (rawIndex || index + 1) - 1))
+      const title = readStringAlias(record, 'title', 'name') || `镜头 ${itemIndex + 1}`
+      const prompt = readStringAlias(record, 'imagePrompt', 'image_prompt', 'prompt', 'description')
+      if (!prompt) return null
+
+      return {
+        itemIndex,
+        title,
+        prompt,
+        durationSec: readShotDuration(record),
+        shotSize: readStringAlias(record, 'shotSize', 'shot_size'),
+        angle: readStringAlias(record, 'angle'),
+        cameraMovement: readStringAlias(record, 'cameraMovement', 'camera_movement'),
+        composition: readStringAlias(record, 'composition'),
+        lighting: readStringAlias(record, 'lighting'),
+        blocking: readStringAlias(record, 'blocking'),
+        emotionalBeat: readStringAlias(record, 'emotionalBeat', 'emotional_beat'),
+      }
+    })
+    .filter((item): item is EpisodeMultiShotDraftItem => Boolean(item))
+    .sort((left, right) => left.itemIndex - right.itemIndex)
 }
 
 function markDraftGenerationFailed(draft: EpisodeMultiShotDraft): EpisodeMultiShotDraft {
@@ -167,7 +232,7 @@ function buildClipGenerationPrompt(params: {
   })
 }
 
-function mergeClipSegments(params: {
+export function mergeClipSegments(params: {
   segmentDefaults: EpisodeMultiShotDraft[]
   generatedRows: Array<Record<string, unknown>>
 }) {
@@ -186,10 +251,10 @@ function mergeClipSegments(params: {
     }
 
     const title = readString(row, 'title') || draft.title
-    const sceneLabel = readString(row, 'sceneLabel') || readString(row, 'scene_label') || draft.sceneLabel
-    const narrativePrompt = readString(row, 'narrativePrompt') || readString(row, 'narrative_prompt')
-    const embeddedDialogue = readString(row, 'embeddedDialogue') || readString(row, 'embedded_dialogue')
-    const shotRhythmGuidance = readString(row, 'shotRhythmGuidance') || readString(row, 'shot_rhythm_guidance')
+    const sceneLabel = readStringAlias(row, 'sceneLabel', 'scene_label') || draft.sceneLabel
+    const narrativePrompt = readStringAlias(row, 'narrativePrompt', 'narrative_prompt')
+    const embeddedDialogue = readStringAlias(row, 'embeddedDialogue', 'embedded_dialogue')
+    const shotRhythmGuidance = readStringAlias(row, 'shotRhythmGuidance', 'shot_rhythm_guidance')
 
     if (!narrativePrompt || !shotRhythmGuidance) {
       return markDraftGenerationFailed(draft)
@@ -199,6 +264,19 @@ function mergeClipSegments(params: {
       row.expectedShotCount ?? row.expected_shot_count,
       draft.expectedShotCount,
     )
+    const referencePromptText = readStringAlias(row, 'referencePrompt', 'reference_prompt')
+    const compositePromptText = readStringAlias(row, 'storyboardPrompt', 'storyboard_prompt', 'compositePrompt', 'composite_prompt')
+    const videoPrompt = readStringAlias(row, 'videoPrompt', 'video_prompt') || narrativePrompt
+    const shotItems = normalizeGeneratedShots(row, expectedShotCount)
+    const emotionalIntent = readRecordAlias(row, 'emotionalIntent', 'emotional_intent')
+    const visualStrategy = readRecordAlias(row, 'visualStrategy', 'visual_strategy')
+    const cinematicPlan: EpisodeMultiShotCinematicPlan | null = emotionalIntent || visualStrategy || shotItems.length > 0
+      ? {
+        emotionalIntent,
+        visualStrategy,
+        shots: shotItems,
+      }
+      : null
 
     return {
       ...draft,
@@ -209,8 +287,12 @@ function mergeClipSegments(params: {
       narrativePrompt,
       embeddedDialogue,
       shotRhythmGuidance,
-      groupPrompt: narrativePrompt,
-      videoPrompt: narrativePrompt,
+      referencePromptText: referencePromptText || null,
+      compositePromptText: compositePromptText || null,
+      cinematicPlan,
+      shotItems,
+      groupPrompt: compositePromptText || narrativePrompt,
+      videoPrompt,
       includeDialogue: Boolean(embeddedDialogue),
       sourceStatus: 'ready' as const,
       placeholderReason: null,

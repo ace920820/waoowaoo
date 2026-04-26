@@ -21,7 +21,11 @@ import { buildWorkspaceControllerViewModel } from './workspace-controller-view-m
 import type { NovelPromotionWorkspaceProps } from '../types'
 import { useRouter } from '@/i18n/navigation'
 import { resolveEpisodeStageArtifacts, resolveStageArtifactsEpisodeData } from '@/lib/novel-promotion/stage-readiness'
-import { useEnsureEpisodeMultiShotDrafts } from '@/lib/query/hooks'
+import {
+  useCommitStoryboardPackageImport,
+  useEnsureEpisodeMultiShotDrafts,
+  usePreviewStoryboardPackageImport,
+} from '@/lib/query/hooks'
 import { useWorkspaceEpisodeStageData } from './useWorkspaceEpisodeStageData'
 
 export function useNovelPromotionWorkspaceController({
@@ -122,6 +126,8 @@ export function useNovelPromotionWorkspaceController({
     t,
   })
   const ensureEpisodeMultiShotDraftsMutation = useEnsureEpisodeMultiShotDrafts(projectId, episodeId || '')
+  const previewStoryboardPackageImportMutation = usePreviewStoryboardPackageImport(projectId, episodeId || '')
+  const commitStoryboardPackageImportMutation = useCommitStoryboardPackageImport(projectId, episodeId || '')
 
   const isStartingStoryToScript = rebuildState.pendingActionType === 'storyToScript'
   const isStartingScriptToStoryboard = rebuildState.pendingActionType === 'scriptToStoryboard'
@@ -172,6 +178,8 @@ export function useNovelPromotionWorkspaceController({
     isStartingStoryToScript,
     isStartingScriptToStoryboard,
     isPreparingMultiShotDrafts: ensureEpisodeMultiShotDraftsMutation.isPending,
+    isPreviewingStoryboardPackageImport: previewStoryboardPackageImportMutation.isPending,
+    isCommittingStoryboardPackageImport: commitStoryboardPackageImportMutation.isPending,
     videoRatio: projectSnapshot.videoRatio,
     artStyle: projectSnapshot.artStyle,
     storyboardMoodPresets: projectSnapshot.storyboardMoodPresets,
@@ -185,6 +193,12 @@ export function useNovelPromotionWorkspaceController({
     runWithRebuildConfirm: rebuildState.runWithRebuildConfirm,
     runStoryToScriptFlow: execution.runStoryToScriptFlow,
     runScriptToStoryboardFlow: execution.runScriptToStoryboardFlow,
+    previewStoryboardPackageImport: previewStoryboardPackageImportMutation.mutateAsync,
+    commitStoryboardPackageImport: async (payload) => {
+      const result = await commitStoryboardPackageImportMutation.mutateAsync(payload)
+      await onRefresh()
+      return result
+    },
     handleUpdateClip: videoActions.handleUpdateClip,
     openAssetLibrary: assetLibrary.openAssetLibrary,
     handleStageChange: configActions.handleStageChange,

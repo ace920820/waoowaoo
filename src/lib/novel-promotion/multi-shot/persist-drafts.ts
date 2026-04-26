@@ -4,11 +4,15 @@ import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import { parseShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
 
-function buildDefaultItems(templateKey: string) {
-  const template = getShotGroupTemplateSpec(templateKey)
+function buildDefaultItems(draft: Pick<EpisodeMultiShotDraft, 'templateKey' | 'shotItems'>) {
+  const generatedItems = draft.shotItems || []
+  const template = getShotGroupTemplateSpec(draft.templateKey)
   return Array.from({ length: template.slotCount }, (_, index) => ({
     itemIndex: index,
-    title: template.slotTitles[index] || `镜头 ${index + 1}`,
+    title: generatedItems.find((item) => item.itemIndex === index)?.title
+      || template.slotTitles[index]
+      || `镜头 ${index + 1}`,
+    prompt: generatedItems.find((item) => item.itemIndex === index)?.prompt || undefined,
   }))
 }
 
@@ -133,6 +137,9 @@ export async function persistEpisodeMultiShotDrafts(params: {
         },
         scriptDerivedCharacterAssets: previousDraftMetadata?.scriptDerivedCharacterAssets ?? [],
         scriptDerivedPropAssets: previousDraftMetadata?.scriptDerivedPropAssets ?? [],
+        referencePromptText: draft.referencePromptText ?? previousDraftMetadata?.referencePromptText ?? null,
+        compositePromptText: draft.compositePromptText ?? previousDraftMetadata?.compositePromptText ?? null,
+        cinematicPlan: (draft.cinematicPlan as Record<string, unknown> | null | undefined) ?? previousDraftMetadata?.cinematicPlan ?? null,
         storyboardMoodPresetId: previousDraftMetadata?.storyboardMoodPresetId ?? null,
         customMood: previousDraftMetadata?.customMood ?? null,
       },
@@ -172,7 +179,7 @@ export async function persistEpisodeMultiShotDrafts(params: {
           videoReferencesJson,
           items: {
             deleteMany: {},
-            create: buildDefaultItems(draft.templateKey),
+            create: buildDefaultItems(draft),
           },
         },
         include: {
@@ -199,7 +206,7 @@ export async function persistEpisodeMultiShotDrafts(params: {
         smartMultiFrameEnabled: true,
         videoReferencesJson,
         items: {
-          create: buildDefaultItems(draft.templateKey),
+          create: buildDefaultItems(draft),
         },
       },
       include: {

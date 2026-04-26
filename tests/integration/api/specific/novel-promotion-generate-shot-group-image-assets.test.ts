@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMockRequest } from '../../../helpers/request'
-import { buildShotGroupCompositePrompt } from '@/lib/shot-group/prompt'
+import { buildShotGroupCompositePrompt, buildShotGroupReferencePrompt } from '@/lib/shot-group/prompt'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 
 type ShotGroupRecord = {
@@ -137,8 +137,33 @@ function buildShotGroup(): ShotGroupRecord {
           code: 'missing_asset_binding',
           message: '物品素材缺失，当前片段将继续使用剧本文本回退生成',
         }],
+        referencePromptText: '单张关键概念图：林夏站在废弃站台边缘，被冷白霓虹切开轮廓。',
+        compositePromptText: '四到九个镜头展示林夏被逼入雨夜站台，空间压迫逐步增强。',
         storyboardMoodPresetId: 'mood-rain',
         customMood: '潮湿、压迫、冷白霓虹',
+        cinematicPlan: {
+          emotionalIntent: '让观众感到被窥视、紧张且人物很脆弱',
+          visualStrategy: {
+            shotSize: '从远景压到眼神特写',
+            angle: '高角度俯拍削弱人物力量',
+            cameraMovement: '缓慢前推并轻微摇晃',
+            lighting: '冷白霓虹与雨水反光形成高反差',
+            blocking: '人物被站台柱子切割在画面边缘',
+          },
+          shots: [{
+            title: '窥视建立',
+            duration: '2s',
+            shotSize: '远景',
+            angle: '高角度',
+            cameraMovement: '缓慢前推',
+            composition: '柱子遮挡形成窥视感',
+            lighting: '冷白霓虹侧逆光',
+            blocking: '林夏站在画面边缘',
+            action: '她回头确认身后动静',
+            dialogue: '别再往前了。',
+            prompt: '远景高角度，废弃站台柱后窥视林夏，冷白霓虹雨夜。',
+          }],
+        },
       },
     }),
     items: new Array(9).fill(null).map((_, index) => ({
@@ -146,7 +171,7 @@ function buildShotGroup(): ShotGroupRecord {
       shotGroupId: 'shot-group-1',
       itemIndex: index,
       title: `镜头 ${index + 1}`,
-      prompt: null,
+      prompt: index === 0 ? '远景高角度，废弃站台柱后窥视林夏，冷白霓虹雨夜。' : null,
       imageUrl: null,
       sourcePanelId: null,
     })),
@@ -231,5 +256,41 @@ describe('api specific - novel promotion generate shot group image assets', () =
     expect(prompt).toContain('物品约束：未保存显式物品资产，回退到剧本道具描述。')
     expect(prompt).toContain('氛围约束：预设=mood-rain；自定义=潮湿、压迫、冷白霓虹。')
     expect(prompt).toContain('弱约束提示：prop 仍不完整')
+    expect(prompt).toContain('剧情内容：四到九个镜头展示林夏被逼入雨夜站台，空间压迫逐步增强。')
+    expect(prompt).toContain('电影情绪意图：让观众感到被窥视、紧张且人物很脆弱。')
+    expect(prompt).toContain('视觉策略：shotSize: 从远景压到眼神特写')
+    expect(prompt).toContain('请把每个有序槽位当作镜头级指令执行')
+    expect(prompt).toContain('镜头语言纪律：参考项目《data/镜头语言.md》的方法论')
+    expect(prompt).toContain('保持空间地理、视线连续和 180° 规则')
+    expect(prompt).toContain('远景高角度，废弃站台柱后窥视林夏，冷白霓虹雨夜。')
+    expect(prompt).toContain('电影化镜头计划')
+  })
+
+  it('keeps the reference prompt as one key visual while using cinematic intent', () => {
+    const prompt = buildShotGroupReferencePrompt({
+      group: {
+        ...buildShotGroup(),
+        episodeId: 'episode-1',
+        templateKey: 'grid-9',
+        dialogueLanguage: 'zh',
+        generateAudio: false,
+        bgmEnabled: false,
+        includeDialogue: true,
+        omniReferenceEnabled: false,
+        smartMultiFrameEnabled: true,
+        createdAt: '2026-04-19T00:00:00.000Z',
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      },
+      artStyle: '电影感冷调概念图',
+      locale: 'zh',
+      canvasAspectRatio: '16:9',
+    })
+
+    expect(prompt).toContain('单张关键概念图：林夏站在废弃站台边缘，被冷白霓虹切开轮廓。')
+    expect(prompt).toContain('电影情绪意图：让观众感到被窥视、紧张且人物很脆弱。')
+    expect(prompt).toContain('视觉策略：shotSize: 从远景压到眼神特写')
+    expect(prompt).toContain('不要输出九宫格、拼贴、多格构图')
+    expect(prompt).toContain('镜头语言纪律：参考项目《data/镜头语言.md》的方法论')
+    expect(prompt).toContain('输出一张完成的、写实电影感的辅助参考图')
   })
 })

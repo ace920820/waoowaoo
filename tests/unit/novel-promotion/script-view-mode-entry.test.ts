@@ -42,6 +42,15 @@ function renderPanel(mode: 'multi_shot' | 'traditional') {
           'screenplay.noCharacter': '暂无角色信息',
           'screenplay.noLocation': '暂无出场场景',
           'generate.startGenerate': '确认并开始绘制 →',
+          'storyboardPackageImport.actions.upload': '上传分镜表',
+          'storyboardPackageImport.actions.previewing': '正在预览...',
+          'storyboardPackageImport.actions.cancel': '取消',
+          'storyboardPackageImport.actions.confirm': '确认导入',
+          'storyboardPackageImport.actions.importing': '正在导入...',
+          'storyboardPackageImport.preview.title': '导入分镜表预览',
+          'storyboardPackageImport.preview.unknownFile': '未命名文件',
+          'storyboardPackageImport.preview.loading': '正在解析分镜表...',
+          'storyboardPackageImport.errors.commitFailed': '导入失败，请稍后重试。',
           'productionMode.title': '生产模式',
           'productionMode.subtitle': '请在开始绘制前，确认本集要走的生产路径',
           'productionMode.badge.multiShot': '默认更快路径',
@@ -75,6 +84,7 @@ describe('script view mode entry', () => {
     expect(html).toContain('多镜头片段模式')
     expect(html).toContain('传统模式')
     expect(html).toContain('确认并开始绘制 →')
+    expect(html).toContain('上传分镜表')
     expect(html).toContain('自动创建多镜头草稿')
     expect(html).toContain('打开多镜头确认')
     expect(html).toContain('片段结构')
@@ -93,5 +103,6 @@ describe('script view mode entry', () => {
     expect(html).toContain('当前将进入传统分镜生成')
     expect(html).toContain('继续执行剧本到分镜的传统生成链路')
     expect(html).toContain('确认并开始绘制 →')
+    expect(html).not.toContain('上传分镜表')
   })
 })

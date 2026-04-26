@@ -119,6 +119,8 @@ function createStageRuntimeParams(overrides: Record<string, unknown> = {}) {
     isStartingStoryToScript: false,
     isStartingScriptToStoryboard: false,
     isPreparingMultiShotDrafts: false,
+    isPreviewingStoryboardPackageImport: false,
+    isCommittingStoryboardPackageImport: false,
     videoRatio: '9:16',
     artStyle: 'cinematic',
     storyboardMoodPresets: [],
@@ -225,6 +227,23 @@ describe('multi-shot stage routing', () => {
 
     expect(runWithRebuildConfirm).toHaveBeenCalledWith('scriptToStoryboard', runScriptToStoryboardFlow)
     expect(handleStageChange).not.toHaveBeenCalled()
+  })
+
+  it('routes successful storyboard package import to multi-shot confirmation without generation flow', async () => {
+    const handleStageChange = vi.fn()
+    const runScriptToStoryboardFlow = vi.fn().mockResolvedValue(undefined)
+    const commitStoryboardPackageImport = vi.fn().mockResolvedValue({ ok: true })
+    const runtime = captureStageRuntimeValue(createStageRuntimeParams({
+      handleStageChange,
+      runScriptToStoryboardFlow,
+      commitStoryboardPackageImport,
+    }))
+
+    await runtime.onCommitStoryboardPackageImport({ content: '{}', filename: 'package.json' })
+
+    expect(commitStoryboardPackageImport).toHaveBeenCalledWith({ content: '{}', filename: 'package.json' })
+    expect(runScriptToStoryboardFlow).not.toHaveBeenCalled()
+    expect(handleStageChange).toHaveBeenCalledWith('multi-shot-storyboard')
   })
 
   it('normalizes storyboard stage ids by episode production mode', () => {

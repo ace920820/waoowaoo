@@ -25,9 +25,33 @@ export interface EpisodeMultiShotDraft {
   narrativePrompt: string | null
   embeddedDialogue: string | null
   shotRhythmGuidance: string | null
+  referencePromptText?: string | null
+  compositePromptText?: string | null
+  cinematicPlan?: EpisodeMultiShotCinematicPlan | null
+  shotItems?: EpisodeMultiShotDraftItem[]
   groupPrompt: string | null
   videoPrompt: string | null
   includeDialogue: boolean
+}
+
+export interface EpisodeMultiShotDraftItem {
+  itemIndex: number
+  title: string | null
+  prompt: string | null
+  durationSec?: number | null
+  shotSize?: string | null
+  angle?: string | null
+  cameraMovement?: string | null
+  composition?: string | null
+  lighting?: string | null
+  blocking?: string | null
+  emotionalBeat?: string | null
+}
+
+export interface EpisodeMultiShotCinematicPlan {
+  emotionalIntent?: Record<string, unknown> | null
+  visualStrategy?: Record<string, unknown> | null
+  shots?: EpisodeMultiShotDraftItem[]
 }
 
 type BuildEpisodeMultiShotDraftsParams = {

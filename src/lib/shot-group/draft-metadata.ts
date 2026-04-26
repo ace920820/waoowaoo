@@ -36,6 +36,10 @@ export interface ShotGroupDraftMetadata {
   submittedCompositePrompt?: string | null
   storyboardMoodPresetId?: string | null
   customMood?: string | null
+  cinematicPlan?: Record<string, unknown> | null
+  importedStoryboardPackageId?: string | null
+  importedStoryboardSceneId?: string | null
+  importedStoryboardSegmentId?: string | null
 }
 
 export type ShotGroupAssetBindingType = 'location' | 'character' | 'prop'
@@ -339,10 +343,14 @@ export function normalizeShotGroupDraftMetadata(
     submittedCompositePrompt: readString(metadata.submittedCompositePrompt) ?? previous?.submittedCompositePrompt ?? null,
     storyboardMoodPresetId: readString(metadata.storyboardMoodPresetId) ?? previous?.storyboardMoodPresetId ?? null,
     customMood: readString(metadata.customMood) ?? previous?.customMood ?? null,
+    cinematicPlan: asObject(metadata.cinematicPlan) ?? previous?.cinematicPlan ?? null,
     dialogueOverrideText: readOptionalStringWithPrevious(
       metadata.dialogueOverrideText,
       previous?.dialogueOverrideText,
     ),
+    importedStoryboardPackageId: readString(metadata.importedStoryboardPackageId) ?? previous?.importedStoryboardPackageId ?? null,
+    importedStoryboardSceneId: readString(metadata.importedStoryboardSceneId) ?? previous?.importedStoryboardSceneId ?? null,
+    importedStoryboardSegmentId: readString(metadata.importedStoryboardSegmentId) ?? previous?.importedStoryboardSegmentId ?? null,
   }
 }
 
@@ -415,6 +423,10 @@ export function parseShotGroupDraftMetadata(value: string | null | undefined): S
       submittedCompositePrompt: readString(metadata.submittedCompositePrompt),
       storyboardMoodPresetId: readString(metadata.storyboardMoodPresetId),
       customMood: readString(metadata.customMood),
+      cinematicPlan: asObject(metadata.cinematicPlan),
+      importedStoryboardPackageId: readString(metadata.importedStoryboardPackageId),
+      importedStoryboardSceneId: readString(metadata.importedStoryboardSceneId),
+      importedStoryboardSegmentId: readString(metadata.importedStoryboardSegmentId),
     })
   } catch {
     return null

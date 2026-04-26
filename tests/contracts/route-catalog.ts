@@ -94,12 +94,15 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/download-voices/route.ts',
   'src/app/api/novel-promotion/[projectId]/editor/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts',
+  'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/storyboard-package-import/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/batch/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/split-by-markers/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/split/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-character-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/generate-shot-group-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/generate-shot-group-video/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-video/route.ts',
   'src/app/api/novel-promotion/[projectId]/insert-panel/route.ts',
   'src/app/api/novel-promotion/[projectId]/lip-sync/route.ts',
@@ -107,6 +110,8 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/location/route.ts',
   'src/app/api/novel-promotion/[projectId]/modify-asset-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/modify-storyboard-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/multi-shot-drafts/route.ts',
+  'src/app/api/novel-promotion/[projectId]/panel-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/panel-link/route.ts',
   'src/app/api/novel-promotion/[projectId]/panel-variant/route.ts',
   'src/app/api/novel-promotion/[projectId]/panel/route.ts',
@@ -122,6 +127,8 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/script-to-storyboard-stream/route.ts',
   'src/app/api/novel-promotion/[projectId]/select-character-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/select-location-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/shot-group-video-runs/route.ts',
+  'src/app/api/novel-promotion/[projectId]/shot-groups/route.ts',
   'src/app/api/novel-promotion/[projectId]/speaker-voice/route.ts',
   'src/app/api/novel-promotion/[projectId]/story-to-script-stream/route.ts',
   'src/app/api/novel-promotion/[projectId]/storyboard-group/route.ts',
@@ -133,6 +140,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/update-prompt/route.ts',
   'src/app/api/novel-promotion/[projectId]/upload-asset-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/video-proxy/route.ts',
+  'src/app/api/novel-promotion/[projectId]/video-tail-frame/route.ts',
   'src/app/api/novel-promotion/[projectId]/video-urls/route.ts',
   'src/app/api/novel-promotion/[projectId]/voice-analyze/route.ts',
   'src/app/api/novel-promotion/[projectId]/voice-design/route.ts',
@@ -206,6 +214,8 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
   if (
     routeFile.endsWith('/generate-image/route.ts')
     || routeFile.endsWith('/generate-video/route.ts')
+    || routeFile.endsWith('/generate-shot-group-image/route.ts')
+    || routeFile.endsWith('/generate-shot-group-video/route.ts')
     || routeFile.endsWith('/generate/route.ts')
     || routeFile.endsWith('/modify-image/route.ts')
     || routeFile.endsWith('/modify-render/route.ts')
@@ -214,11 +224,13 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     || routeFile.endsWith('/lip-sync/route.ts')
     || routeFile.endsWith('/modify-asset-image/route.ts')
     || routeFile.endsWith('/modify-storyboard-image/route.ts')
+    || routeFile.endsWith('/panel-image/route.ts')
     || routeFile.endsWith('/panel-variant/route.ts')
     || routeFile.endsWith('/regenerate-group/route.ts')
     || routeFile.endsWith('/regenerate-panel-image/route.ts')
     || routeFile.endsWith('/regenerate-single-image/route.ts')
     || routeFile.endsWith('/regenerate-storyboard-text/route.ts')
+    || routeFile.endsWith('/video-tail-frame/route.ts')
     || routeFile.endsWith('/voice-generate/route.ts')
   ) {
     return 'direct-submit-routes'

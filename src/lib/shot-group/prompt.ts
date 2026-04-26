@@ -4,6 +4,130 @@ import { normalizeShotGroupVideoMode } from './video-config'
 import { parseShotGroupDraftMetadata } from './draft-metadata'
 import { CLASSIC_NINE_GRID_PROMPT } from './storyboard-mode-config'
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function readPlanString(plan: Record<string, unknown> | null | undefined, aliases: string[]) {
+  if (!plan) return null
+  for (const alias of aliases) {
+    const value = readString(plan[alias])
+    if (value) return value
+  }
+  return null
+}
+
+function stringifyPlanValue(value: unknown): string | null {
+  const text = readString(value)
+  if (text) return text
+
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((item) => stringifyPlanValue(item))
+      .filter((item): item is string => Boolean(item))
+    return entries.length > 0 ? entries.join('；') : null
+  }
+
+  const record = asRecord(value)
+  if (!record) return null
+
+  const entries = Object.entries(record).flatMap(([key, entry]) => {
+    const formatted = stringifyPlanValue(entry)
+    return formatted ? [`${key}: ${formatted}`] : []
+  })
+  return entries.length > 0 ? entries.join('；') : null
+}
+
+function readPlanValue(plan: Record<string, unknown> | null | undefined, aliases: string[]) {
+  if (!plan) return null
+  for (const alias of aliases) {
+    const value = stringifyPlanValue(plan[alias])
+    if (value) return value
+  }
+  return null
+}
+
+function formatCinematicPlanDirective(
+  plan: Record<string, unknown> | null | undefined,
+  locale: string,
+) {
+  const emotionalIntent = readPlanString(plan, ['emotionalIntent', 'emotional_intent'])
+  const visualStrategy = readPlanValue(plan, ['visualStrategy', 'visual_strategy'])
+
+  if (!emotionalIntent && !visualStrategy) return null
+
+  if (locale === 'en') {
+    return [
+      emotionalIntent ? `Cinematic intent: ${emotionalIntent}.` : null,
+      visualStrategy ? `Visual strategy: ${visualStrategy}.` : null,
+    ].filter(Boolean).join('\n')
+  }
+
+  return [
+    emotionalIntent ? `电影情绪意图：${emotionalIntent}。` : null,
+    visualStrategy ? `视觉策略：${visualStrategy}。` : null,
+  ].filter(Boolean).join('\n')
+}
+
+function formatCinematicShotBeats(
+  plan: Record<string, unknown> | null | undefined,
+  locale: string,
+) {
+  const shots = Array.isArray(plan?.shots) ? plan.shots : Array.isArray(plan?.shotBeats) ? plan.shotBeats : null
+  if (!shots || shots.length === 0) return null
+
+  const lines = shots.flatMap((shot, index) => {
+    const record = asRecord(shot)
+    if (!record) return []
+    const title = readString(record.title) || readString(record.name) || `${locale === 'en' ? 'Shot' : '镜头'} ${index + 1}`
+    const fields = [
+      ['duration', '时长'],
+      ['shotSize', '景别'],
+      ['angle', '角度'],
+      ['cameraMovement', '运镜'],
+      ['composition', '构图'],
+      ['lighting', '打光'],
+      ['blocking', '场面调度'],
+      ['action', '动作'],
+      ['dialogue', '台词'],
+    ].flatMap(([key, zhLabel]) => {
+      const value = stringifyPlanValue(record[key])
+      if (!value) return []
+      return [locale === 'en' ? `${key}: ${value}` : `${zhLabel}: ${value}`]
+    })
+    const prompt = readString(record.prompt) || readString(record.imagePrompt) || readString(record.videoPrompt)
+    const promptLine = prompt ? (locale === 'en' ? `prompt: ${prompt}` : `提示词: ${prompt}`) : null
+    return [`${index + 1}. ${title}${fields.length || promptLine ? ` — ${[...fields, promptLine].filter(Boolean).join(locale === 'en' ? '; ' : '；')}` : ''}`]
+  })
+
+  if (lines.length === 0) return null
+  return locale === 'en'
+    ? `Cinematic shot plan:\n${lines.join('\n')}`
+    : `电影化镜头计划：\n${lines.join('\n')}`
+}
+
+function buildLensLanguageDirective(locale: string) {
+  return locale === 'en'
+    ? [
+      'Lens-language discipline: apply the project lens-language research (`data/镜头语言.md`) as concrete film grammar, not generic cinematic wording.',
+      'Use shot-size psychology, angle psychology, camera movement, composition, lighting, and blocking to serve the intended viewer feeling.',
+      'Preserve spatial geography, eyeline continuity, and the 180-degree rule for dialogue, confrontation, chase, and action beats.',
+      'Avoid contradictory instructions such as wide shot plus extreme close-up in the same shot, or mismatched time of day and lighting.',
+    ].join('\n')
+    : [
+      '镜头语言纪律：参考项目《data/镜头语言.md》的方法论，把景别心理、角度心理、运镜、构图、打光、场面调度落实为具体画面指令，而不是泛泛写“电影感”。',
+      '每个镜头选择都必须服务观众感受：例如远景建立环境，近景/特写放大脆弱或紧张，仰拍强化权威，俯拍表现渺小，手持/跟拍制造追逐或恐慌。',
+      '保持空间地理、视线连续和 180° 规则；对话、对峙、追逐、格斗都要让人物位置、移动路线、入口出口和道具触发点清晰。',
+      '避免互相冲突的提示词，例如同一镜头同时要求广角全景和面部大特写，或时间/光线/风格互相矛盾。',
+    ].join('\n')
+}
+
 function stringifyItems(items: NovelPromotionShotGroupItem[] | undefined, template: ShotGroupTemplateSpec) {
   const normalized = Array.from({ length: template.slotCount }, (_, index) => {
     const item = items?.find((entry) => entry.itemIndex === index)
@@ -152,6 +276,8 @@ export function buildShotGroupReferencePrompt(params: {
   const artStyle = params.artStyle?.trim() || (params.locale === 'en' ? 'consistent cinematic concept art' : '统一电影感写实风格')
   const labels = summarizeAssetLabels(params.group, params.locale)
   const sceneLabel = draftMetadata?.sceneLabel || (params.locale === 'en' ? 'current scene' : '当前场景')
+  const cinematicDirective = formatCinematicPlanDirective(draftMetadata?.cinematicPlan, params.locale)
+  const lensLanguageDirective = buildLensLanguageDirective(params.locale)
   const canvasDirective = params.canvasAspectRatio?.trim()
     ? (params.locale === 'en'
       ? `Canvas ratio: ${params.canvasAspectRatio}. Return one finished image in this ratio.`
@@ -168,6 +294,8 @@ export function buildShotGroupReferencePrompt(params: {
       `Location assets to honor: ${labels.location}.`,
       `Prop assets to honor: ${labels.props}.`,
       `Mood guidance: ${labels.mood}.`,
+      ...(cinematicDirective ? [cinematicDirective] : []),
+      lensLanguageDirective,
       `Style: ${artStyle}.`,
       ...(canvasDirective ? [canvasDirective] : []),
       'Use the provided asset images as visual anchors for identity, costume, environment, and prop fidelity.',
@@ -184,6 +312,8 @@ export function buildShotGroupReferencePrompt(params: {
     `场景资产约束：${labels.location}。`,
     `物品资产约束：${labels.props}。`,
     `氛围约束：${labels.mood}。`,
+    ...(cinematicDirective ? [cinematicDirective] : []),
+    lensLanguageDirective,
     `风格要求：${artStyle}。`,
     ...(canvasDirective ? [canvasDirective] : []),
     '请把已提供的资产图作为视觉锚点，确保人物身份、服装、环境和关键物品尽可能贴合。',
@@ -205,6 +335,9 @@ export function buildShotGroupCompositePrompt(params: {
     || '保持同一场景与角色连续性，强调镜头调度与画面叙事。'
   const title = params.group.title?.trim() || '未命名镜头组'
   const artStyle = params.artStyle?.trim() || (params.locale === 'en' ? 'consistent cinematic storyboard style' : '统一电影感分镜风格')
+  const cinematicDirective = formatCinematicPlanDirective(draftMetadata?.cinematicPlan, params.locale)
+  const cinematicShotPlan = formatCinematicShotBeats(draftMetadata?.cinematicPlan, params.locale)
+  const lensLanguageDirective = buildLensLanguageDirective(params.locale)
   const canvasDirective = params.canvasAspectRatio?.trim()
     ? (params.locale === 'en'
       ? `Canvas ratio: ${params.canvasAspectRatio}. Keep the final composite image in this ratio.`
@@ -218,11 +351,15 @@ export function buildShotGroupCompositePrompt(params: {
       'Keep all slots in one coherent scene, consistent characters, wardrobe, lighting, and art direction.',
       `Storyboard mode prompt: ${modePrompt}`,
       `Story content: ${storyContent}`,
+      ...(cinematicDirective ? [cinematicDirective] : []),
+      lensLanguageDirective,
       buildAssetDirective(params.group, params.template, params.locale),
       `Style: ${artStyle}`,
       ...(canvasDirective ? [canvasDirective] : []),
+      'Treat each ordered slot as a shot-level command. Preserve shot size, camera angle, movement, composition, lighting, and blocking when provided.',
       'Return a single finished composite storyboard image with clearly separated slots and no captions or UI chrome.',
       `Ordered slots:\n${stringifyItems(params.group.items, params.template)}`,
+      ...(cinematicShotPlan ? [cinematicShotPlan] : []),
     ].join('\n\n')
   }
 
@@ -232,11 +369,15 @@ export function buildShotGroupCompositePrompt(params: {
     '要求所有格子处于同一叙事连续体内，角色、服装、空间、光线和风格保持一致。',
     `分镜模式提示词：${modePrompt}`,
     `剧情内容：${storyContent}`,
+    ...(cinematicDirective ? [cinematicDirective] : []),
+    lensLanguageDirective,
     buildAssetDirective(params.group, params.template, params.locale),
     `风格要求：${artStyle}`,
     ...(canvasDirective ? [canvasDirective] : []),
+    '请把每个有序槽位当作镜头级指令执行；如槽位中包含景别、角度、运镜、构图、打光、场面调度，必须优先体现在对应格子。',
     '只输出一张完成的 composite storyboard image，不要文字标题、字幕、界面边框或多余排版。',
     `有序镜头槽位：\n${stringifyItems(params.group.items, params.template)}`,
+    ...(cinematicShotPlan ? [cinematicShotPlan] : []),
   ].join('\n\n')
 }
 
@@ -245,11 +386,17 @@ export function buildShotGroupVideoPrompt(params: {
   template: ShotGroupTemplateSpec
   locale: string
 }) {
+  const draftMetadata = parseShotGroupDraftMetadata(params.group.videoReferencesJson)
   const title = params.group.title?.trim() || '未命名镜头组'
-  const primaryPrompt = params.group.videoPrompt?.trim()
+  const cinematicVideoPrompt = readPlanString(draftMetadata?.cinematicPlan, ['videoPrompt', 'video_prompt'])
+  const primaryPrompt = cinematicVideoPrompt
+    || params.group.videoPrompt?.trim()
     || params.group.groupPrompt?.trim()
     || '保持同一场景与角色连续性，强调镜头之间的镜头语言推进。'
   const orderedShots = stringifyItems(params.group.items, params.template)
+  const cinematicDirective = formatCinematicPlanDirective(draftMetadata?.cinematicPlan, params.locale)
+  const cinematicShotPlan = formatCinematicShotBeats(draftMetadata?.cinematicPlan, params.locale)
+  const lensLanguageDirective = buildLensLanguageDirective(params.locale)
   const audioDirective = buildAudioDirective(params.group, params.locale)
   const dialogueDirective = buildDialogueDirective(params.group, params.locale)
   const dialogueContentDirective = buildDialogueContentDirective(params.group, params.locale)
@@ -279,14 +426,19 @@ export function buildShotGroupVideoPrompt(params: {
       'Use Ark official content[] multimodal inputs for visual references.',
       `Template: ${params.template.label}. Keep the ordered shot beats, camera progression, and scene continuity.`,
       `Prompt: ${primaryPrompt}`,
+      ...(cinematicDirective ? [cinematicDirective] : []),
+      lensLanguageDirective,
       audioDirective,
       dialogueDirective,
       ...(dialogueContentDirective ? [dialogueContentDirective] : []),
       referenceDirective,
       multiFrameDirective,
-      'Preserve subject identity, wardrobe, environment, lighting, and cinematic continuity across the whole clip.',
+      'Treat the ordered slots as one continuous approximately 15-second beat sequence, not isolated shots.',
+      'Preserve subject identity, wardrobe, environment, lighting, camera direction, blocking continuity, and cinematic continuity across the whole clip.',
+      'If dialogue content is provided, time it to the relevant beat without inventing extra subtitles or unrelated speech.',
       'Output one coherent continuous video instead of multiple short clips.',
       `Ordered shot beats:\n${orderedShots}`,
+      ...(cinematicShotPlan ? [cinematicShotPlan] : []),
     ].join('\n\n')
   }
 
@@ -295,12 +447,17 @@ export function buildShotGroupVideoPrompt(params: {
     '请使用 Ark 官方 content[] 多模态输入组织视觉参考。',
     `模板：${params.template.label}。请保留组内镜头顺序、镜头推进节奏和场景连续性。`,
     `提示词：${primaryPrompt}`,
+    ...(cinematicDirective ? [cinematicDirective] : []),
+    lensLanguageDirective,
     audioDirective,
     dialogueDirective,
     ...(dialogueContentDirective ? [dialogueContentDirective] : []),
     referenceDirective,
     multiFrameDirective,
-    '要求人物身份、服装、环境、光线和电影感在整段视频中保持一致，不要拆成多段短视频。',
+    '请把有序槽位当作一个最长约 15 秒的连续镜头节拍序列，而不是彼此孤立的镜头。',
+    '要求人物身份、服装、环境、光线、运镜方向、场面调度和电影感在整段视频中保持一致，不要拆成多段短视频。',
+    '如提供台词内容，请把台词安排在对应镜头节拍内，不要发明额外字幕或无关对白。',
     `有序镜头节拍：\n${orderedShots}`,
+    ...(cinematicShotPlan ? [cinematicShotPlan] : []),
   ].join('\n\n')
 }
