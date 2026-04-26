@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { buildShotGroupCompositePrompt } from '@/lib/shot-group/prompt'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
@@ -8,6 +8,12 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionShotGroup: {
     findFirst: vi.fn(),
     update: vi.fn(async () => ({})),
+  },
+  novelPromotionCharacter: {
+    findMany: vi.fn(async () => []),
+  },
+  novelPromotionLocation: {
+    findMany: vi.fn(async () => []),
   },
 }))
 
@@ -37,7 +43,7 @@ vi.mock('@/lib/workers/handlers/image-task-handler-shared', () => ({
 
 import { handleShotGroupImageTask } from '@/lib/workers/handlers/shot-group-image-task-handler'
 
-function buildJob(): Job<TaskJobData> {
+function buildJob(payload: Record<string, unknown> = {}): Job<TaskJobData> {
   return {
     data: {
       taskId: 'task-shot-group-image-1',
@@ -47,7 +53,7 @@ function buildJob(): Job<TaskJobData> {
       episodeId: 'episode-1',
       targetType: 'NovelPromotionShotGroup',
       targetId: 'group-1',
-      payload: {},
+      payload,
       userId: 'user-1',
     },
   } as unknown as Job<TaskJobData>
@@ -141,6 +147,106 @@ describe('shot-group-image-task-handler', () => {
         compositeImageUrl: 'cos/shot-group-composite.png',
       }),
     }))
+  })
+
+
+  it('hydrates selected asset imageUrls before reference generation', async () => {
+    prismaMock.novelPromotionShotGroup.findFirst.mockResolvedValue({
+      ...buildShotGroupRecord(),
+      videoReferencesJson: JSON.stringify({
+        draftMetadata: {
+          segmentOrder: 1,
+          clipId: 'clip-1',
+          segmentKey: 'clip-1:1',
+          sourceClipId: 'clip-1',
+          segmentIndexWithinClip: 0,
+          segmentStartSeconds: 0,
+          segmentEndSeconds: 15,
+          sceneLabel: '空房间',
+          narrativePrompt: '李未在空房间发现旧钥匙。',
+          embeddedDialogue: null,
+          shotRhythmGuidance: null,
+          expectedShotCount: 4,
+          sourceStatus: 'ready',
+          placeholderReason: null,
+          selectedLocationAsset: {
+            assetType: 'location',
+            source: 'manual',
+            assetId: 'location-empty-room',
+            label: '空房间',
+            imageUrl: null,
+          },
+          effectiveLocationAsset: {
+            assetType: 'location',
+            source: 'manual',
+            assetId: 'location-empty-room',
+            label: '空房间',
+            imageUrl: null,
+          },
+          selectedCharacterAssets: [{
+            assetType: 'character',
+            source: 'manual',
+            assetId: 'character-liwei',
+            label: '李未',
+            imageUrl: null,
+          }],
+          effectiveCharacterAssets: [{
+            assetType: 'character',
+            source: 'manual',
+            assetId: 'character-liwei',
+            label: '李未',
+            imageUrl: null,
+          }],
+          selectedPropAssets: [{
+            assetType: 'prop',
+            source: 'manual',
+            assetId: 'prop-old-key',
+            label: '旧钥匙',
+            imageUrl: null,
+          }],
+          effectivePropAssets: [{
+            assetType: 'prop',
+            source: 'manual',
+            assetId: 'prop-old-key',
+            label: '旧钥匙',
+            imageUrl: null,
+          }],
+        },
+      }),
+    })
+    ;(prismaMock.novelPromotionCharacter.findMany as Mock).mockResolvedValueOnce([{
+      id: 'character-liwei',
+      appearances: [{ id: 'appearance-liwei', imageUrl: 'cos/liwei-character.png', imageUrls: null, selectedIndex: null }],
+    }])
+    ;(prismaMock.novelPromotionLocation.findMany as Mock)
+      .mockResolvedValueOnce([{
+        id: 'location-empty-room',
+        selectedImage: { id: 'location-image-empty-room', imageUrl: 'cos/empty-room.png' },
+        images: [],
+      }])
+      .mockResolvedValueOnce([{
+        id: 'prop-old-key',
+        selectedImage: null,
+        images: [{ id: 'prop-image-old-key', imageUrl: 'cos/old-key.png', isSelected: true }],
+      }])
+
+    await handleShotGroupImageTask(buildJob({ targetField: 'reference' }))
+
+    expect(utilsMock.resolveImageSourceFromGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        options: {
+          referenceImages: [
+            'normalized:https://signed.example/cos/empty-room.png',
+            'normalized:https://signed.example/cos/liwei-character.png',
+            'normalized:https://signed.example/cos/old-key.png',
+          ],
+          aspectRatio: '4:3',
+        },
+      }),
+    )
+    const updateArg = (prismaMock.novelPromotionShotGroup.update as Mock).mock.calls[0]?.[0] as { data: { videoReferencesJson?: string } }
+    expect(updateArg.data.videoReferencesJson).toContain('cos/liwei-character.png')
   })
 
   it('keeps the same options shape for other storyboard models', async () => {
