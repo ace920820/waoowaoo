@@ -12,6 +12,7 @@ import {
   deriveShotGroupModeFlags,
   resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
+  normalizeShotGroupVideoReferenceSettings,
 } from '@/lib/shot-group/video-config'
 import { buildShotGroupVideoConfigSnapshot } from '@/lib/shot-group/video-config-snapshot'
 import type { ShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
@@ -297,6 +298,10 @@ export const PATCH = apiHandler(async (
       ...previousGenerationOptions,
       ...sanitizeShotGroupGenerationOptions(body.generationOptions),
     }
+  const previousVideoReferenceSettings = normalizeShotGroupVideoReferenceSettings(currentVideoConfig.videoReferenceSettings)
+  const nextVideoReferenceSettings = body.videoReferenceSettings === undefined
+    ? previousVideoReferenceSettings
+    : normalizeShotGroupVideoReferenceSettings(body.videoReferenceSettings)
   const nextReferenceImageUrl = body.referenceImageUrl === undefined
     ? current.referenceImageUrl
     : normalizeOptionalString(body.referenceImageUrl)
@@ -331,6 +336,7 @@ export const PATCH = apiHandler(async (
         dialogueLanguage: nextDialogueLanguage,
         ...nextModeFlags,
         generationOptions: nextGenerationOptions,
+        videoReferenceSettings: nextVideoReferenceSettings,
         previousDraftMetadata,
         draftMetadata: nextDraftMetadata,
       }),

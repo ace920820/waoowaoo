@@ -82,6 +82,12 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionVoiceLine: {
     findUnique: vi.fn(),
   },
+  novelPromotionCharacter: {
+    findMany: vi.fn(),
+  },
+  novelPromotionLocation: {
+    findMany: vi.fn(),
+  },
 }))
 
 vi.mock('bullmq', () => ({
@@ -199,6 +205,7 @@ function buildShotGroup(overrides?: Record<string, unknown>) {
     groupPrompt: '组提示词',
     videoPrompt: '视频提示词',
     compositeImageUrl: 'cos/shot-group.png',
+    referenceImageUrl: 'cos/concept.png',
     generateAudio: true,
     bgmEnabled: false,
     includeDialogue: false,
@@ -206,6 +213,40 @@ function buildShotGroup(overrides?: Record<string, unknown>) {
     omniReferenceEnabled: false,
     smartMultiFrameEnabled: true,
     videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
     items: [
       { itemIndex: 0, title: '镜头 1', prompt: '提示词 1', imageUrl: 'cos/frame-1.png', sourcePanelId: 'panel-1' },
       { itemIndex: 1, title: '镜头 2', prompt: '提示词 2', imageUrl: 'cos/frame-2.png', sourcePanelId: 'panel-2' },
@@ -227,6 +268,22 @@ describe('worker video processor behavior', () => {
       audioUrl: 'cos/line-1.mp3',
       audioDuration: 1200,
     })
+    prismaMock.novelPromotionCharacter.findMany.mockResolvedValue([{
+      id: 'char-liwei',
+      customVoiceUrl: 'cos/liwei-voice.wav',
+      appearances: [{ id: 'appearance-liwei', imageUrl: 'cos/liwei.png', imageUrls: null, selectedIndex: null }],
+    }])
+    prismaMock.novelPromotionLocation.findMany
+      .mockResolvedValueOnce([{
+        id: 'loc-room',
+        selectedImage: { id: 'loc-img', imageUrl: 'cos/room.png' },
+        images: [],
+      }])
+      .mockResolvedValueOnce([{
+        id: 'prop-key',
+        selectedImage: { id: 'prop-img', imageUrl: 'cos/key.png' },
+        images: [],
+      }])
 
     const mod = await import('@/lib/workers/video.worker')
     mod.createVideoWorker()
@@ -315,6 +372,40 @@ describe('worker video processor behavior', () => {
       type: TASK_TYPE.VIDEO_PANEL,
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
       },
     })
 
@@ -365,6 +456,40 @@ describe('worker video processor behavior', () => {
       type: TASK_TYPE.VIDEO_PANEL,
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
       },
     })
 
@@ -416,6 +541,40 @@ describe('worker video processor behavior', () => {
       type: TASK_TYPE.VIDEO_PANEL,
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
       },
     })
 
@@ -472,6 +631,40 @@ describe('worker video processor behavior', () => {
       type: TASK_TYPE.VIDEO_PANEL,
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
       },
     })
 
@@ -503,6 +696,40 @@ describe('worker video processor behavior', () => {
       type: TASK_TYPE.VIDEO_PANEL,
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
         generationOptions: {
           generateAudio: false,
         },
@@ -558,6 +785,55 @@ describe('worker video processor behavior', () => {
     })
   })
 
+
+
+  it('VIDEO_SHOT_GROUP: Seedance reference plan includes concept, character, prop and audio references', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_SHOT_GROUP,
+      targetType: 'NovelPromotionShotGroup',
+      targetId: 'shot-group-1',
+      payload: {
+        videoModel: 'ark::doubao-seedance-2-0-260128',
+        generationOptions: {
+          duration: 5,
+          resolution: '720p',
+          generateAudio: true,
+        },
+      },
+    })
+
+    const result = await processor!(job) as {
+      videoReferences: { referencePlan?: Array<{ token: string; label: string }> }
+      videoPrompt: string
+    }
+
+    const resolveCall = utilsMock.resolveVideoSourceFromGeneration.mock.calls.at(-1)
+    expect(resolveCall?.[1]).toMatchObject({
+      modelId: 'ark::doubao-seedance-2-0-260128',
+      options: expect.objectContaining({
+        contentItems: expect.arrayContaining([
+          { type: 'image_url', image_url: { url: 'https://signed.example/cos/shot-group.png' } },
+          { type: 'image_url', image_url: { url: 'https://signed.example/cos/concept.png' }, role: 'reference_image' },
+          { type: 'image_url', image_url: { url: 'https://signed.example/cos/liwei.png' }, role: 'reference_image' },
+          { type: 'audio_url', audio_url: { url: 'https://signed.example/cos/liwei-voice.wav' }, role: 'reference_audio' },
+        ]),
+        prompt: expect.stringContaining('@Image3（角色 李未）'),
+      }),
+    })
+    expect(resolveCall?.[1]).toMatchObject({
+      options: expect.objectContaining({
+        prompt: expect.stringContaining('@Audio1（角色 李未 声音）'),
+      }),
+    })
+    expect(result.videoReferences.referencePlan).toEqual(expect.arrayContaining([
+      expect.objectContaining({ token: '@Image3', label: '角色 李未' }),
+      expect.objectContaining({ token: '@Audio1', label: '角色 李未 声音' }),
+    ]))
+  })
+
   it('VIDEO_SHOT_GROUP: 非 Ark 模型归一为 composite storyboard 真实语义', async () => {
     const processor = workerState.processor
     expect(processor).toBeTruthy()
@@ -568,6 +844,40 @@ describe('worker video processor behavior', () => {
       targetId: 'shot-group-1',
       payload: {
         videoModel: 'fal::kling-v1',
+    videoReferencesJson: JSON.stringify({
+      videoReferenceSettings: {
+        includeConceptImage: true,
+        includeCharacterImages: true,
+        selectedCharacterAssetIds: ['char-liwei'],
+        includeLocationImage: true,
+        includePropImages: true,
+        includeShotImages: false,
+        includeCharacterAudio: true,
+        selectedAudioCharacterAssetIds: ['char-liwei'],
+      },
+      draftMetadata: {
+        segmentOrder: 1,
+        clipId: 'clip-1',
+        segmentKey: 'clip-1:1',
+        sourceClipId: 'clip-1',
+        segmentIndexWithinClip: 1,
+        segmentStartSeconds: 0,
+        segmentEndSeconds: 15,
+        sceneLabel: '空房间',
+        narrativePrompt: '李未发现线索。',
+        embeddedDialogue: null,
+        shotRhythmGuidance: null,
+        expectedShotCount: 4,
+        sourceStatus: 'ready',
+        placeholderReason: null,
+        selectedLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        effectiveLocationAsset: { assetType: 'location', source: 'manual', assetId: 'loc-room', label: '空房间' },
+        selectedCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        effectiveCharacterAssets: [{ assetType: 'character', source: 'manual', assetId: 'char-liwei', label: '李未' }],
+        selectedPropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+        effectivePropAssets: [{ assetType: 'prop', source: 'manual', assetId: 'prop-key', label: '旧钥匙' }],
+      },
+    }),
         generationOptions: {
           duration: 5,
           resolution: '720p',
@@ -596,13 +906,13 @@ describe('worker video processor behavior', () => {
       }),
     })
 
-    expect(prismaMock.novelPromotionShotGroup.update).toHaveBeenCalledWith({
+    expect(prismaMock.novelPromotionShotGroup.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'shot-group-1' },
       data: expect.objectContaining({
         videoSourceType: 'composite_image_mvp',
         videoModel: 'fal::kling-v1',
       }),
-    })
+    }))
   })
 
   it('LIP_SYNC: 缺少 panel 时显式失败', async () => {

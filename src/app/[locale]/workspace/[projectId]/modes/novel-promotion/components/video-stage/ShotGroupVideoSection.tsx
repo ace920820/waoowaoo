@@ -16,7 +16,10 @@ import {
 import { projectVideoPricingTiersByFixedSelections } from '@/lib/model-pricing/video-tier'
 import {
   readShotGroupCapabilitySelection,
+  normalizeShotGroupVideoReferenceSettings,
+  DEFAULT_SHOT_GROUP_VIDEO_REFERENCE_SETTINGS,
   type ShotGroupVideoGenerationOptions,
+  type ShotGroupVideoReferenceSettings,
   type ShotGroupVideoMode,
   resolveShotGroupModeForModel,
   supportsShotGroupMultiReferenceModes,
@@ -91,6 +94,7 @@ interface VideoDraftState {
   dialogueLanguage: NovelPromotionDialogueLanguage
   videoModel: string
   pendingCompositeFile: File | null
+  videoReferenceSettings: ShotGroupVideoReferenceSettings
 }
 
 interface ReviewDraftState {
@@ -197,6 +201,53 @@ function parseSavedVideoConfig(group: NovelPromotionShotGroup) {
   }
 }
 
+
+type VideoReferenceCharacterOption = {
+  id: string
+  label: string
+  hasImage: boolean
+  hasAudio: boolean
+}
+
+function readSavedReferenceSettings(config: Record<string, unknown>): ShotGroupVideoReferenceSettings {
+  return normalizeShotGroupVideoReferenceSettings(config.videoReferenceSettings)
+}
+
+function normalizeReferenceSettingsWithCharacterDefaults(
+  config: Record<string, unknown>,
+  characterAssets: ShotGroupAssetBindingReference[],
+): ShotGroupVideoReferenceSettings {
+  const settings = readSavedReferenceSettings(config)
+  const characterIds = characterAssets.map((asset) => asset.assetId).filter((assetId): assetId is string => Boolean(assetId))
+  return {
+    ...settings,
+    selectedCharacterAssetIds: settings.selectedCharacterAssetIds.length > 0
+      ? settings.selectedCharacterAssetIds
+      : characterIds,
+    selectedAudioCharacterAssetIds: settings.selectedAudioCharacterAssetIds,
+  }
+}
+
+function buildVideoReferenceCharacterOptions(
+  group: NovelPromotionShotGroup | null | undefined,
+  projectCharacters: Character[],
+): VideoReferenceCharacterOption[] {
+  const draftMetadata = parseShotGroupDraftMetadata(group?.videoReferencesJson)
+  const effectiveAssets = draftMetadata?.effectiveCharacterAssets ?? []
+  const assets = effectiveAssets.length > 0
+    ? effectiveAssets
+    : projectCharacters.map(toCharacterAssetReference)
+  return assets.map((asset) => {
+    const character = asset.assetId ? projectCharacters.find((item) => item.id === asset.assetId) : null
+    return {
+      id: asset.assetId || asset.label,
+      label: asset.label,
+      hasImage: Boolean(asset.imageUrl || (character ? pickCharacterImageUrl(character) : null)),
+      hasAudio: Boolean(character?.customVoiceUrl),
+    }
+  })
+}
+
 function parseGenerationOptionValue(rawValue: string, sample: CapabilityValue): CapabilityValue {
   if (typeof sample === 'number') return Number(rawValue)
   if (typeof sample === 'boolean') return rawValue === 'true'
@@ -229,6 +280,7 @@ function toDraft(
   const videoModel = group.videoModel || savedModel || defaultVideoModel
   const savedGenerationOptions = savedConfig.generationOptions as Record<string, unknown> | undefined
   const embeddedDialogue = draftMetadata?.embeddedDialogue ?? ''
+  const videoReferenceSettings = normalizeReferenceSettingsWithCharacterDefaults(savedConfig, draftMetadata?.effectiveCharacterAssets ?? [])
   return {
     title: group.title || buildDefaultTitle((group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey),
     templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
@@ -259,6 +311,7 @@ function toDraft(
     dialogueLanguage: normalizeDialogueLanguage(group.dialogueLanguage),
     videoModel,
     pendingCompositeFile: null,
+    videoReferenceSettings,
   }
 }
 
@@ -1232,6 +1285,7 @@ function buildShotGroupPayload(draft: VideoDraftState, episodeId?: string) {
     mode: draft.mode,
     videoModel: draft.videoModel || null,
     generationOptions: draft.generationOptions,
+    videoReferenceSettings: draft.videoReferenceSettings,
   }
 }
 
@@ -1267,9 +1321,10 @@ function renderVideoConfigFields(params: {
   draft: VideoDraftState
   resolvedVideoModelOptions: VideoModelOption[]
   capabilityOverrides?: CapabilitySelections
+  referenceCharacterOptions?: VideoReferenceCharacterOption[]
   onChange: (updater: (draft: VideoDraftState) => VideoDraftState) => void
 }) {
-  const { draft, resolvedVideoModelOptions, capabilityOverrides, onChange } = params
+  const { draft, resolvedVideoModelOptions, capabilityOverrides, referenceCharacterOptions = [], onChange } = params
   const selectedVideoModelOption = resolvedVideoModelOptions.find((option) => option.value === draft.videoModel)
     || resolvedVideoModelOptions[0]
   const pricingTiers = projectVideoPricingTiersByFixedSelections({
@@ -1299,6 +1354,8 @@ function renderVideoConfigFields(params: {
     .filter((field) => field.options.length === 0 || field.value === undefined)
     .map((field) => field.field)
   const supportsAdvancedReferenceModes = supportsShotGroupMultiReferenceModes(selectedVideoModelOption?.value || draft.videoModel)
+  const selectedCharacterIds = new Set(draft.videoReferenceSettings.selectedCharacterAssetIds)
+  const selectedAudioCharacterIds = new Set(draft.videoReferenceSettings.selectedAudioCharacterAssetIds)
 
   return (
     <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-4 space-y-4">
@@ -1401,6 +1458,131 @@ function renderVideoConfigFields(params: {
           </div>
         ) : null}
       </div>
+
+      {supportsAdvancedReferenceModes ? (
+        <div className="space-y-3 rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-3">
+          <div>
+            <div className="text-sm font-medium text-[var(--glass-text-primary)]">Seedance 参考素材</div>
+            <div className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
+              最多会按顺序传入 9 张图片和 3 段音频，并在提示词里用 @Image / @Audio 说明用途。
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {([
+              ['includeConceptImage', '辅助参考图 / 概念母图'],
+              ['includeLocationImage', '场景设定图'],
+              ['includePropImages', '物品设定图'],
+              ['includeShotImages', '逐镜头槽位图'],
+            ] as Array<[keyof ShotGroupVideoReferenceSettings, string]>).map(([field, label]) => (
+              <label key={field} className="flex items-center gap-2 rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.videoReferenceSettings[field])}
+                  onChange={(event) => onChange((current) => ({
+                    ...current,
+                    videoReferenceSettings: {
+                      ...current.videoReferenceSettings,
+                      [field]: event.target.checked,
+                    },
+                  }))}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
+            <input
+              type="checkbox"
+              checked={draft.videoReferenceSettings.includeCharacterImages}
+              onChange={(event) => onChange((current) => ({
+                ...current,
+                videoReferenceSettings: {
+                  ...current.videoReferenceSettings,
+                  includeCharacterImages: event.target.checked,
+                },
+              }))}
+            />
+            <span>角色形象图</span>
+          </label>
+          {draft.videoReferenceSettings.includeCharacterImages && referenceCharacterOptions.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {referenceCharacterOptions.map((character) => {
+                const isSelected = selectedCharacterIds.has(character.id)
+                return (
+                  <button
+                    key={character.id}
+                    type="button"
+                    onClick={() => onChange((current) => ({
+                      ...current,
+                      videoReferenceSettings: {
+                        ...current.videoReferenceSettings,
+                        selectedCharacterAssetIds: isSelected
+                          ? current.videoReferenceSettings.selectedCharacterAssetIds.filter((id) => id !== character.id)
+                          : [...current.videoReferenceSettings.selectedCharacterAssetIds, character.id],
+                      },
+                    }))}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-xs transition',
+                      isSelected
+                        ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70 text-[var(--glass-tone-info-fg)]'
+                        : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)]',
+                      !character.hasImage ? 'opacity-60' : '',
+                    ].join(' ')}
+                  >
+                    {character.label}{character.hasImage ? '' : '（无图）'}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+          <label className="flex items-center gap-2 rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 px-3 py-2 text-xs text-[var(--glass-text-secondary)]">
+            <input
+              type="checkbox"
+              checked={draft.videoReferenceSettings.includeCharacterAudio}
+              onChange={(event) => onChange((current) => ({
+                ...current,
+                videoReferenceSettings: {
+                  ...current.videoReferenceSettings,
+                  includeCharacterAudio: event.target.checked,
+                },
+              }))}
+            />
+            <span>角色声音参考</span>
+          </label>
+          {draft.videoReferenceSettings.includeCharacterAudio ? (
+            <div className="flex flex-wrap gap-2">
+              {referenceCharacterOptions.map((character) => {
+                const isSelected = selectedAudioCharacterIds.has(character.id)
+                return (
+                  <button
+                    key={character.id}
+                    type="button"
+                    disabled={!character.hasAudio}
+                    onClick={() => onChange((current) => ({
+                      ...current,
+                      videoReferenceSettings: {
+                        ...current.videoReferenceSettings,
+                        selectedAudioCharacterAssetIds: isSelected
+                          ? current.videoReferenceSettings.selectedAudioCharacterAssetIds.filter((id) => id !== character.id)
+                          : [...current.videoReferenceSettings.selectedAudioCharacterAssetIds, character.id],
+                      },
+                    }))}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-xs transition',
+                      isSelected
+                        ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-tone-info-bg)]/70 text-[var(--glass-tone-info-fg)]'
+                        : 'border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] text-[var(--glass-text-secondary)]',
+                      !character.hasAudio ? 'cursor-not-allowed opacity-50' : '',
+                    ].join(' ')}
+                  >
+                    {character.label}{character.hasAudio ? '' : '（无声音）'}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {supportsAdvancedReferenceModes ? (
         <div className="space-y-2">
@@ -1548,6 +1730,7 @@ function VideoShotGroupSection({
   const generateMutation = useGenerateProjectShotGroupVideo(projectId, episodeId)
   const saveTailFrameMutation = useSaveProjectVideoTailFrame(projectId, episodeId)
   const downloadRemoteBlobMutation = useDownloadRemoteBlob()
+  const { data: projectAssets } = useProjectAssets(projectId)
 
   const [drafts, setDrafts] = useState<Record<string, VideoDraftState>>({})
   const [createDraft, setCreateDraft] = useState<VideoDraftState>({
@@ -1563,6 +1746,7 @@ function VideoShotGroupSection({
     dialogueLanguage: 'zh',
     videoModel: defaultVideoModel,
     pendingCompositeFile: null,
+    videoReferenceSettings: DEFAULT_SHOT_GROUP_VIDEO_REFERENCE_SETTINGS,
   })
   const [isCreatingInline, setIsCreatingInline] = useState(false)
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
@@ -1924,6 +2108,7 @@ function VideoShotGroupSection({
               draft: createDraft,
               resolvedVideoModelOptions,
               capabilityOverrides,
+              referenceCharacterOptions: [],
               onChange: (updater) => setCreateDraft((previous) => updater(previous)),
             })}
           </div>
@@ -2188,6 +2373,7 @@ function VideoShotGroupSection({
                         draft,
                         resolvedVideoModelOptions,
                         capabilityOverrides,
+                        referenceCharacterOptions: buildVideoReferenceCharacterOptions(group, projectAssets?.characters ?? []),
                         onChange: (updater) => updateGroupDraft(group.id, updater),
                       })}
 

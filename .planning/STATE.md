@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Phase 03.4 Complete
-last_updated: "2026-04-26T21:45:00+08:00"
+last_updated: "2026-04-27T00:33:00+08:00"
 progress:
   total_phases: 9
   completed_phases: 8
@@ -45,6 +45,7 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 | 2026-04-26 | `260426-mj1-fix-storyboard-package-import-review-fin` | Fixed storyboard package import review findings: duplicate segment/shot validation, scene-qualified commit lookup, and visible preview upload errors. |
 | 2026-04-26 | `260426-rln-fix-storyboard-import-dialog-opacity-and` | Improved storyboard import modal opacity and fixed Nano Banana 2 reference-image generation failures caused by `0.5K` imageSize. |
 | 2026-04-26 | `260426-u23-imageurl-referenceimages` | Hydrated missing character/location/prop asset image URLs before shot-group reference generation and added a regression ensuring 李未 enters `referenceImages`. |
+| 2026-04-27 | `260427-0dt-seedance-2-0-contentitems` | Added configurable Seedance reference materials for multi-shot video: concept images, selected character/scene/prop/shot images, character voice audio, `contentItems`, and `@Image`/`@Audio` prompt instructions. |
 
 ### UAT / Verification Notes
 

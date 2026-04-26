@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   useSaveProjectVideoTailFrameMock: vi.fn(),
   useDownloadRemoteBlobMock: vi.fn(),
   useTaskTargetStateMapMock: vi.fn(),
+  useProjectAssetsMock: vi.fn(),
 }))
 
 vi.mock('@/lib/query/hooks', async () => {
@@ -32,6 +33,7 @@ vi.mock('@/lib/query/hooks', async () => {
     useSaveProjectVideoTailFrame: mocks.useSaveProjectVideoTailFrameMock,
     useDownloadRemoteBlob: mocks.useDownloadRemoteBlobMock,
     useTaskTargetStateMap: mocks.useTaskTargetStateMapMock,
+    useProjectAssets: mocks.useProjectAssetsMock,
   }
 })
 
@@ -129,6 +131,7 @@ describe('multi-shot video stage', () => {
     mocks.useSaveProjectVideoTailFrameMock.mockReset()
     mocks.useDownloadRemoteBlobMock.mockReset()
     mocks.useTaskTargetStateMapMock.mockReset()
+    mocks.useProjectAssetsMock.mockReset()
 
     mocks.useCreateProjectShotGroupMock.mockReturnValue({
       isPending: false,
@@ -158,6 +161,9 @@ describe('multi-shot video stage', () => {
     })
     mocks.useTaskTargetStateMapMock.mockReturnValue({
       data: [],
+    })
+    mocks.useProjectAssetsMock.mockReturnValue({
+      data: { characters: [], locations: [], props: [] },
     })
   })
 

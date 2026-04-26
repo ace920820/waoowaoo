@@ -17,6 +17,7 @@ import {
   resolveShotGroupModeForModel,
   resolveShotGroupReferenceMode,
   sanitizeShotGroupGenerationOptions,
+  normalizeShotGroupVideoReferenceSettings,
 } from '@/lib/shot-group/video-config'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -164,6 +165,7 @@ export const POST = apiHandler(async (
     smartMultiFrameEnabled: modeFlags.smartMultiFrameEnabled,
     modelKey: videoModel,
   })
+  const videoReferenceSettings = normalizeShotGroupVideoReferenceSettings(savedConfig.videoReferenceSettings)
   const billingPayload = {
     shotGroupId,
     templateKey: shotGroup.templateKey,
@@ -179,6 +181,7 @@ export const POST = apiHandler(async (
     ...modeFlags,
     videoModel,
     generationOptions: capabilityOptions,
+    videoReferenceSettings,
   }
   const hasOutputAtStart = await hasShotGroupVideoOutput(shotGroupId)
 

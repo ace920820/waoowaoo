@@ -3,6 +3,8 @@ import { mergeShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 import {
   resolveShotGroupModeForModel,
   sanitizeShotGroupGenerationOptions,
+  normalizeShotGroupVideoReferenceSettings,
+  type ShotGroupVideoReferenceSettings,
 } from '@/lib/shot-group/video-config'
 
 export function buildShotGroupVideoConfigSnapshot(input: {
@@ -13,6 +15,7 @@ export function buildShotGroupVideoConfigSnapshot(input: {
   omniReferenceEnabled: boolean
   smartMultiFrameEnabled: boolean
   generationOptions?: Record<string, string | number | boolean>
+  videoReferenceSettings?: ShotGroupVideoReferenceSettings | null
   draftMetadata?: ShotGroupDraftMetadata | null
   previousDraftMetadata?: ShotGroupDraftMetadata | null
 }) {
@@ -28,6 +31,7 @@ export function buildShotGroupVideoConfigSnapshot(input: {
     dialogueLanguage: input.dialogueLanguage,
     ...(input.videoModel ? { videoModel: input.videoModel } : {}),
     generationOptions: sanitizeShotGroupGenerationOptions(input.generationOptions),
+    videoReferenceSettings: normalizeShotGroupVideoReferenceSettings(input.videoReferenceSettings),
   })
 
   return input.draftMetadata
