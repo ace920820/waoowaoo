@@ -42,8 +42,8 @@ describe('storyboard package mapper', () => {
     expect(segment.shotGroupFields).toMatchObject({
       title: '归来与第一处缺席',
       templateKey: 'grid-6',
-      groupPrompt: 'Create a 2x3 keyframe storyboard sheet, 6 panels.',
-      videoPrompt: 'Generate a restrained 15-second cinematic video segment set in an old apartment hallway.',
+      groupPrompt: expect.stringContaining('Create a 2x3 keyframe storyboard sheet, 6 panels.'),
+      videoPrompt: expect.stringContaining('Generate a restrained 15-second cinematic video segment set in an old apartment hallway.'),
       generateAudio: false,
       includeDialogue: false,
       dialogueLanguage: 'zh',
@@ -51,8 +51,8 @@ describe('storyboard package mapper', () => {
       generationOptions: { duration: 15, resolution: '1080p', generateAudio: false },
     })
     expect(segment.draftMetadata).toMatchObject({
-      referencePromptText: 'Cinematic concept mother image for a 15-second segment, not a collage.',
-      compositePromptText: 'Create a 2x3 keyframe storyboard sheet, 6 panels.',
+      referencePromptText: expect.stringContaining('Cinematic concept mother image for a 15-second segment, not a collage.'),
+      compositePromptText: expect.stringContaining('Create a 2x3 keyframe storyboard sheet, 6 panels.'),
       storyboardModeId: 'director-keyframe-sheet',
       storyboardModeLabel: '导演关键帧分镜表',
       storyboardModePromptText: 'Create a 2x3 keyframe storyboard sheet following exact ordered panels.',
@@ -63,6 +63,9 @@ describe('storyboard package mapper', () => {
       segmentStartSeconds: 0,
       segmentEndSeconds: 15,
     })
+    expect(segment.draftMetadata.referencePromptText).toContain('关键镜头视觉锚点')
+    expect(segment.draftMetadata.compositePromptText).toContain('导演逐镜头分镜表要求')
+    expect(segment.shotGroupFields.videoPrompt).toContain('导演逐镜头视频执行表')
   })
 
   it('maps dialogue text into override metadata and includeDialogue', () => {
@@ -144,7 +147,7 @@ describe('storyboard package mapper', () => {
       expect.objectContaining({
         itemIndex: 0,
         title: '李未深夜回到公寓门口',
-        prompt: 'Wide shot, Li Wei approaches her apartment door in a narrow dim hallway.',
+        prompt: expect.stringContaining('画面提示词=Wide shot, Li Wei approaches her apartment door in a narrow dim hallway.'),
         durationSec: 2.5,
         shotSize: 'WS',
         angle: '略低平视',
@@ -162,6 +165,15 @@ describe('storyboard package mapper', () => {
       emotionalIntent: {
         dominantMood: '疲惫、不安、冷观察',
       },
+      importedRawPrompts: {
+        compositePromptText: 'Create a 2x3 keyframe storyboard sheet, 6 panels.',
+        referencePromptText: 'Cinematic concept mother image for a 15-second segment, not a collage.',
+        videoPrompt: 'Generate a restrained 15-second cinematic video segment set in an old apartment hallway.',
+      },
     })
+    expect(segment.items[0].prompt).toContain('焦段=28mm')
+    expect(segment.items[0].prompt).toContain('景深=中深景深')
+    expect(segment.items[0].prompt).toContain('剪辑=冷开场')
+    expect(segment.items[0].prompt).toContain('目的=建立冷静、低照度、无人等待的基调')
   })
 })

@@ -19,7 +19,11 @@ const prismaMock = vi.hoisted(() => ({
 
 const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => undefined),
-  getProjectModels: vi.fn(async () => ({ storyboardModel: 'google::gemini-3.1-flash-image-preview', artStyle: 'shaw-brothers' })),
+  getProjectModels: vi.fn(async () => ({
+    storyboardModel: 'google::gemini-3.1-flash-image-preview',
+    shotGroupReferenceImageModel: 'openai-compatible:oa-1::gpt-image-2-low',
+    artStyle: 'shaw-brothers',
+  })),
   resolveImageSourceFromGeneration: vi.fn(async () => 'generated-shot-group-source'),
   toSignedUrlIfCos: vi.fn((url: string | null | undefined) => (url ? `https://signed.example/${url}` : null)),
   uploadImageSourceToCos: vi.fn(async () => 'cos/shot-group-composite.png'),
@@ -235,6 +239,7 @@ describe('shot-group-image-task-handler', () => {
     expect(utilsMock.resolveImageSourceFromGeneration).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        modelId: 'openai-compatible:oa-1::gpt-image-2-low',
         options: {
           referenceImages: [
             'normalized:https://signed.example/cos/empty-room.png',
@@ -252,6 +257,7 @@ describe('shot-group-image-task-handler', () => {
   it('keeps the same options shape for other storyboard models', async () => {
     utilsMock.getProjectModels.mockResolvedValueOnce({
       storyboardModel: 'google::gemini-2.5-flash-image-preview',
+      shotGroupReferenceImageModel: '',
       artStyle: 'shaw-brothers',
     })
 

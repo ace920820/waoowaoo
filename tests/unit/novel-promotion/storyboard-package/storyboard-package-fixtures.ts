@@ -87,6 +87,7 @@ export function buildValidStoryboardPackage(overrides: Partial<StoryboardPackage
               blocking: '李未从走廊左侧进入，停在门前',
               shotSize: 'WS',
               lens: '28mm 轻广角',
+              dof: '中深景深',
               angle: '略低平视',
               cameraMovement: 'static',
               composition: '李未15%，门墙65%，走廊负空间20%',

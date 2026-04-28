@@ -815,7 +815,7 @@ describe('worker video processor behavior', () => {
       modelId: 'ark::doubao-seedance-2-0-260128',
       options: expect.objectContaining({
         contentItems: expect.arrayContaining([
-          { type: 'image_url', image_url: { url: 'https://signed.example/cos/shot-group.png' } },
+          { type: 'image_url', image_url: { url: 'https://signed.example/cos/shot-group.png' }, role: 'reference_image' },
           { type: 'image_url', image_url: { url: 'https://signed.example/cos/concept.png' }, role: 'reference_image' },
           { type: 'image_url', image_url: { url: 'https://signed.example/cos/liwei.png' }, role: 'reference_image' },
           { type: 'audio_url', audio_url: { url: 'https://signed.example/cos/liwei-voice.wav' }, role: 'reference_audio' },
@@ -828,6 +828,9 @@ describe('worker video processor behavior', () => {
         prompt: expect.stringContaining('@Audio1（角色 李未 声音）'),
       }),
     })
+    const contentItems = (resolveCall?.[1] as { options?: { contentItems?: Array<{ type: string; role?: string }> } } | undefined)
+      ?.options?.contentItems
+    expect(contentItems?.filter((item) => item.type === 'image_url').every((item) => item.role === 'reference_image')).toBe(true)
     expect(result.videoReferences.referencePlan).toEqual(expect.arrayContaining([
       expect.objectContaining({ token: '@Image3', label: '角色 李未' }),
       expect.objectContaining({ token: '@Audio1', label: '角色 李未 声音' }),

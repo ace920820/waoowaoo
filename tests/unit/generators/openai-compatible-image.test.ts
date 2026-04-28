@@ -74,6 +74,29 @@ describe('OpenAICompatibleImageGenerator', () => {
     })
   })
 
+  it('maps gpt-image-2 quality aliases to upstream model and quality', async () => {
+    openAIState.generate.mockResolvedValueOnce({
+      data: [{ b64_json: 'YWxpYXM=' }],
+    })
+
+    const generator = new OpenAICompatibleImageGenerator('gpt-image-2-medium', 'openai-compatible:oa-1')
+    const result = await generator.generate({
+      userId: 'user-1',
+      prompt: 'draw a spaceship',
+      options: {
+        size: '1024x1024',
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(openAIState.generate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-image-2',
+      prompt: 'draw a spaceship',
+      quality: 'medium',
+      size: '1024x1024',
+    }))
+  })
+
   it('uses official images.edit payload when reference images are provided', async () => {
     openAIState.edit.mockResolvedValueOnce({
       data: [{ b64_json: 'ZWRpdA==' }],
@@ -104,6 +127,26 @@ describe('OpenAICompatibleImageGenerator', () => {
       quality: 'medium',
     })
     expect(Array.isArray((call[0] as { image?: unknown }).image)).toBe(true)
+  })
+
+  it('maps gpt-image-2 aliases for image edits', async () => {
+    openAIState.edit.mockResolvedValueOnce({
+      data: [{ b64_json: 'ZWRpdA==' }],
+    })
+
+    const generator = new OpenAICompatibleImageGenerator('gpt-image-2-low', 'openai-compatible:oa-1')
+    const result = await generator.generate({
+      userId: 'user-1',
+      prompt: 'edit this image quickly',
+      referenceImages: ['data:image/png;base64,QQ=='],
+    })
+
+    expect(result.success).toBe(true)
+    expect(openAIState.edit).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-image-2',
+      prompt: 'edit this image quickly',
+      quality: 'low',
+    }))
   })
 
   it('fails explicitly on unsupported option values', async () => {

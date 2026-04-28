@@ -47,12 +47,21 @@ function buildShotGroup() {
             blocking: '追逐者始终占据画面中心线',
           },
           shots: [{
+            shotId: 'CHASE_SH01',
             title: '巷口追逐',
-            duration: '3s',
+            durationSec: 3,
+            dramaticBeat: '权力压迫',
+            informationUnit: '追逐者正在逼近',
+            purpose: '建立追逐者优势',
             shotSize: '全景',
+            lens: '28mm',
+            dof: '中深景深',
             angle: '低角度',
             cameraMovement: '手持跟拍',
+            composition: '追逐者中心，被追者边缘',
+            lighting: '巷口冷白路灯',
             blocking: '追逐者压迫被追者向墙边移动',
+            edit: '动作切',
             dialogue: '站住。',
             prompt: '低角度手持跟拍，旧城巷口追逐者占据中心。',
           }],
@@ -134,6 +143,16 @@ describe('shot-group-video-config', () => {
     expect(prompt).toContain('保持空间地理、视线连续和 180° 规则')
     expect(prompt).toContain('如提供台词内容，请把台词安排在对应镜头节拍内')
     expect(prompt).toContain('电影化镜头计划')
+    expect(prompt).toContain('镜头ID: CHASE_SH01')
+    expect(prompt).toContain('时长: 3')
+    expect(prompt).toContain('戏剧节拍: 权力压迫')
+    expect(prompt).toContain('信息点: 追逐者正在逼近')
+    expect(prompt).toContain('目的: 建立追逐者优势')
+    expect(prompt).toContain('焦段: 28mm')
+    expect(prompt).toContain('景深: 中深景深')
+    expect(prompt).toContain('构图: 追逐者中心，被追者边缘')
+    expect(prompt).toContain('打光: 巷口冷白路灯')
+    expect(prompt).toContain('剪辑: 动作切')
     expect(prompt).toContain('低角度手持跟拍，旧城巷口追逐者占据中心。')
     expect(prompt).not.toContain('组提示词')
     expect(prompt).not.toContain('辅助参考图')

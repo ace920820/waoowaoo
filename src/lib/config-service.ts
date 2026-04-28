@@ -102,6 +102,7 @@ export interface ProjectModelConfig {
   characterModel: string | null
   locationModel: string | null
   storyboardModel: string | null
+  shotGroupReferenceImageModel: string | null
   editModel: string | null
   videoModel: string | null
   audioModel: string | null
@@ -158,6 +159,7 @@ export async function getProjectModelConfig(
     characterModel: extractModelKey(projectData?.characterModel) || null,
     locationModel: extractModelKey(projectData?.locationModel) || null,
     storyboardModel: extractModelKey(projectData?.storyboardModel) || null,
+    shotGroupReferenceImageModel: extractModelKey(projectData?.shotGroupReferenceImageModel) || null,
     editModel: extractModelKey(projectData?.editModel) || null,
     videoModel: extractModelKey(projectData?.videoModel) || null,
     audioModel: extractModelKey(projectData?.audioModel) || extractModelKey(userPref?.audioModel) || null,

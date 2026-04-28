@@ -274,6 +274,49 @@ describe('multi-shot asset injection stage', () => {
     ])
   })
 
+  it('builds a draftMetadata fallback for legacy video config snapshots without draftMetadata', () => {
+    const shotGroup = createShotGroup()
+    shotGroup.videoReferencesJson = JSON.stringify({
+      mode: 'omni-reference',
+      videoModel: 'ark::doubao-seedance-2-0-fast-260128',
+      orderedReferences: [],
+    })
+
+    const payload = buildReviewSavePayload(shotGroup, {
+      templateKey: 'grid-9',
+      referencePromptText: '旧配置也要能重新生成辅助参考图。',
+      compositePromptText: '旧配置也要能重新生成分镜参考表。',
+      storyboardModeId: 'classic-nine-grid',
+      selectedLocationAsset: null,
+      selectedCharacterAssets: [{
+        assetType: 'character',
+        source: 'manual',
+        assetId: 'character-1',
+        label: '李未',
+        imageUrl: 'cos/liwei.png',
+      }],
+      selectedPropAssets: [],
+      storyboardMoodPresetId: '',
+      customMood: '',
+    })
+
+    expect(payload.draftMetadata).toEqual(expect.objectContaining({
+      clipId: 'group-1',
+      sceneLabel: '片段 1',
+      narrativePrompt: '镜头从高空压下，人物踏入空旷街口。',
+      referencePromptText: '旧配置也要能重新生成辅助参考图。',
+      compositePromptText: '旧配置也要能重新生成分镜参考表。',
+      expectedShotCount: 9,
+      sourceStatus: 'ready',
+    }))
+    expect(payload.draftMetadata?.selectedCharacterAssets).toEqual([
+      expect.objectContaining({ assetId: 'character-1', label: '李未', imageUrl: 'cos/liwei.png' }),
+    ])
+    expect(payload.draftMetadata?.effectiveCharacterAssets).toEqual([
+      expect.objectContaining({ assetId: 'character-1', label: '李未', imageUrl: 'cos/liwei.png' }),
+    ])
+  })
+
   it('keeps synchronized review drafts stable when shot-group source data has not changed', () => {
     const shotGroup = createShotGroup()
     const seeded = syncReviewDraftsFromShotGroups({}, [shotGroup])

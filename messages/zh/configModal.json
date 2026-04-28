@@ -13,6 +13,7 @@
     "characterModel": "人物生成模型",
     "locationModel": "场景生成模型",
     "storyboardModel": "分镜图像模型",
+    "shotGroupReferenceImageModel": "辅助参考图模型",
     "editModel": "修图/编辑模型",
     "videoModel": "视频模型",
     "audioModel": "语音合成模型",

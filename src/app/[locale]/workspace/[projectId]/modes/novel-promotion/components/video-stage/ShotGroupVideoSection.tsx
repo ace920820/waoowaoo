@@ -411,7 +411,11 @@ function createReviewDraft(group: NovelPromotionShotGroup): ReviewDraftState {
   const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
   return {
     templateKey: (group.templateKey || 'grid-9') as NovelPromotionShotGroupTemplateKey,
-    referencePromptText: draftMetadata?.referencePromptText ?? draftMetadata?.narrativePrompt ?? '',
+    referencePromptText: draftMetadata?.referencePromptText
+      ?? draftMetadata?.narrativePrompt
+      ?? group.groupPrompt?.trim()
+      ?? group.videoPrompt?.trim()
+      ?? '',
     compositePromptText: draftMetadata?.compositePromptText
       ?? group.videoPrompt?.trim()
       ?? group.groupPrompt?.trim()
@@ -424,6 +428,29 @@ function createReviewDraft(group: NovelPromotionShotGroup): ReviewDraftState {
     storyboardMoodPresetId: draftMetadata?.storyboardMoodPresetId ?? '',
     customMood: draftMetadata?.customMood ?? '',
   }
+}
+
+function buildFallbackDraftMetadata(group: NovelPromotionShotGroup): ShotGroupDraftMetadata {
+  const prompt = group.groupPrompt?.trim() || group.videoPrompt?.trim() || ''
+  return normalizeShotGroupDraftMetadata({
+    segmentOrder: 1,
+    clipId: group.id,
+    segmentKey: group.id,
+    sourceClipId: group.id,
+    segmentIndexWithinClip: 1,
+    segmentStartSeconds: 0,
+    segmentEndSeconds: 15,
+    sceneLabel: group.title || '多镜头片段',
+    narrativePrompt: prompt || null,
+    embeddedDialogue: null,
+    dialogueOverrideText: null,
+    shotRhythmGuidance: null,
+    expectedShotCount: group.items?.length || 9,
+    sourceStatus: 'ready',
+    placeholderReason: null,
+    referencePromptText: prompt || null,
+    compositePromptText: group.videoPrompt?.trim() || group.groupPrompt?.trim() || null,
+  })
 }
 
 function stringifyServerSnapshot(value: unknown) {
@@ -504,7 +531,7 @@ export function buildReviewDraftMetadata(
   inheritedMoodPresetId?: string | null,
 ): ShotGroupDraftMetadata | null {
   const currentMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
-  if (!currentMetadata) return null
+    ?? buildFallbackDraftMetadata(group)
   const selectedStoryboardMode = resolveStoryboardModeDefinition(storyboardModes, draft.storyboardModeId)
 
   return normalizeShotGroupDraftMetadata({
@@ -563,6 +590,7 @@ function ShotGroupVideoReviewSection({
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
   const [editingAssetGroupId, setEditingAssetGroupId] = useState<string | null>(null)
   const [promptViewer, setPromptViewer] = useState<{ title: string; prompt: string } | null>(null)
+  const [reviewErrors, setReviewErrors] = useState<Record<string, string | null>>({})
   const visibleShotGroups = useMemo(() => (
     shotGroups.filter((group) => {
       const draftMetadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
@@ -627,6 +655,25 @@ function ShotGroupVideoReviewSection({
       await updateMutation.mutateAsync(payload)
     } finally {
       setSavingGroupId((current) => (current === group.id ? null : current))
+    }
+  }
+
+  const handleGenerateReviewImage = async (
+    group: NovelPromotionShotGroup,
+    targetField: 'reference' | 'composite',
+  ) => {
+    setReviewErrors((previous) => ({ ...previous, [group.id]: null }))
+    try {
+      await persistReviewDraft(group)
+      await generateMutation.mutateAsync({ shotGroupId: group.id, targetField })
+    } catch (error) {
+      setReviewErrors((previous) => ({
+        ...previous,
+        [group.id]: resolveMutationError(
+          error,
+          targetField === 'reference' ? '生成辅助参考图失败' : '生成分镜参考表失败',
+        ),
+      }))
     }
   }
 
@@ -1161,10 +1208,7 @@ function ShotGroupVideoReviewSection({
                             <button
                               type="button"
                               onClick={() => {
-                                void (async () => {
-                                  await persistReviewDraft(group)
-                                  generateMutation.mutate({ shotGroupId: group.id, targetField: 'reference' })
-                                })()
+                                void handleGenerateReviewImage(group, 'reference')
                               }}
                               disabled={isUploadingReference || isGeneratingReference || isGeneratingBoard || isSavingReviewDraft}
                               className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
@@ -1176,10 +1220,7 @@ function ShotGroupVideoReviewSection({
                             <button
                               type="button"
                               onClick={() => {
-                                void (async () => {
-                                  await persistReviewDraft(group)
-                                  generateMutation.mutate({ shotGroupId: group.id, targetField: 'composite' })
-                                })()
+                                void handleGenerateReviewImage(group, 'composite')
                               }}
                               disabled={!hasAuxReference || isUploadingReference || isGeneratingReference || isGeneratingBoard || isSavingReviewDraft}
                               className="inline-flex items-center justify-center rounded-full border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] px-3 py-2 text-xs font-medium text-[var(--glass-text-primary)]"
@@ -1214,6 +1255,11 @@ function ShotGroupVideoReviewSection({
                       </div>
                     ))}
                   </div>
+                  {reviewErrors[group.id] ? (
+                    <div className="rounded-xl border border-[var(--glass-tone-danger-border)] bg-[var(--glass-tone-danger-bg)]/70 px-3 py-2 text-xs text-[var(--glass-tone-danger-fg)]">
+                      {reviewErrors[group.id]}
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

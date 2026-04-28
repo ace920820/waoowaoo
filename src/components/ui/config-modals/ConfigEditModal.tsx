@@ -48,6 +48,7 @@ interface SettingsModalProps {
     characterModel?: string
     locationModel?: string
     imageModel?: string
+    shotGroupReferenceImageModel?: string
     editModel?: string
 
     videoModel?: string
@@ -62,6 +63,7 @@ interface SettingsModalProps {
     onCharacterModelChange?: (value: string) => void
     onLocationModelChange?: (value: string) => void
     onImageModelChange?: (value: string) => void
+    onShotGroupReferenceImageModelChange?: (value: string) => void
     onEditModelChange?: (value: string) => void
 
     onVideoModelChange?: (value: string) => void
@@ -137,6 +139,7 @@ export function SettingsModal({
     characterModel,
     locationModel,
     imageModel,
+    shotGroupReferenceImageModel,
     editModel,
     videoModel,
     audioModel,
@@ -150,6 +153,7 @@ export function SettingsModal({
     onCharacterModelChange,
     onLocationModelChange,
     onImageModelChange,
+    onShotGroupReferenceImageModelChange,
     onEditModelChange,
     onVideoModelChange,
     onAudioModelChange,
@@ -214,6 +218,11 @@ export function SettingsModal({
         () => userModels.image.find((model) => model.value === imageModel) || null,
         [userModels.image, imageModel],
     )
+    const effectiveShotGroupReferenceImageModel = shotGroupReferenceImageModel || imageModel
+    const selectedShotGroupReferenceImageModelOption = useMemo(
+        () => userModels.image.find((model) => model.value === effectiveShotGroupReferenceImageModel) || null,
+        [userModels.image, effectiveShotGroupReferenceImageModel],
+    )
     const selectedEditModelOption = useMemo(
         () => userModels.image.find((model) => model.value === editModel) || null,
         [userModels.image, editModel],
@@ -229,6 +238,10 @@ export function SettingsModal({
     const storyboardCapabilityFields = useMemo(
         () => extractCapabilityFields(selectedStoryboardModelOption?.capabilities, 'image'),
         [selectedStoryboardModelOption],
+    )
+    const shotGroupReferenceImageCapabilityFields = useMemo(
+        () => extractCapabilityFields(selectedShotGroupReferenceImageModelOption?.capabilities, 'image'),
+        [selectedShotGroupReferenceImageModelOption],
     )
     const editCapabilityFields = useMemo(
         () => extractCapabilityFields(selectedEditModelOption?.capabilities, 'image'),
@@ -253,6 +266,9 @@ export function SettingsModal({
     const selectedStoryboardOverrides = useMemo<Record<string, CapabilityValue>>(() => {
         return readCapabilitySelectionForModel(capabilityOverrides, imageModel)
     }, [capabilityOverrides, imageModel])
+    const selectedShotGroupReferenceImageOverrides = useMemo<Record<string, CapabilityValue>>(() => {
+        return readCapabilitySelectionForModel(capabilityOverrides, effectiveShotGroupReferenceImageModel)
+    }, [capabilityOverrides, effectiveShotGroupReferenceImageModel])
     const selectedEditOverrides = useMemo<Record<string, CapabilityValue>>(() => {
         return readCapabilitySelectionForModel(capabilityOverrides, editModel)
     }, [capabilityOverrides, editModel])
@@ -543,6 +559,22 @@ export function SettingsModal({
                                     capabilityOverrides={selectedLocationOverrides}
                                     onCapabilityChange={(field, rawValue, sample) => {
                                         applyCapabilityOverride(locationModel, field, rawValue, sample)
+                                    }}
+                                />
+                            </div>
+
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-[var(--glass-text-secondary)]">{t('shotGroupReferenceImageModel')}</label>
+                                <ModelCapabilityDropdown
+                                    models={userModels.image}
+                                    value={effectiveShotGroupReferenceImageModel}
+                                    onModelChange={(v) => handleModelChange(v, userModels.image, 'image', onShotGroupReferenceImageModelChange)}
+                                    capabilityFields={shotGroupReferenceImageCapabilityFields}
+                                    placementMode="downward"
+                                    capabilityOverrides={selectedShotGroupReferenceImageOverrides}
+                                    onCapabilityChange={(field, rawValue, sample) => {
+                                        applyCapabilityOverride(effectiveShotGroupReferenceImageModel, field, rawValue, sample)
                                     }}
                                 />
                             </div>

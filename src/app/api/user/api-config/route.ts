@@ -41,6 +41,7 @@ import type {
   OpenAICompatMediaTemplateSource,
 } from '@/lib/openai-compat-media-template'
 import { validateOpenAICompatMediaTemplate } from '@/lib/user-api/model-template/validator'
+import { getGptImage2AliasDisplayName, parseGptImage2QualityAlias } from '@/lib/model-gateway/openai-compat/image-model-alias'
 
 type ApiModeType = 'gemini-sdk' | 'openai-official'
 type GatewayRouteType = 'official' | 'openai-compat'
@@ -193,6 +194,12 @@ const OPTIONAL_PRICING_PROVIDER_KEYS = new Set([
 ])
 const OFFICIAL_ONLY_PROVIDER_KEYS = new Set(['bailian', 'siliconflow'])
 const RETIRED_PROVIDER_KEYS = new Set(['qwen'])
+const GPT_IMAGE_2_QUALITY_ALIAS_IDS = [
+  'gpt-image-2-high',
+  'gpt-image-2-medium',
+  'gpt-image-2-low',
+  'gpt-image-2-auto',
+] as const
 const MINIMAX_OFFICIAL_BASE_URL = 'https://api.minimaxi.com/v1'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -975,8 +982,9 @@ function isOpenAICompatibleMediaTemplateModel(model: StoredModel): boolean {
   return model.type === 'image' || model.type === 'video'
 }
 
-function getDefaultMediaTemplate(type: 'image' | 'video'): OpenAICompatMediaTemplate {
+function getDefaultMediaTemplate(type: 'image' | 'video', modelId?: string): OpenAICompatMediaTemplate {
   if (type === 'image') {
+    const quality = parseGptImage2QualityAlias(modelId)
     return {
       version: 1,
       mediaType: 'image',
@@ -988,6 +996,7 @@ function getDefaultMediaTemplate(type: 'image' | 'video'): OpenAICompatMediaTemp
         bodyTemplate: {
           model: '{{model}}',
           prompt: '{{prompt}}',
+          ...(quality ? { quality: '{{quality}}' } : {}),
         },
       },
       response: {
@@ -1134,7 +1143,7 @@ function resolveStoredMediaTemplates(
 
     return {
       ...model,
-      compatMediaTemplate: getDefaultMediaTemplate(expectedMediaType),
+      compatMediaTemplate: getDefaultMediaTemplate(expectedMediaType, model.modelId),
       compatMediaTemplateCheckedAt: checkedAtFallback,
       compatMediaTemplateSource: 'manual',
     }
@@ -1722,6 +1731,26 @@ export const GET = apiHandler(async () => {
         price: 0,
         // alias 回退自动从 google catalog 获取 capabilities
         capabilities: findBuiltinCapabilities(preset.type, p.id, preset.modelId),
+      }
+      disabledPresets.push({ ...withDisplayPricing(base, pricingDisplay), enabled: false })
+    }
+  }
+
+  for (const provider of providers) {
+    if (getProviderKey(provider.id) !== 'openai-compatible') continue
+    for (const modelId of GPT_IMAGE_2_QUALITY_ALIAS_IDS) {
+      const modelKey = composeModelKey(provider.id, modelId)
+      if (!modelKey || savedModelKeys.has(modelKey)) continue
+      savedModelKeys.add(modelKey)
+      const base: StoredModel = {
+        modelId,
+        modelKey,
+        name: getGptImage2AliasDisplayName(modelId) || modelId,
+        type: 'image',
+        provider: provider.id,
+        price: 0,
+        compatMediaTemplate: getDefaultMediaTemplate('image', modelId),
+        compatMediaTemplateSource: 'manual',
       }
       disabledPresets.push({ ...withDisplayPricing(base, pricingDisplay), enabled: false })
     }

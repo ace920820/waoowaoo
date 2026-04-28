@@ -37,6 +37,28 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionShotGroup: {
     findFirst: vi.fn(async () => routeState.shotGroup),
   },
+  novelPromotionCharacter: {
+    findMany: vi.fn(async () => [{
+      id: 'character-manual',
+      appearances: [{
+        id: 'character-image-1',
+        imageUrl: 'cos/character-manual.png',
+        imageUrls: JSON.stringify(['cos/character-manual.png']),
+        selectedIndex: 0,
+      }],
+    }]),
+  },
+  novelPromotionLocation: {
+    findMany: vi.fn(async ({ where }: { where?: { assetKind?: unknown } } = {}) => {
+      const isProp = where?.assetKind === 'prop'
+      if (isProp) return []
+      return [{
+        id: 'location-manual',
+        selectedImage: { id: 'location-image-1', imageUrl: 'cos/location-manual.png' },
+        images: [],
+      }]
+    }),
+  },
 }))
 
 const submitTaskMock = vi.hoisted(() => vi.fn(async (input: Record<string, unknown>) => ({
@@ -48,7 +70,8 @@ const submitTaskMock = vi.hoisted(() => vi.fn(async (input: Record<string, unkno
 
 const configServiceMock = vi.hoisted(() => ({
   getProjectModelConfig: vi.fn(async () => ({
-    storyboardModel: 'image-model-1',
+    storyboardModel: 'image-model-storyboard',
+    shotGroupReferenceImageModel: 'image-model-reference',
   })),
   resolveProjectModelCapabilityGenerationOptions: vi.fn(async () => ({
     resolution: '1024x1024',
@@ -204,6 +227,7 @@ describe('api specific - novel promotion generate shot group image assets', () =
           warnings: Array<{ assetType: string }>
         }
         storyboardMood: { presetId: string | null; customMood: string | null }
+        imageModel: string
       }
     }
 
@@ -228,6 +252,43 @@ describe('api specific - novel promotion generate shot group image assets', () =
       presetId: 'mood-rain',
       customMood: '潮湿、压迫、冷白霓虹',
     })
+    expect(json.payload.imageModel).toBe('image-model-storyboard')
+  })
+
+  it('hydrates asset image URLs before validating reference-image generation readiness', async () => {
+    const mod = await import('@/app/api/novel-promotion/[projectId]/generate-shot-group-image/route')
+    const req = buildMockRequest({
+      path: '/api/novel-promotion/project-1/generate-shot-group-image',
+      method: 'POST',
+      body: {
+        shotGroupId: 'shot-group-1',
+        targetField: 'reference',
+      },
+    })
+
+    const res = await mod.POST(req, { params: Promise.resolve({ projectId: 'project-1' }) })
+    const json = await res.json() as {
+      payload: {
+        assetReferenceImages: string[]
+        imageModel: string
+        assetBindings: {
+          location: { imageUrl?: string | null }
+          characters: Array<{ imageUrl?: string | null }>
+        }
+      }
+    }
+
+    expect(res.status).toBe(200)
+    expect(json.payload.imageModel).toBe('image-model-reference')
+    expect(configServiceMock.resolveProjectModelCapabilityGenerationOptions).toHaveBeenCalledWith(expect.objectContaining({
+      modelKey: 'image-model-reference',
+    }))
+    expect(json.payload.assetReferenceImages).toEqual([
+      'cos/location-manual.png',
+      'cos/character-manual.png',
+    ])
+    expect(json.payload.assetBindings.location?.imageUrl).toBe('cos/location-manual.png')
+    expect(json.payload.assetBindings.characters[0]?.imageUrl).toBe('cos/character-manual.png')
   })
 
   it('injects manual-over-auto asset constraints and non-blocking warnings into the composite prompt', () => {

@@ -665,6 +665,111 @@ describe('api specific - user api-config PUT provider uniqueness', () => {
     expect(model?.customPricing?.llm?.outputPerMillion).toBe(5.5)
   })
 
+  it('adds disabled gpt-image-2 quality aliases for openai-compatible providers on GET', async () => {
+    installAuthMocks()
+    mockAuthenticated('user-1')
+    prismaMock.userPreference.findUnique.mockResolvedValue({
+      customProviders: JSON.stringify([
+        { id: 'openai-compatible:zhizengzeng', name: '智增增', baseUrl: 'https://api.zhizengzeng.com/v1', apiKey: 'enc:key' },
+      ]),
+      customModels: JSON.stringify([
+        {
+          type: 'image',
+          provider: 'openai-compatible:zhizengzeng',
+          modelId: 'gpt-image-2',
+          modelKey: 'openai-compatible:zhizengzeng::gpt-image-2',
+          name: 'GPT Image 2',
+        },
+      ]),
+    })
+    const route = await import('@/app/api/user/api-config/route')
+
+    const req = buildMockRequest({
+      path: '/api/user/api-config',
+      method: 'GET',
+    })
+
+    const res = await route.GET(req, routeContext)
+    expect(res.status).toBe(200)
+    const json = await res.json() as {
+      models?: Array<{
+        modelKey?: string
+        enabled?: boolean
+        compatMediaTemplate?: { create?: { bodyTemplate?: Record<string, unknown> } }
+      }>
+    }
+    const aliases = (json.models || []).filter((model) => model.modelKey?.startsWith('openai-compatible:zhizengzeng::gpt-image-2-'))
+    expect(aliases.map((model) => model.modelKey).sort()).toEqual([
+      'openai-compatible:zhizengzeng::gpt-image-2-auto',
+      'openai-compatible:zhizengzeng::gpt-image-2-high',
+      'openai-compatible:zhizengzeng::gpt-image-2-low',
+      'openai-compatible:zhizengzeng::gpt-image-2-medium',
+    ])
+    expect(aliases.every((model) => model.enabled === false)).toBe(true)
+    expect(aliases.every((model) => model.compatMediaTemplate?.create?.bodyTemplate?.quality === '{{quality}}')).toBe(true)
+  })
+
+  it('saves enabled gpt-image-2 quality aliases with quality template placeholder', async () => {
+    installAuthMocks()
+    mockAuthenticated('user-1')
+    prismaMock.userPreference.findUnique.mockResolvedValue({
+      customProviders: JSON.stringify([
+        { id: 'openai-compatible:zhizengzeng', name: '智增增', baseUrl: 'https://api.zhizengzeng.com/v1', apiKey: 'enc:key' },
+      ]),
+      customModels: JSON.stringify([]),
+    })
+    const route = await import('@/app/api/user/api-config/route')
+
+    const req = buildMockRequest({
+      path: '/api/user/api-config',
+      method: 'PUT',
+      body: {
+        providers: [
+          { id: 'openai-compatible:zhizengzeng', name: '智增增', baseUrl: 'https://api.zhizengzeng.com/v1', apiKey: undefined },
+        ],
+        models: [
+          {
+            modelId: 'gpt-image-2-high',
+            modelKey: 'openai-compatible:zhizengzeng::gpt-image-2-high',
+            name: 'GPT Image 2 (high)',
+            type: 'image',
+            provider: 'openai-compatible:zhizengzeng',
+            enabled: true,
+            price: 0,
+            priceLabel: '--',
+            compatMediaTemplate: {
+              version: 1,
+              mediaType: 'image',
+              mode: 'sync',
+              create: {
+                method: 'POST',
+                path: '/images/generations',
+                contentType: 'application/json',
+                bodyTemplate: {
+                  model: '{{model}}',
+                  prompt: '{{prompt}}',
+                  quality: '{{quality}}',
+                },
+              },
+              response: {
+                outputUrlPath: '$.data[0].url',
+                outputUrlsPath: '$.data',
+                errorPath: '$.error.message',
+              },
+            },
+            compatMediaTemplateSource: 'manual',
+          },
+        ],
+      },
+    })
+
+    const res = await route.PUT(req, routeContext)
+    expect(res.status).toBe(200)
+    const savedModels = readSavedModelsFromUpsert()
+    expect(savedModels[0]?.modelId).toBe('gpt-image-2-high')
+    expect((savedModels[0]?.compatMediaTemplate as { create?: { bodyTemplate?: Record<string, unknown> } } | undefined)?.create?.bodyTemplate?.quality).toBe('{{quality}}')
+  })
+
   it('defaults gemini-compatible provider to official route when apiMode is gemini-sdk', async () => {
     installAuthMocks()
     mockAuthenticated('user-1')

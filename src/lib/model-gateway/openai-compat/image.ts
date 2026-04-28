@@ -6,6 +6,7 @@ import {
   resolveOpenAICompatClientConfig,
   toUploadFile,
 } from './common'
+import { resolveOpenAICompatImageModelAlias } from './image-model-alias'
 
 type OpenAIImageResponseFormat = 'url' | 'b64_json'
 type OpenAIImageOutputFormat = 'png' | 'jpeg' | 'webp'
@@ -99,8 +100,15 @@ function resolveRawSize(options: Record<string, unknown>): string | undefined {
 function resolveModelId(modelId: string | undefined, options: Record<string, unknown>): string {
   const optionModelId = readStringOption(options.modelId, 'modelId')
   const selected = (modelId || optionModelId || '').trim()
-  if (selected) return selected
+  if (selected) return resolveOpenAICompatImageModelAlias(selected).modelId || selected
   return 'gpt-image-1'
+}
+
+function resolveModelQuality(modelId: string | undefined, options: Record<string, unknown>): OpenAIImageGenerateQuality | undefined {
+  const optionModelId = readStringOption(options.modelId, 'modelId')
+  const selected = (modelId || optionModelId || '').trim()
+  const aliasQuality = resolveOpenAICompatImageModelAlias(selected).quality
+  return normalizeGenerateQuality(aliasQuality || options.quality)
 }
 
 function toMimeFromOutputFormat(outputFormat: string | undefined): string {
@@ -166,7 +174,7 @@ export async function generateImageViaOpenAICompat(request: OpenAICompatImageReq
   const normalizedModelId = resolveModelId(modelId, options)
   const responseFormat = normalizeResponseFormat(options.responseFormat)
   const outputFormat = normalizeOutputFormat(options.outputFormat)
-  const quality = normalizeGenerateQuality(options.quality)
+  const quality = resolveModelQuality(modelId, options)
   const rawSize = resolveRawSize(options)
   const size = normalizeOpenAIImageSize(rawSize)
 

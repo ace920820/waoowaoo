@@ -319,6 +319,7 @@ export interface NovelPromotionProject {
   characterModel: string
   locationModel: string
   storyboardModel: string
+  shotGroupReferenceImageModel: string | null
   editModel: string
   videoModel: string
   audioModel: string

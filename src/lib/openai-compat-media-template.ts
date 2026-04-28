@@ -61,5 +61,6 @@ export const TEMPLATE_PLACEHOLDER_ALLOWLIST = new Set([
   'duration',
   'resolution',
   'size',
+  'quality',
   'task_id',
 ])

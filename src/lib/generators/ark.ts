@@ -61,7 +61,7 @@ type ArkVideoContentItem =
     | {
         type: 'image_url'
         image_url: { url: string }
-        role?: 'first_frame' | 'last_frame' | 'reference_image'
+        role: 'first_frame' | 'last_frame' | 'reference_image'
     }
     | {
         type: 'video_url'
@@ -172,9 +172,11 @@ function parseArkVideoContentItem(item: unknown, index: number): ArkVideoContent
         if (!isRecord(item.image_url) || !isNonEmptyString(item.image_url.url)) {
             throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.image_url.url is required`)
         }
+        if (!isNonEmptyString(item.role)) {
+            throw new Error(`ARK_VIDEO_OPTION_INVALID: ${path}.role is required`)
+        }
         if (
-            item.role !== undefined
-            && item.role !== 'first_frame'
+            item.role !== 'first_frame'
             && item.role !== 'last_frame'
             && item.role !== 'reference_image'
         ) {
@@ -183,7 +185,7 @@ function parseArkVideoContentItem(item: unknown, index: number): ArkVideoContent
         return {
             type: 'image_url',
             image_url: { url: item.image_url.url.trim() },
-            ...(item.role ? { role: item.role } : {}),
+            role: item.role,
         }
     }
 
@@ -225,7 +227,7 @@ async function normalizeArkVideoContentItems(items: ArkVideoContentItem[]) {
             normalized.push({
                 type: 'image_url',
                 image_url: { url: await normalizeToBase64ForGeneration(item.image_url.url) },
-                ...(item.role ? { role: item.role } : {}),
+                role: item.role,
             })
             continue
         }
@@ -555,7 +557,8 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             const imageBase64 = await normalizeToBase64ForGeneration(imageUrl)
             content.push({
                 type: 'image_url',
-                image_url: { url: imageBase64 }
+                image_url: { url: imageBase64 },
+                role: 'first_frame'
             })
         }
 

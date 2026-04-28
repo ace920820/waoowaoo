@@ -58,6 +58,7 @@ export function useWorkspaceProjectSnapshot({
       characterModel: projectData?.characterModel,
       locationModel: projectData?.locationModel,
       storyboardModel: projectData?.storyboardModel,
+      shotGroupReferenceImageModel: projectData?.shotGroupReferenceImageModel,
       editModel: projectData?.editModel,
       videoModel: projectData?.videoModel,
       audioModel: projectData?.audioModel,

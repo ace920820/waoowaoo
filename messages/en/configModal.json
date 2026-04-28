@@ -13,6 +13,7 @@
     "characterModel": "Character Model",
     "locationModel": "Location Model",
     "storyboardModel": "Storyboard Model",
+    "shotGroupReferenceImageModel": "Shot Group Reference Image Model",
     "editModel": "Edit Model",
     "videoModel": "Video Model",
     "audioModel": "Speech Synthesis Model",

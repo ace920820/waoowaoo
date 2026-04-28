@@ -26,6 +26,7 @@ const MODEL_FIELDS = [
   'characterModel',
   'locationModel',
   'storyboardModel',
+  'shotGroupReferenceImageModel',
   'editModel',
   'videoModel',
   'audioModel',
@@ -36,6 +37,7 @@ const MODEL_FIELD_TO_TYPE: Record<typeof MODEL_FIELDS[number], UnifiedModelType>
   characterModel: 'image',
   locationModel: 'image',
   storyboardModel: 'image',
+  shotGroupReferenceImageModel: 'image',
   editModel: 'image',
   videoModel: 'video',
   audioModel: 'audio',
@@ -161,6 +163,7 @@ function getNextProjectModelMap(
     characterModel: string | null
     locationModel: string | null
     storyboardModel: string | null
+    shotGroupReferenceImageModel: string | null
     editModel: string | null
     videoModel: string | null
     audioModel: string | null
@@ -262,6 +265,7 @@ export const GET = apiHandler(async (
       characterModel: true,
       locationModel: true,
       storyboardModel: true,
+      shotGroupReferenceImageModel: true,
       editModel: true,
       videoModel: true,
       audioModel: true,
@@ -274,6 +278,7 @@ export const GET = apiHandler(async (
       characterModel: projectData.characterModel,
       locationModel: projectData.locationModel,
       storyboardModel: projectData.storyboardModel,
+      shotGroupReferenceImageModel: projectData.shotGroupReferenceImageModel,
       editModel: projectData.editModel,
       videoModel: projectData.videoModel,
       audioModel: projectData.audioModel,
@@ -306,6 +311,7 @@ export const PATCH = apiHandler(async (
       characterModel: true,
       locationModel: true,
       storyboardModel: true,
+      shotGroupReferenceImageModel: true,
       editModel: true,
       videoModel: true,
       audioModel: true,
@@ -316,7 +322,7 @@ export const PATCH = apiHandler(async (
 
   const allowedProjectFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
-    'editModel', 'videoModel', 'audioModel', 'videoRatio', 'artStyle',
+    'shotGroupReferenceImageModel', 'editModel', 'videoModel', 'audioModel', 'videoRatio', 'artStyle',
     'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides', 'storyboardMoodPresets', 'storyboardDefaultMoodPresetId',
     'episodeSplitPreference',
   ] as const

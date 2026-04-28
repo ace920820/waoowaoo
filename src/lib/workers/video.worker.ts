@@ -52,7 +52,7 @@ type ShotGroupAdvancedFields = {
 }
 type ShotGroupDialogueLanguage = 'zh' | 'en' | 'ja'
 type ArkReferenceContentItem =
-  | { type: 'image_url'; image_url: { url: string }; role?: 'reference_image' }
+  | { type: 'image_url'; image_url: { url: string }; role: 'reference_image' }
   | { type: 'video_url'; video_url: { url: string }; role: 'reference_video' }
   | { type: 'audio_url'; audio_url: { url: string }; role: 'reference_audio' }
 
@@ -502,7 +502,7 @@ async function buildShotGroupArkContentPlan(projectId: string, shotGroup: ShotGr
   let imageIndex = 0
   let audioIndex = 0
 
-  const pushImage = (url: string | null | undefined, sourceType: string, label: string, usage: string, role?: 'reference_image') => {
+  const pushImage = (url: string | null | undefined, sourceType: string, label: string, usage: string) => {
     if (imageIndex >= 9) return
     const signed = toSignedUrlIfCos(url, 3600)
     if (!signed || uniqueUrls.has(signed)) return
@@ -511,7 +511,7 @@ async function buildShotGroupArkContentPlan(projectId: string, shotGroup: ShotGr
     contentItems.push({
       type: 'image_url',
       image_url: { url: signed },
-      ...(role ? { role } : {}),
+      role: 'reference_image',
     })
     references.push({ token: `@Image${imageIndex}`, type: 'image', sourceType, label, url: signed, usage })
   }
@@ -532,33 +532,33 @@ async function buildShotGroupArkContentPlan(projectId: string, shotGroup: ShotGr
 
   pushImage(shotGroup.compositeImageUrl, 'composite_storyboard', '分镜参考表', '参考镜头顺序、构图和动作节奏；不要把九宫格画面直接做成拼贴成片')
   if (settings.includeConceptImage) {
-    pushImage(shotGroup.referenceImageUrl, 'concept_reference', '辅助参考图 / 概念母图', '参考整体美术、空间、光线、人物气质和氛围', 'reference_image')
+    pushImage(shotGroup.referenceImageUrl, 'concept_reference', '辅助参考图 / 概念母图', '参考整体美术、空间、光线、人物气质和氛围')
   }
 
   if (settings.includeCharacterImages) {
     const selectedCharacterIds = selectedAssetIdsOrAll(settings.selectedCharacterAssetIds, draftMetadata?.effectiveCharacterAssets ?? [])
     for (const asset of draftMetadata?.effectiveCharacterAssets ?? []) {
       if (!asset.assetId || !selectedCharacterIds.includes(asset.assetId)) continue
-      pushImage(asset.imageUrl || characterImageById.get(asset.assetId), 'character_reference', `角色 ${asset.label}`, '必须保持角色身份、性别、脸型、发型、服装和年龄感一致', 'reference_image')
+      pushImage(asset.imageUrl || characterImageById.get(asset.assetId), 'character_reference', `角色 ${asset.label}`, '必须保持角色身份、性别、脸型、发型、服装和年龄感一致')
     }
   }
 
   if (settings.includeLocationImage && draftMetadata?.effectiveLocationAsset?.assetId) {
     const asset = draftMetadata.effectiveLocationAsset
     const locationAssetId = asset.assetId
-    pushImage(asset.imageUrl || (locationAssetId ? locationImageById.get(locationAssetId) : null), 'location_reference', `场景 ${asset.label}`, '参考空间结构、材质、光线方向和场面调度边界', 'reference_image')
+    pushImage(asset.imageUrl || (locationAssetId ? locationImageById.get(locationAssetId) : null), 'location_reference', `场景 ${asset.label}`, '参考空间结构、材质、光线方向和场面调度边界')
   }
 
   if (settings.includePropImages) {
     for (const asset of draftMetadata?.effectivePropAssets ?? []) {
       if (!asset.assetId) continue
-      pushImage(asset.imageUrl || propImageById.get(asset.assetId), 'prop_reference', `物品 ${asset.label}`, '参考关键物品外观，保持触发剧情的道具一致', 'reference_image')
+      pushImage(asset.imageUrl || propImageById.get(asset.assetId), 'prop_reference', `物品 ${asset.label}`, '参考关键物品外观，保持触发剧情的道具一致')
     }
   }
 
   if (settings.includeShotImages || mode === 'smart-multi-frame') {
     for (const item of shotGroup.items || []) {
-      pushImage(item.imageUrl, 'shot_frame_reference', item.title || `镜头 ${item.itemIndex + 1}`, '参考该镜头的构图、人物站位和动作衔接', 'reference_image')
+      pushImage(item.imageUrl, 'shot_frame_reference', item.title || `镜头 ${item.itemIndex + 1}`, '参考该镜头的构图、人物站位和动作衔接')
     }
   }
 

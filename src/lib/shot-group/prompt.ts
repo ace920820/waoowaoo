@@ -26,6 +26,8 @@ function readPlanString(plan: Record<string, unknown> | null | undefined, aliase
 function stringifyPlanValue(value: unknown): string | null {
   const text = readString(value)
   if (text) return text
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
 
   if (Array.isArray(value)) {
     const entries = value
@@ -57,7 +59,7 @@ function formatCinematicPlanDirective(
   plan: Record<string, unknown> | null | undefined,
   locale: string,
 ) {
-  const emotionalIntent = readPlanString(plan, ['emotionalIntent', 'emotional_intent'])
+  const emotionalIntent = readPlanValue(plan, ['emotionalIntent', 'emotional_intent'])
   const visualStrategy = readPlanValue(plan, ['visualStrategy', 'visual_strategy'])
 
   if (!emotionalIntent && !visualStrategy) return null
@@ -88,12 +90,20 @@ function formatCinematicShotBeats(
     const title = readString(record.title) || readString(record.name) || `${locale === 'en' ? 'Shot' : '镜头'} ${index + 1}`
     const fields = [
       ['duration', '时长'],
+      ['durationSec', '时长'],
+      ['shotId', '镜头ID'],
+      ['dramaticBeat', '戏剧节拍'],
+      ['informationUnit', '信息点'],
+      ['purpose', '目的'],
       ['shotSize', '景别'],
+      ['lens', '焦段'],
+      ['dof', '景深'],
       ['angle', '角度'],
       ['cameraMovement', '运镜'],
       ['composition', '构图'],
       ['lighting', '打光'],
       ['blocking', '场面调度'],
+      ['edit', '剪辑'],
       ['action', '动作'],
       ['dialogue', '台词'],
     ].flatMap(([key, zhLabel]) => {

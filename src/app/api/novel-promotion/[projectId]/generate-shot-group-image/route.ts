@@ -6,6 +6,7 @@ import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig, resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
 import { prisma } from '@/lib/prisma'
 import { buildShotGroupInProjectWhere } from '@/lib/novel-promotion/ownership'
+import { hydrateShotGroupDraftAssetImageUrls } from '@/lib/shot-group/asset-image-hydration'
 import { parseShotGroupDraftMetadata } from '@/lib/shot-group/draft-metadata'
 import { hasShotGroupImageOutput } from '@/lib/task/has-output'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
@@ -46,7 +47,10 @@ export const POST = apiHandler(async (
     throw new ApiError('NOT_FOUND')
   }
 
-  const draftMetadata = parseShotGroupDraftMetadata(shotGroup.videoReferencesJson)
+  const draftMetadata = await hydrateShotGroupDraftAssetImageUrls(
+    projectId,
+    parseShotGroupDraftMetadata(shotGroup.videoReferencesJson),
+  )
   const assetReferenceImages = [
     draftMetadata?.effectiveLocationAsset?.imageUrl,
     ...(draftMetadata?.effectiveCharacterAssets ?? []).map((asset) => asset.imageUrl),
@@ -73,15 +77,22 @@ export const POST = apiHandler(async (
   }
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
-  if (!projectModelConfig.storyboardModel) {
-    throw new ApiError('INVALID_PARAMS', { code: 'STORYBOARD_MODEL_NOT_CONFIGURED' })
+  const imageModel = targetField === 'reference'
+    ? (projectModelConfig.shotGroupReferenceImageModel || projectModelConfig.storyboardModel)
+    : projectModelConfig.storyboardModel
+  if (!imageModel) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: targetField === 'reference'
+        ? 'SHOT_GROUP_REFERENCE_IMAGE_MODEL_NOT_CONFIGURED'
+        : 'STORYBOARD_MODEL_NOT_CONFIGURED',
+    })
   }
   try {
-    await resolveModelSelection(session.user.id, projectModelConfig.storyboardModel, 'image')
+    await resolveModelSelection(session.user.id, imageModel, 'image')
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Storyboard image model is invalid'
     throw new ApiError('INVALID_PARAMS', {
-      code: 'STORYBOARD_MODEL_INVALID',
+      code: targetField === 'reference' ? 'SHOT_GROUP_REFERENCE_IMAGE_MODEL_INVALID' : 'STORYBOARD_MODEL_INVALID',
       message,
     })
   }
@@ -90,7 +101,7 @@ export const POST = apiHandler(async (
     projectId,
     userId: session.user.id,
     modelType: 'image',
-    modelKey: projectModelConfig.storyboardModel,
+    modelKey: imageModel,
   })
 
   const billingPayload = {
@@ -110,7 +121,7 @@ export const POST = apiHandler(async (
       presetId: draftMetadata?.storyboardMoodPresetId ?? null,
       customMood: draftMetadata?.customMood ?? null,
     },
-    imageModel: projectModelConfig.storyboardModel,
+    imageModel,
     ...(Object.keys(capabilityOptions).length > 0 ? { generationOptions: capabilityOptions } : {}),
   }
   const hasOutputAtStart = await hasShotGroupImageOutput(shotGroupId)

@@ -46,6 +46,9 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 | 2026-04-26 | `260426-rln-fix-storyboard-import-dialog-opacity-and` | Improved storyboard import modal opacity and fixed Nano Banana 2 reference-image generation failures caused by `0.5K` imageSize. |
 | 2026-04-26 | `260426-u23-imageurl-referenceimages` | Hydrated missing character/location/prop asset image URLs before shot-group reference generation and added a regression ensuring 李未 enters `referenceImages`. |
 | 2026-04-27 | `260427-0dt-seedance-2-0-contentitems` | Added configurable Seedance reference materials for multi-shot video: concept images, selected character/scene/prop/shot images, character voice audio, `contentItems`, and `@Image`/`@Audio` prompt instructions. |
+| 2026-04-28 | `260428-sy7-storyboard-package-mapper-prompt-formatt` | Enriched storyboard package import mapping so visible prompts and final model prompts include director per-shot cinematic fields without schema changes. |
+| 2026-04-28 | `260428-w7y-gpt-image-2-high-medium-low-auto-quality` | Exposed OpenAI-compatible `gpt-image-2` as high/medium/low/auto quality aliases; follow-ups allowed the `{{quality}}` placeholder and accepted `b64_json` template image responses. |
+| 2026-04-28 | `260428-x6i-shot-group-reference-image-model` | Added project-level auxiliary reference image model selection (`shotGroupReferenceImageModel`) and routed multi-shot reference image generation to it while keeping storyboard board generation on `storyboardModel`. |
 
 ### UAT / Verification Notes
 

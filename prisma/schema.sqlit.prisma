@@ -266,6 +266,7 @@ model NovelPromotionProject {
   characterModel  String? // 用户配置的角色图片模型
   locationModel   String? // 用户配置的场景图片模型
   storyboardModel String? // 用户配置的分镜图片模型
+  shotGroupReferenceImageModel String? // 用户配置的多镜头辅助参考图模型
   editModel       String? // 用户配置的修图/编辑模型
   videoResolution String                    @default("720p")
   capabilityOverrides String?

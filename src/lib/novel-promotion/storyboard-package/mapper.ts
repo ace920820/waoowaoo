@@ -185,11 +185,76 @@ function formatShotRhythmGuidance(segment: StoryboardPackageSegment) {
   ].filter(Boolean).join('\n')
 }
 
+function formatShotField(label: string, value: string | number | null | undefined) {
+  if (value === null || value === undefined) return []
+  const text = typeof value === 'number' ? String(value) : value.trim()
+  return text ? [`${label}=${text}`] : []
+}
+
+function formatDirectorShotLine(shot: StoryboardPackageShot) {
+  const fields = [
+    ...formatShotField('shotId', shot.shotId),
+    ...formatShotField('时长', shot.durationSec === null || shot.durationSec === undefined ? null : `${shot.durationSec}s`),
+    ...formatShotField('戏剧节拍', shot.dramaticBeat),
+    ...formatShotField('信息点', shot.informationUnit),
+    ...formatShotField('目的', shot.purpose),
+    ...formatShotField('场面调度', shot.blocking),
+    ...formatShotField('景别', shot.shotSize),
+    ...formatShotField('焦段', shot.lens),
+    ...formatShotField('景深', shot.dof),
+    ...formatShotField('角度', shot.angle),
+    ...formatShotField('运镜', shot.cameraMovement),
+    ...formatShotField('构图', shot.composition),
+    ...formatShotField('打光', shot.lighting),
+    ...formatShotField('剪辑', shot.edit),
+    ...formatShotField('画面提示词', shot.imagePrompt),
+  ]
+  return `镜头${shot.index}《${shot.title}》：${fields.join('；')}`
+}
+
+function formatDirectorShotPlan(segment: StoryboardPackageSegment) {
+  return segment.cinematicPlan.shots
+    .slice()
+    .sort((left, right) => left.index - right.index)
+    .map(formatDirectorShotLine)
+    .join('\n')
+}
+
+function buildDirectorReferencePrompt(segment: StoryboardPackageSegment) {
+  const visualStrategy = JSON.stringify(segment.cinematicPlan.visualStrategy ?? {}, null, 0)
+  const emotionalIntent = JSON.stringify(segment.cinematicPlan.emotionalIntent ?? {}, null, 0)
+  const shotAnchors = segment.cinematicPlan.shots
+    .slice()
+    .sort((left, right) => left.index - right.index)
+    .map((shot) => `镜头${shot.index}《${shot.title}》：${shot.imagePrompt}`)
+    .join('\n')
+  return [
+    segment.reviewConfig.referencePromptText,
+    `导演情绪意图：${emotionalIntent}`,
+    `导演视觉策略：${visualStrategy}`,
+    `关键镜头视觉锚点：\n${shotAnchors}`,
+  ].filter(Boolean).join('\n\n')
+}
+
+function buildDirectorCompositePrompt(segment: StoryboardPackageSegment) {
+  return [
+    segment.reviewConfig.compositePromptText,
+    `导演逐镜头分镜表要求：\n${formatDirectorShotPlan(segment)}`,
+  ].join('\n\n')
+}
+
+function buildDirectorVideoPrompt(segment: StoryboardPackageSegment) {
+  return [
+    segment.videoConfig.videoPrompt,
+    `导演逐镜头视频执行表：\n${formatDirectorShotPlan(segment)}`,
+  ].join('\n\n')
+}
+
 function mapShotToItem(shot: StoryboardPackageShot): StoryboardPackageImportShotItem {
   return {
     itemIndex: shot.index - 1,
     title: shot.title || null,
-    prompt: shot.imagePrompt || null,
+    prompt: formatDirectorShotLine(shot),
     durationSec: shot.durationSec ?? null,
     shotSize: shot.shotSize || null,
     angle: shot.angle || null,
@@ -237,6 +302,9 @@ function mapSegment(params: {
   const dialogueText = segment.videoConfig.dialogueText.trim()
   const cinematicPlan = buildCinematicPlan(segment)
   const generationOptions = sanitizeShotGroupGenerationOptions(segment.videoConfig.generationOptions)
+  const referencePromptText = buildDirectorReferencePrompt(segment)
+  const compositePromptText = buildDirectorCompositePrompt(segment)
+  const videoPrompt = buildDirectorVideoPrompt(segment)
 
   return {
     packageId: pkg.packageId,
@@ -251,8 +319,8 @@ function mapSegment(params: {
     shotGroupFields: {
       title: segment.title,
       templateKey: segment.reviewConfig.templateKey,
-      groupPrompt: segment.reviewConfig.compositePromptText,
-      videoPrompt: segment.videoConfig.videoPrompt,
+      groupPrompt: compositePromptText,
+      videoPrompt,
       generateAudio: segment.videoConfig.generateAudio,
       includeDialogue: segment.videoConfig.includeDialogue || Boolean(dialogueText),
       dialogueLanguage: segment.videoConfig.dialogueLanguage,
@@ -269,15 +337,15 @@ function mapSegment(params: {
       segmentStartSeconds: timeWindow.start,
       segmentEndSeconds: timeWindow.end || timeWindow.start + segment.targetDurationSec,
       sceneLabel: segment.sceneLabel,
-      narrativePrompt: segment.reviewConfig.compositePromptText,
+      narrativePrompt: compositePromptText,
       embeddedDialogue: dialogueText || null,
       dialogueOverrideText: dialogueText || null,
       shotRhythmGuidance: formatShotRhythmGuidance(segment),
       expectedShotCount: items.length,
       sourceStatus: 'ready',
       placeholderReason: null,
-      referencePromptText: segment.reviewConfig.referencePromptText,
-      compositePromptText: segment.reviewConfig.compositePromptText,
+      referencePromptText,
+      compositePromptText,
       storyboardModeId: segment.reviewConfig.storyboardMode.id,
       storyboardModeLabel: segment.reviewConfig.storyboardMode.label,
       storyboardModePromptText: segment.reviewConfig.storyboardMode.promptText,
@@ -288,7 +356,14 @@ function mapSegment(params: {
         : null,
       scriptDerivedCharacterAssets: assetMatchRequests.characters.map(toScriptDerivedAssetReference),
       scriptDerivedPropAssets: assetMatchRequests.props.map(toScriptDerivedAssetReference),
-      cinematicPlan,
+      cinematicPlan: {
+        ...cinematicPlan,
+        importedRawPrompts: {
+          referencePromptText: segment.reviewConfig.referencePromptText,
+          compositePromptText: segment.reviewConfig.compositePromptText,
+          videoPrompt: segment.videoConfig.videoPrompt,
+        },
+      },
     },
     assetMatchRequests,
     warnings: buildWarnings(assetMatchRequests),
