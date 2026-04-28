@@ -90,7 +90,7 @@
     "test:all": "npm run test:guards && npm run test:unit:all && npm run test:billing:integration && npm run test:billing:concurrency && npm run test:integration:api && npm run test:integration:provider && npm run test:integration:chain && npm run test:integration:task && npm run test:system && npm run test:regression:cases",
     "test:regression": "npm run test:all",
     "test:pr": "bash scripts/test-regression-runner.sh npm run test:all",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "prisma generate && tsc --noEmit",
     "lint:all": "npm run lint -- .",
     "verify:commit": "npm run lint:all && npm run typecheck && npm run test:all",
     "verify:push": "npm run lint:all && npm run typecheck && npm run test:all && npm run build",
