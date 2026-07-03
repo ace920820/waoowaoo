@@ -49,6 +49,7 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 | 2026-04-28 | `260428-sy7-storyboard-package-mapper-prompt-formatt` | Enriched storyboard package import mapping so visible prompts and final model prompts include director per-shot cinematic fields without schema changes. |
 | 2026-04-28 | `260428-w7y-gpt-image-2-high-medium-low-auto-quality` | Exposed OpenAI-compatible `gpt-image-2` as high/medium/low/auto quality aliases; follow-ups allowed the `{{quality}}` placeholder and accepted `b64_json` template image responses. |
 | 2026-04-28 | `260428-x6i-shot-group-reference-image-model` | Added project-level auxiliary reference image model selection (`shotGroupReferenceImageModel`) and routed multi-shot reference image generation to it while keeping storyboard board generation on `storyboardModel`. |
+| 2026-07-03 | `260703-lqd-fix-shot-group-videoreferencesjson-overf` | Widened `NovelPromotionShotGroup.videoReferencesJson` to MySQL `LONGTEXT` so imported cinematic plans and submitted storyboard prompts can persist without overflowing the column. |
 
 ### UAT / Verification Notes
 

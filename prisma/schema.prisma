@@ -363,7 +363,7 @@ model NovelPromotionShotGroup {
   smartMultiFrameEnabled Boolean                 @default(false)
   videoModel       String?
   videoSourceType  String?
-  videoReferencesJson String?                    @db.Text
+  videoReferencesJson String?                    @db.LongText
   videoUrl         String?                       @db.Text
   referenceImageMediaId String?
   savedTailFrameUrl String?                      @db.Text
