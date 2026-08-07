@@ -2,83 +2,110 @@
 
 ## What This Is
 
-waoowaoo 是一个面向短剧 / 漫画视频创作的 AI Studio，已经具备从故事、剧本、资产、分镜到视频与配音的完整生产能力。当前阶段的核心工作不是重新定义产品，而是重构“从剧本进入生产”的主流程，让用户能更快进入可直接绘制与生成的视频生产阶段。
+waoowaoo 是一个面向 AI 影视生产的 Web 工作台，现有系统已经覆盖项目、剧本、角色/场景/物品资产、分镜、图片生成、视频生成、任务队列、模型网关和对象存储。
 
-本轮改造聚焦剧本页的流程升级：在保留传统精细分镜链路的同时，引入以集为单位配置的“多镜头片段模式”，把它设为默认快路径，并让它更贴合平台已具备的多镜头片段合成能力。
+从 v1.1 开始，产品将新增“AI 视频翻拍工作台”能力：用户导入一段原始影视或动画视频，在同一个项目中完成镜头切分与关键帧确认、图片 Prompt 和 Video Prompt 分析、关键帧与视频镜头生成、版本比较和人工审核，最终交付可供人工剪辑的 Shot 视频素材。
+
+这不是一键式全自动 Agent，也不是把 SceneDetect、Codex 和生成模型继续作为彼此分离的工具。waoowaoo 负责持久化 Project / Shot / Task / Asset / Version / Review 状态，并通过后台执行器调用外部分析能力和现有生成基础设施。
 
 ## Core Value
 
-用户在完成剧本后，必须能用更短路径、更少无效编辑成本进入可生产的视频生成阶段。
+用户只做镜头判断、Prompt 修订和版本选择等高价值决策，系统自动完成从原始视频到可编辑 Shot 视频素材之间的重复生产工作，并保证所有中间状态可追踪、可回退、可重试。
+
+## Current Milestone: v1.1 AI 视频翻拍工作台整合
+
+**Goal:** 在 waoowaoo 内打通一个可实际使用的人机协作闭环：原视频导入 → 镜头与关键帧确认 → 图片 Prompt → 新关键帧 → Video Prompt → 新视频镜头 → 素材完整性检查与导出。
+
+**Target features:**
+
+- 新建“视频翻拍”项目模式，并以 Shot 作为跨阶段共享的核心业务对象
+- 接入 SceneDetect 的视频导入、镜头边界与关键帧数据，保留人工调整和确认
+- 接入 Codex/GPT-5.6 的结构化图片 Prompt 与 Video Prompt 分析能力
+- 复用 waoowaoo 现有图片/视频模型网关、任务队列、Worker、存储和生成页面能力
+- 为 Prompt、关键帧和视频结果提供版本、选中版本、人工审核、单镜头/批量重试
+- 提供统一进度与最终素材检查，输出给外部人工剪辑流程
 
 ## Requirements
 
 ### Validated
 
-- ✓ 用户可以从故事进入剧本与分片段剧本流程 — existing
-- ✓ 用户可以围绕集、片段、角色、场景和资产进行创作管理 — existing
-- ✓ 用户可以生成与编辑分镜、配音、视频等生产资料 — existing
-- ✓ 平台已经具备多镜头片段合成相关能力与对应 UI 基础 — existing
-- ✓ 用户可以在工作区内按集推进创作流程 — existing
+- ✓ 项目、用户、数据库、对象存储和项目级资产组织已经存在 — v1.0 之前
+- ✓ 图片生成与视频生成已经通过统一模型配置和后台 Worker 运行 — existing
+- ✓ 任务状态、队列、失败处理和前端任务反馈已有可复用基础 — existing
+- ✓ 多镜头提示词、资产引用、生成参数和可编辑下游交接已经落地 — v1.0
+- ✓ 导演分镜包 schema、preview/commit 导入和可编辑预填已经落地 — v1.0
+- ✓ SceneDetect 已能完成原视频导入、镜头边界识别和关键帧提取 — external existing capability
+- ✓ `image-to-structured-prompt` 已能将关键帧反推为结构化图片生成 Prompt — Codex skill
+- ✓ Codex/GPT-5.6 能结合原视频片段、时间表与首尾关键帧生成镜头级 Video Prompt — model capability
 
 ### Active
 
-- [ ] 以集为单位在剧本页提供两种生产模式：传统模式 / 多镜头片段模式
-- [ ] 将多镜头片段模式设为默认模式，并要求在“确认并开始绘制”前完成配置
-- [ ] 在多镜头片段模式下，片段剧本生成后默认跳过冗长的传统分镜剧本生成
-- [ ] 在多镜头片段模式下，直接产出适合多镜头片段生成的情节短剧本提示词与对应台词内容
-- [ ] 在多镜头片段模式下，默认不预生成单镜头分镜，但允许用户手动补充单镜头分镜
-- [ ] 调整剧本页相关 UI，让模式切换、字段显隐和行动路径与新流程一致且可直接使用
+- [ ] 用户可以在 waoowaoo 中创建视频翻拍项目并导入原始视频
+- [ ] 用户可以审核和修改自动切分的 Shot 边界及关键帧
+- [ ] 用户可以为 Shot 生成、编辑、批准和版本化结构化图片 Prompt
+- [ ] 用户可以复用现有生成基础设施为关键帧生成多个版本并选择采用版本
+- [ ] 用户可以为 Shot 生成、编辑、批准和版本化 Video Prompt
+- [ ] 用户可以用采用关键帧和 Video Prompt 生成多个视频版本并选择采用版本
+- [ ] 用户可以单独、批量或仅针对失败 Shot 运行、取消、重试和恢复任务
+- [ ] 用户可以查看整个翻拍项目的阶段进度、缺失项、失败项和审核状态
+- [ ] 用户可以导出已采用的 Shot 视频素材及时间表/Prompt/版本元数据，交给人工剪辑
 
 ### Out of Scope
 
-- 多镜头分镜表接入人物 / 物品 / 场景资产素材 — 留到下一阶段处理，本轮先完成流程级改造
-- 扩展真正的全能参考模式（`@` 资产、多图 / 多视频 / 多音频 / mp3 特征注入）— 属于能力上限增强，不是当前第一阶段阻塞项
-- 完全取消单镜头分镜 — 不符合产品目标，本轮只改变默认路径并保留手动补充能力
+- 最终镜头拼接、节奏调整、配乐、音效和发布 — 明确保留在外部人工剪辑流程
+- 全自动角色一致性、风格一致性、动作质量评分与自动循环修复 — 基础闭环稳定后再研究
+- 自动接受 AI 结果或无人工检查的一键成片 — 与 human-in-the-loop 产品原则冲突
+- 重写 waoowaoo 已有图片/视频生成模型接入 — 本轮只扩展输入、状态和编排
+- 重建 SceneDetect 算法或将其全部源码并入 waoowaoo — 首版通过稳定集成合同复用
+- 通用多 Agent Framework、无限 Codex Session 或让 Session Memory 成为项目数据库 — 不属于闭环 MVP
 
 ## Context
 
-- 这是 brownfield 项目，现有代码库已经覆盖故事、剧本、分镜、视频、配音、资产系统、多语言与任务运行时等完整链路。
-- 当前主痛点集中在“分镜剧本”这一环节：文本过于啰嗦、不可直接使用、编辑成本高，拖慢从剧本进入视频生产的整体路径。
-- 现有平台已具备多镜头片段合成能力，但产品主流程仍然要求用户经过传统的冗长分镜剧本环节，造成能力与流程不匹配。
-- 用户已明确本轮最高优先级是 P1：流程拆成传统模式 / 多镜头片段模式；P2 资产接入留到下一阶段；P3 全能参考增强作为后续 bonus。
-- 模式切换粒度已明确为“以集为单位”，放置在剧本子页面，并在点击“确认并开始绘制”之前配置或修改。
-- 默认模式已明确为“多镜头片段模式”。
+- v1.0 已归档 8 个交付阶段、31 个实现计划；原 Phase 4 Hardening And Rollout 已正式取消。
+- 当前痛点不是缺少单点能力，而是用户需要在 SceneDetect、Codex Skills、图片生成和视频生成工具之间手工传递文件、Prompt、版本和状态。
+- 新里程碑必须在 waoowaoo 内形成统一 Project / Shot 视图；SceneDetect 和 Codex 作为后台能力提供者，不能成为产品状态中心。
+- 一个 Shot 至少关联原始时间范围、原始片段、首/中/尾关键帧、图片 Prompt 版本、生成关键帧版本、Video Prompt 版本、生成视频版本和人工审核状态。
+- 工作流是 project-based + state-based，不是只能从头跑到尾的一次性 pipeline；用户必须能回到任一 Shot、修改、重跑、暂停并继续。
 
 ## Constraints
 
-- **Brownfield**: 必须兼容现有故事、剧本、分镜、视频、资产与任务系统 — 不能用推倒重来的方式实现
-- **Workflow Scope**: 本阶段只完成 P1 — 避免把资产接入和全能参考扩展混入当前交付
-- **UX Placement**: 模式配置必须放在剧本页、以集为单位操作 — 这是已确定的产品决策
-- **Backward Compatibility**: 传统模式必须继续可用 — 仍需支持精细逐镜头设计项目
-- **Flexibility**: 多镜头片段模式下仍允许手动添加单镜头分镜 — 不能把单镜头路径完全封死
+- **Brownfield:** 必须沿用现有 Next.js、Prisma、Redis/BullMQ、存储、模型网关、任务运行时和多语言结构
+- **Integration First:** 优先建立明确的数据合同和边界适配层，避免复制 SceneDetect 或生成模块业务逻辑
+- **Human Review:** Shot 边界、关键帧、Prompt 和生成结果都必须有可见审核状态与人工覆盖能力
+- **Version Safety:** AI 输出和人工修订必须追加版本；不能用新结果静默覆盖已采用版本
+- **Recoverability:** 长任务必须可观察、可取消、可重试，刷新或重启后可恢复真实状态
+- **Batch Control:** 批量任务使用受控并发和现有队列，不为每个 Shot 启动独立常驻 Codex 进程
+- **Manual Finish:** 系统交付可剪辑素材，但不把最终剪辑纳入本里程碑
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 按“集”配置流程模式 | 每集的分镜剧本本来就是在剧本生成后逐集完成，按集切换最贴合实际使用节奏 | — Pending |
-| 模式入口放在剧本子页面、位于“确认并开始绘制”之前 | 让用户在进入绘制与生产前完成路径选择，避免后续返工 | — Pending |
-| 默认模式为多镜头片段模式 | 当前最核心目标是缩短从剧本进入生产的路径，且平台已有多镜头能力基础 | — Pending |
-| 保留传统模式 | 仍需服务依赖精细逐镜头设计的用户与项目 | — Pending |
-| 多镜头片段模式默认不预生成单镜头分镜，但允许手动添加 | 既压缩默认流程，又保留机动补充能力 | — Pending |
-| 本阶段只交付 P1，P2 延后 | 先解决最大流程痛点，再补强多镜头资产约束 | — Pending |
+| waoowaoo 作为最终产品和工作台基础 | 已具备项目、生成、队列、存储和 UI，整合成本显著低于从 SceneDetect 侧重建 | — Pending |
+| SceneDetect 通过清晰合同提供镜头和关键帧分析 | 保留成熟边界识别能力，同时避免两个项目的数据模型互相渗透 | — Pending |
+| Shot 是翻拍流程的核心业务对象 | 所有分析、Prompt、资产、版本和审核都需要稳定的共同连接点 | — Pending |
+| Task 是后台执行的统一抽象，Executor 可替换 | Codex、图片模型和视频模型属于不同执行器，不能在业务代码中写死 | — Pending |
+| Codex/GPT-5.6 作为后台分析 Executor | 产品需要执行能力和结构化结果，而不是让用户操作 CLI 或维护 Session | — Pending |
+| Prompt、图片和视频全部版本化 | 支持比较、回退、重新生成和明确采用，避免 AI 迭代覆盖历史 | — Pending |
+| 最终剪辑保持人工 | 产品价值集中在生成可用 Shot 素材，剪辑决策仍需创作者控制 | — Pending |
+| 先完成一个真实项目的端到端闭环 | 防止过早引入自动质量循环、复杂 Session Pool 和通用 Agent 框架 | — Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd-transition`):
+**After each phase transition** (via `$gsd-transition`):
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (via `/gsd-complete-milestone`):
+**After each milestone** (via `$gsd-complete-milestone`):
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-19 after initialization*
+*Last updated: 2026-08-07 for milestone v1.1 AI 视频翻拍工作台整合*
