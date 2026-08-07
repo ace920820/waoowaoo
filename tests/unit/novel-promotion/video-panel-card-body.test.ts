@@ -20,6 +20,11 @@ vi.mock('@/components/ui/icons', () => ({
   AppIcon: ({ name }: { name: string }) => React.createElement('span', null, name),
 }))
 
+vi.mock('@/lib/query/hooks', () => ({
+  useSaveProjectVideoTailFrame: () => ({ isPending: false, mutateAsync: vi.fn(async () => undefined) }),
+  useUploadProjectStoryboardPanelImage: () => ({ isPending: false, mutateAsync: vi.fn(async () => undefined) }),
+}))
+
 function createRuntime(overrides: Partial<VideoPanelRuntime> = {}): VideoPanelRuntime {
   const translate = (key: string, values?: Record<string, unknown>) => {
     if (key === 'firstLastFrame.asLastFrameFor') {

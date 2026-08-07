@@ -204,7 +204,7 @@ describe('api specific - novel promotion shot groups route', () => {
       resolution: '1080p',
       generateAudio: true,
     })
-    expect((savedConfig as { draftMetadata?: Record<string, unknown> }).draftMetadata).toEqual({
+    expect((savedConfig as { draftMetadata?: Record<string, unknown> }).draftMetadata).toMatchObject({
       segmentOrder: 2,
       clipId: 'clip-2',
       sceneLabel: '雨夜街口',

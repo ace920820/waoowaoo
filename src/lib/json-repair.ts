@@ -99,18 +99,10 @@ function extractBalancedJsonFromIndex(input: string, start: number): string | nu
 
 function extractPreferredJsonSubstring(input: string): string {
     const indexes = collectJsonStartIndexes(input)
-    for (let i = indexes.length - 1; i >= 0; i -= 1) {
-        const candidate = extractBalancedJsonFromIndex(input, indexes[i])
-        if (!candidate) continue
-        try {
-            JSON.parse(candidate)
-            return candidate
-        } catch {
-            continue
-        }
-    }
-
-    return extractJsonSubstring(input)
+    const firstCandidate = indexes.length > 0
+        ? extractBalancedJsonFromIndex(input, indexes[0])
+        : null
+    return firstCandidate || extractJsonSubstring(input)
 }
 
 /**

@@ -57,6 +57,7 @@ describe('api specific - novel promotion episode create text', () => {
         name: '第 1 集',
         description: null,
         novelText: '第一章内容',
+        episodeProductionMode: 'multi_shot',
       },
     })
     expect(prismaMock.novelPromotionProject.update).toHaveBeenCalledWith({

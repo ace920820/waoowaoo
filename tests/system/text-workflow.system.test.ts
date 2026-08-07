@@ -155,6 +155,10 @@ async function seedScriptToStoryboardState() {
   const project = await createFixtureProject(user.id)
   const novelProject = await createFixtureNovelProject(project.id)
   const episode = await createFixtureEpisode(novelProject.id)
+  await prisma.novelPromotionEpisode.update({
+    where: { id: episode.id },
+    data: { episodeProductionMode: 'traditional' },
+  })
   const clip = await prisma.novelPromotionClip.create({
     data: {
       episodeId: episode.id,
