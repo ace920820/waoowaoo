@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "/Volumes/KINGSTON/projects/SceneDetect",
+    "entry": "src/App.tsx",
+    "commit": "6ba3ab803bf8e08ee748eec1751119c4a0a99108"
+  },
+  "sync": "node scripts/vendor-scenedetect.mjs --sync",
+  "sourceFiles": [
+    {
+      "path": "src/App.tsx",
+      "sha256": "180aea9867d64c516e04fbb6195e33c45440000993dd62e5e700b5bfbe975f71"
+    },
+    {
+      "path": "src/components/AnalysisModal.tsx",
+      "sha256": "5389b2be0ded923815ba9c63b34dc8a32b4a0423cdd5badd0a553526fba462e8"
+    },
+    {
+      "path": "src/components/ExportModal.tsx",
+      "sha256": "221ed5c47b9d7cb2690d18a679509afeb4df34f6472ad48fbb4185e0cae5310a"
+    },
+    {
+      "path": "src/components/Header.tsx",
+      "sha256": "b6df0a86b7d8d72f20f425ceabafc3d9209b618609f269d7b17400df6d3b1c04"
+    },
+    {
+      "path": "src/components/KeyframeSelectorPopover.tsx",
+      "sha256": "c49e6599ed525f4139564e0ebc2382043d6da027989ba2e8a6655015e74c1f4c"
+    },
+    {
+      "path": "src/components/ProjectManager.tsx",
+      "sha256": "fef04081ce7b75d91aca0f46ff9eb96a9f4f78903eca69b70c58c028fc9a9e51"
+    },
+    {
+      "path": "src/components/ShotCard.tsx",
+      "sha256": "603c773785144dbbd7091cfadcd0b197ba96c415a49dbc82b5fa75fbb9fec2b8"
+    },
+    {
+      "path": "src/components/ShotEditorPopover.tsx",
+      "sha256": "17e2ffde6c39dad9238e2d6556e79130f5145cbe354852268c4cafe98c79329f"
+    },
+    {
+      "path": "src/components/ShotInspector.tsx",
+      "sha256": "9e6430fee7927a22582d2b18d7738ae6b1a08162510297b2c3b9698facd3c9e7"
+    },
+    {
+      "path": "src/components/ShotList.tsx",
+      "sha256": "5c2e2d234bb596251dabb9b239e7dffcf8559f62fb70c6a5418d9c877a41f81b"
+    },
+    {
+      "path": "src/components/ShotPreviewOverlay.tsx",
+      "sha256": "ed4af990b166c6489f28e97ca1e15eb986f9df46e95550fc97501bd18098119f"
+    },
+    {
+      "path": "src/components/Timeline.tsx",
+      "sha256": "8496a64f44e5b4da70422b5d7d38805a6adb05edb8fec0c0b6c754f877dd2eed"
+    },
+    {
+      "path": "src/components/VideoPlayer.tsx",
+      "sha256": "e2dc0d1d4c5188c3802cf0e6dcf48b371ed8ed56ea0f22735fc6870fad3632de"
+    },
+    {
+      "path": "src/types.ts",
+      "sha256": "296af5ce1fdc9c0ccafbeaf37e3e9ad26974dd16f72000a2107c7ca6a409db47"
+    },
+    {
+      "path": "src/utils/export.ts",
+      "sha256": "134c359269c8c094c82a13b85fff77e698cd43c9257499dd3adf310f9103b4f6"
+    },
+    {
+      "path": "src/utils/projectStore.ts",
+      "sha256": "5b7b89ac8a4e73466c84caff572921d02fc40eaeb70727e3fc755baf4f4e145b"
+    },
+    {
+      "path": "src/utils/sampleVideos.ts",
+      "sha256": "9179763d2a3a2d5efc64a5db51ef014fd1e2ecac88339170ccb3292fca069f51"
+    },
+    {
+      "path": "src/utils/sceneDetector.ts",
+      "sha256": "da7097a6d67b52a77fac20ec43054b62d24270a54087307f0d480bbb9baa720d"
+    },
+    {
+      "path": "src/utils/timecode.ts",
+      "sha256": "8a71c9401deb2477cb254b37ef710a47386cda9dc69a9fcb3943e3f509fb52ec"
+    }
+  ],
+  "aggregateSha256": "11693b7c8d9ce57ff2c662228893aa0e322ad355dc6eeea0b9d3af295f87522b",
+  "dependencies": [
+    "react",
+    "react-dom",
+    "lucide-react",
+    "motion"
+  ],
+  "allowedPatches": []
+}
