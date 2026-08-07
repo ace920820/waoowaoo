@@ -97,6 +97,14 @@ export type StoryboardPackageImportPreviewSegment = {
   targetDurationSec: number
   templateKey: string
   shotCount: number
+  shots: Array<{
+    index: number
+    title: string | null
+    focalLength: string | null
+    dof: string | null
+    lighting: string | null
+    cameraMovement: string | null
+  }>
   assetMatches: {
     location: StoryboardPackageAssetMatch[]
     characters: StoryboardPackageAssetMatch[]
@@ -329,6 +337,14 @@ function buildPreviewSegments(params: {
       targetDurationSec: segment.targetDurationSec,
       templateKey: segment.templateKey,
       shotCount: segment.items.length,
+      shots: segment.items.map((item) => ({
+        index: item.itemIndex + 1,
+        title: item.title,
+        focalLength: item.focalLength ?? null,
+        dof: item.dof ?? null,
+        lighting: item.lighting ?? null,
+        cameraMovement: item.cameraMovement ?? null,
+      })),
       assetMatches,
       warnings,
     }

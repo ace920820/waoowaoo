@@ -1,0 +1,457 @@
+#!/usr/bin/env bash
+set -u
+
+SOURCE_PATH="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE_PATH" ]]; do
+  SOURCE_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
+  LINK_TARGET="$(readlink "$SOURCE_PATH")"
+  if [[ "$LINK_TARGET" == /* ]]; then
+    SOURCE_PATH="$LINK_TARGET"
+  else
+    SOURCE_PATH="$SOURCE_DIR/$LINK_TARGET"
+  fi
+done
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+APP_URL="http://localhost:3000/zh"
+BOARD_URL="http://localhost:3010/admin/queues"
+APP_PORT="3000"
+BOARD_PORT="3010"
+MYSQL_HOST="127.0.0.1"
+MYSQL_PORT="13306"
+MYSQL_DB="waoowaoo"
+REDIS_HOST="127.0.0.1"
+REDIS_PORT="${REDIS_PORT:-16379}"
+BASE_DIR="${WAOOWAOO_DEV_HOME:-$HOME/.local/share/waoowaoo-dev}"
+STATE_DIR="${WAOOWAOO_DEV_STATE:-$BASE_DIR/run}"
+LOG_DIR="${WAOOWAOO_DEV_LOGS:-$BASE_DIR/logs}"
+REDIS_DIR="$BASE_DIR/redis"
+APP_PID_FILE="$STATE_DIR/app.pid"
+APP_PGID_FILE="$STATE_DIR/app.pgid"
+REDIS_PID_FILE="$STATE_DIR/redis.pid"
+APP_LOG="$LOG_DIR/app.log"
+REDIS_LOG="$LOG_DIR/redis.log"
+
+usage() {
+  cat <<USAGE
+waoowaoo local dev runner
+
+Usage:
+  waoowaoo up [--background|-d]   Start Redis if needed and run npm dev
+  waoowaoo down                   Stop only services started by this tool
+  waoowaoo status                 Show MySQL, Redis, app, and Bull Board status
+  waoowaoo logs [app|redis] [args] Tail logs; defaults to app -f
+  waoowaoo restart [--background|-d]
+                                  Stop recorded services, then start again
+  waoowaoo open                   Open app and Bull Board URLs on macOS
+  waoowaoo help                   Show this help
+
+URLs:
+  App:        $APP_URL
+  Bull Board: $BOARD_URL
+
+State:
+  Logs: $LOG_DIR
+  PIDs: $STATE_DIR
+
+Foreground mode is safest for terminals managed by cleanup tools:
+  waoowaoo up
+
+Detached mode:
+  waoowaoo up --background
+
+Portable nohup pattern:
+  nohup "$SCRIPT_DIR/waoowaoo" up --background >/tmp/waoowaoo-up.log 2>&1 &
+USAGE
+}
+
+ensure_dirs() {
+  if mkdir -p "$STATE_DIR" "$LOG_DIR" "$REDIS_DIR" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -z "${WAOOWAOO_DEV_HOME:-}" && -z "${WAOOWAOO_DEV_STATE:-}" && -z "${WAOOWAOO_DEV_LOGS:-}" ]]; then
+    BASE_DIR="$REPO_ROOT/.waoowaoo-dev"
+    STATE_DIR="$BASE_DIR/run"
+    LOG_DIR="$BASE_DIR/logs"
+    REDIS_DIR="$BASE_DIR/redis"
+    APP_PID_FILE="$STATE_DIR/app.pid"
+    APP_PGID_FILE="$STATE_DIR/app.pgid"
+    REDIS_PID_FILE="$STATE_DIR/redis.pid"
+    APP_LOG="$LOG_DIR/app.log"
+    REDIS_LOG="$LOG_DIR/redis.log"
+    mkdir -p "$STATE_DIR" "$LOG_DIR" "$REDIS_DIR"
+    printf 'State dir fallback: using %s because ~/.local/share is not writable.\n' "$BASE_DIR" >&2
+    return 0
+  fi
+  printf 'Failed to create state/log directories. Check WAOOWAOO_DEV_HOME, WAOOWAOO_DEV_STATE, or WAOOWAOO_DEV_LOGS.\n' >&2
+  return 1
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+port_listening() {
+  local port="$1"
+  if have nc; then
+    nc -z 127.0.0.1 "$port" >/dev/null 2>&1
+  elif have lsof; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+http_code() {
+  local url="$1"
+  if have curl; then
+    curl -L -s -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || printf '000'
+  else
+    printf '000'
+  fi
+}
+
+http_ok() {
+  local code
+  code="$(http_code "$1")"
+  case "$code" in
+    2*|3*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pid_alive() {
+  local pid="$1"
+  [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+cmdline_for_pid() {
+  local pid="$1"
+  ps -p "$pid" -o command= 2>/dev/null || true
+}
+
+read_pid_file() {
+  local file="$1"
+  [[ -f "$file" ]] && sed -n '1p' "$file" | tr -d '[:space:]'
+}
+
+valid_app_pid() {
+  local pid="$1" cmd
+  pid_alive "$pid" || return 1
+  cmd="$(cmdline_for_pid "$pid")"
+  [[ "$cmd" == *"npm run dev"* || "$cmd" == *"concurrently"*"dev:next"* || "$cmd" == *"node"*"npm"*"run"*"dev"* ]]
+}
+
+valid_redis_pid() {
+  local pid="$1" cmd
+  pid_alive "$pid" || return 1
+  cmd="$(cmdline_for_pid "$pid")"
+  [[ "$cmd" == *"redis-server"*"$REDIS_PORT"* || "$cmd" == *"redis-server 127.0.0.1:$REDIS_PORT"* ]]
+}
+
+record_pid() {
+  local file="$1" pid="$2"
+  printf '%s\n' "$pid" > "$file"
+}
+
+record_own_pgid() {
+  local file="$1" pid="$2" pgid
+  pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "${pgid:-}" && "$pgid" == "$pid" ]]; then
+    printf '%s\n' "$pgid" > "$file"
+  else
+    rm -f "$file"
+  fi
+}
+
+remove_stale_pid() {
+  local file="$1" validator="$2" pid
+  pid="$(read_pid_file "$file")"
+  [[ -z "${pid:-}" ]] && return 0
+  if ! "$validator" "$pid"; then
+    rm -f "$file"
+  fi
+}
+
+remove_stale_app_state() {
+  local pid
+  pid="$(read_pid_file "$APP_PID_FILE")"
+  if [[ -z "${pid:-}" ]] || ! valid_app_pid "$pid"; then
+    rm -f "$APP_PID_FILE" "$APP_PGID_FILE"
+  fi
+}
+
+status_line() {
+  local name="$1" state="$2" detail="$3"
+  printf '%-10s %-10s %s\n' "$name" "$state" "$detail"
+}
+
+pid_detail() {
+  local file="$1" validator="$2" log="$3" label="$4" pid
+  pid="$(read_pid_file "$file")"
+  if [[ -n "${pid:-}" ]] && "$validator" "$pid"; then
+    printf '%s pid=%s log=%s' "$label" "$pid" "$log"
+  elif [[ -n "${pid:-}" ]]; then
+    printf 'stale pid=%s in %s' "$pid" "$file"
+  else
+    printf 'no pid recorded'
+  fi
+}
+
+show_status() {
+  local app_code board_code mysql_detail redis_detail app_detail board_detail
+  ensure_dirs
+  remove_stale_app_state
+  remove_stale_pid "$REDIS_PID_FILE" valid_redis_pid
+
+  if port_listening "$MYSQL_PORT"; then
+    mysql_detail="$MYSQL_HOST:$MYSQL_PORT database=$MYSQL_DB data=$HOME/.local/share/waoowaoo-dev/mysql/data"
+    status_line "MySQL" "listening" "$mysql_detail"
+  else
+    status_line "MySQL" "down" "$MYSQL_HOST:$MYSQL_PORT database=$MYSQL_DB (not managed by this tool)"
+  fi
+
+  redis_detail="$(pid_detail "$REDIS_PID_FILE" valid_redis_pid "$REDIS_LOG" 'managed')"
+  if port_listening "$REDIS_PORT"; then
+    status_line "Redis" "listening" "$REDIS_HOST:$REDIS_PORT $redis_detail"
+  else
+    status_line "Redis" "down" "$REDIS_HOST:$REDIS_PORT $redis_detail"
+  fi
+
+  app_code="$(http_code "$APP_URL")"
+  app_detail="$(pid_detail "$APP_PID_FILE" valid_app_pid "$APP_LOG" 'managed')"
+  if [[ "$app_code" == 2* || "$app_code" == 3* ]]; then
+    status_line "App" "http-$app_code" "$APP_URL $app_detail"
+  elif port_listening "$APP_PORT"; then
+    status_line "App" "port-open" "$APP_URL http=$app_code $app_detail"
+  else
+    status_line "App" "down" "$APP_URL $app_detail"
+  fi
+
+  board_code="$(http_code "$BOARD_URL")"
+  board_detail="log=$APP_LOG"
+  if [[ "$board_code" == 2* || "$board_code" == 3* ]]; then
+    status_line "BullBoard" "http-$board_code" "$BOARD_URL $board_detail"
+  elif port_listening "$BOARD_PORT"; then
+    status_line "BullBoard" "port-open" "$BOARD_URL http=$board_code $board_detail"
+  else
+    status_line "BullBoard" "down" "$BOARD_URL $board_detail"
+  fi
+}
+
+start_redis_if_needed() {
+  ensure_dirs
+  if port_listening "$REDIS_PORT"; then
+    printf 'Redis already listening on %s:%s; not starting another.\n' "$REDIS_HOST" "$REDIS_PORT"
+    return 0
+  fi
+  if ! have redis-server; then
+    printf 'redis-server not found; install Redis or start it manually on port %s.\n' "$REDIS_PORT" >&2
+    return 1
+  fi
+  printf 'Starting Redis on %s:%s...\n' "$REDIS_HOST" "$REDIS_PORT"
+  redis-server --port "$REDIS_PORT" --bind "$REDIS_HOST" --dir "$REDIS_DIR" --save "" --appendonly no >"$REDIS_LOG" 2>&1 &
+  local pid=$!
+  record_pid "$REDIS_PID_FILE" "$pid"
+  sleep 1
+  if valid_redis_pid "$pid" && port_listening "$REDIS_PORT"; then
+    printf 'Redis started pid=%s log=%s\n' "$pid" "$REDIS_LOG"
+  else
+    printf 'Redis failed to start; see %s\n' "$REDIS_LOG" >&2
+    return 1
+  fi
+}
+
+app_already_running() {
+  local pid
+  pid="$(read_pid_file "$APP_PID_FILE")"
+  if [[ -n "${pid:-}" ]] && valid_app_pid "$pid"; then
+    return 0
+  fi
+  http_ok "$APP_URL" && http_ok "$BOARD_URL"
+}
+
+start_app_background() {
+  ensure_dirs
+  if app_already_running; then
+    printf 'App and Bull Board already appear reachable/running; not starting another npm dev.\n'
+    return 0
+  fi
+  printf 'Starting npm run dev in background...\n'
+  set -m
+  : >"$APP_LOG"
+  (
+    cd "$REPO_ROOT" || exit 1
+    exec npm run dev
+  ) >>"$APP_LOG" 2>&1 &
+  local pid=$!
+  set +m
+  record_pid "$APP_PID_FILE" "$pid"
+  record_own_pgid "$APP_PGID_FILE" "$pid"
+  printf 'App starter pid=%s log=%s\n' "$pid" "$APP_LOG"
+  printf 'Waiting for app and Bull Board to become reachable...\n'
+  local i
+  for i in $(seq 1 60); do
+    if http_ok "$APP_URL" && http_ok "$BOARD_URL"; then
+      printf 'Ready: %s and %s\n' "$APP_URL" "$BOARD_URL"
+      return 0
+    fi
+    if ! valid_app_pid "$pid"; then
+      printf 'npm run dev exited before readiness; see %s\n' "$APP_LOG" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  printf 'Started but readiness check timed out; see %s and run status.\n' "$APP_LOG" >&2
+  return 0
+}
+
+start_app_foreground() {
+  ensure_dirs
+  if app_already_running; then
+    printf 'App and Bull Board already appear reachable/running; not starting another npm dev.\n'
+    return 0
+  fi
+  printf 'Starting npm run dev in foreground from %s\n' "$REPO_ROOT"
+  printf 'Logs are also written by npm/concurrently to this terminal. Press Ctrl-C to stop foreground app.\n'
+  cd "$REPO_ROOT" || exit 1
+  exec npm run dev
+}
+
+stop_recorded_pid() {
+  local name="$1" file="$2" validator="$3" pid
+  pid="$(read_pid_file "$file")"
+  if [[ -z "${pid:-}" ]]; then
+    printf '%s: no pid recorded.\n' "$name"
+    return 0
+  fi
+  if ! "$validator" "$pid"; then
+    printf '%s: stale or unrecognized pid %s; removing pid file only.\n' "$name" "$pid"
+    rm -f "$file"
+    return 0
+  fi
+  printf '%s: stopping recorded pid %s...\n' "$name" "$pid"
+  kill -TERM "-$pid" >/dev/null 2>&1 || kill -TERM "$pid" >/dev/null 2>&1 || true
+  local i
+  for i in $(seq 1 20); do
+    pid_alive "$pid" || break
+    sleep 0.5
+  done
+  if pid_alive "$pid"; then
+    printf '%s: pid %s still alive after TERM; leaving it running.\n' "$name" "$pid" >&2
+    return 1
+  fi
+  rm -f "$file"
+  printf '%s: stopped.\n' "$name"
+}
+
+stop_app() {
+  local pid pgid current_pgid
+  pid="$(read_pid_file "$APP_PID_FILE")"
+  pgid="$(read_pid_file "$APP_PGID_FILE")"
+  if [[ -z "${pid:-}" ]]; then
+    printf 'App: no pid recorded.\n'
+    return 0
+  fi
+  if ! valid_app_pid "$pid"; then
+    printf 'App: stale or unrecognized pid %s; removing app state only.\n' "$pid"
+    rm -f "$APP_PID_FILE" "$APP_PGID_FILE"
+    return 0
+  fi
+
+  current_pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "${pgid:-}" && "$pgid" == "$current_pgid" && "$pgid" =~ ^[0-9]+$ ]]; then
+    printf 'App: stopping recorded process group %s (starter pid %s)...\n' "$pgid" "$pid"
+    kill -TERM "-$pgid" >/dev/null 2>&1 || true
+  else
+    printf 'App: stopping recorded pid %s...\n' "$pid"
+    kill -TERM "$pid" >/dev/null 2>&1 || true
+  fi
+
+  local i
+  for i in $(seq 1 30); do
+    pid_alive "$pid" || break
+    sleep 0.5
+  done
+  if pid_alive "$pid"; then
+    printf 'App: pid %s still alive after TERM; sending KILL to recorded target.\n' "$pid" >&2
+    if [[ -n "${pgid:-}" && "$pgid" == "$current_pgid" && "$pgid" =~ ^[0-9]+$ ]]; then
+      kill -KILL "-$pgid" >/dev/null 2>&1 || true
+    else
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+    sleep 0.5
+  fi
+  if pid_alive "$pid"; then
+    printf 'App: pid %s still alive; leaving app state for inspection.\n' "$pid" >&2
+    return 1
+  fi
+  rm -f "$APP_PID_FILE" "$APP_PGID_FILE"
+  printf 'App: stopped.\n'
+}
+
+cmd_up() {
+  local background=0 arg
+  for arg in "$@"; do
+    case "$arg" in
+      --background|-d) background=1 ;;
+      *) printf 'Unknown up option: %s\n' "$arg" >&2; return 2 ;;
+    esac
+  done
+  start_redis_if_needed || return $?
+  if [[ "$background" -eq 1 ]]; then
+    start_app_background
+  else
+    start_app_foreground
+  fi
+}
+
+cmd_down() {
+  ensure_dirs
+  local rc=0
+  stop_app || rc=$?
+  stop_recorded_pid "Redis" "$REDIS_PID_FILE" valid_redis_pid || rc=$?
+  return "$rc"
+}
+
+cmd_logs() {
+  local target="${1:-app}"
+  if [[ $# -gt 0 ]]; then shift; fi
+  local file
+  case "$target" in
+    app) file="$APP_LOG" ;;
+    redis) file="$REDIS_LOG" ;;
+    *) printf 'Unknown log target: %s (use app or redis)\n' "$target" >&2; return 2 ;;
+  esac
+  ensure_dirs
+  touch "$file"
+  if [[ $# -eq 0 ]]; then
+    set -- -f
+  fi
+  tail "$@" "$file"
+}
+
+cmd_open() {
+  if have open; then
+    open "$APP_URL"
+    open "$BOARD_URL"
+    printf 'Opened %s and %s\n' "$APP_URL" "$BOARD_URL"
+  else
+    printf 'open command unavailable. URLs:\n%s\n%s\n' "$APP_URL" "$BOARD_URL"
+  fi
+}
+
+main() {
+  local cmd="${1:-help}"
+  if [[ $# -gt 0 ]]; then shift; fi
+  case "$cmd" in
+    up) cmd_up "$@" ;;
+    down) cmd_down "$@" ;;
+    status) show_status "$@" ;;
+    logs) cmd_logs "$@" ;;
+    restart) cmd_down && cmd_up "$@" ;;
+    open) cmd_open "$@" ;;
+    help|-h|--help) usage ;;
+    *) printf 'Unknown command: %s\n\n' "$cmd" >&2; usage >&2; return 2 ;;
+  esac
+}
+
+main "$@"

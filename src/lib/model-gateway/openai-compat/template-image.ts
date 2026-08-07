@@ -1,5 +1,6 @@
 import type { GenerateResult } from '@/lib/generators/base'
 import type { OpenAICompatImageRequest } from '../types'
+import type { TemplateEndpoint } from '@/lib/openai-compat-media-template'
 import {
   buildRenderedTemplateRequest,
   buildTemplateVariables,
@@ -67,6 +68,32 @@ function toImageBase64Result(imageBase64: string): GenerateResult {
   }
 }
 
+function hasReferenceImages(request: OpenAICompatImageRequest): boolean {
+  return Array.isArray(request.referenceImages) && request.referenceImages.some((image) => typeof image === 'string' && image.trim())
+}
+
+function resolveCreateEndpointForImageRequest(
+  request: OpenAICompatImageRequest,
+  fallbackEndpoint: TemplateEndpoint,
+  alias: ReturnType<typeof resolveOpenAICompatImageModelAlias>,
+): TemplateEndpoint {
+  if (alias.modelId === 'gpt-image-2' && hasReferenceImages(request)) {
+    return {
+      method: 'POST',
+      path: '/images/edits',
+      contentType: 'multipart/form-data',
+      multipartFileFields: ['image[]'],
+      bodyTemplate: {
+        model: '{{model}}',
+        prompt: '{{prompt}}',
+        quality: '{{quality}}',
+        'image[]': '{{images}}',
+      },
+    }
+  }
+  return fallbackEndpoint
+}
+
 export async function generateImageViaOpenAICompatTemplate(
   request: OpenAICompatImageRequest,
 ): Promise<GenerateResult> {
@@ -98,7 +125,7 @@ export async function generateImageViaOpenAICompatTemplate(
 
   const createRequest = await buildRenderedTemplateRequest({
     baseUrl: config.baseUrl,
-    endpoint: request.template.create,
+    endpoint: resolveCreateEndpointForImageRequest(request, request.template.create, alias),
     variables,
     defaultAuthHeader: `Bearer ${config.apiKey}`,
   })

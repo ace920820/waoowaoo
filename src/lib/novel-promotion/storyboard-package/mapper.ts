@@ -25,6 +25,8 @@ export type StoryboardPackageImportShotItem = {
   title: string | null
   prompt: string | null
   durationSec?: number | null
+  focalLength?: string | null
+  dof?: string | null
   shotSize?: string | null
   angle?: string | null
   cameraMovement?: string | null
@@ -191,6 +193,11 @@ function formatShotField(label: string, value: string | number | null | undefine
   return text ? [`${label}=${text}`] : []
 }
 
+function getShotFocalLength(shot: StoryboardPackageShot) {
+  const focalLength = (shot as StoryboardPackageShot & { focalLength?: unknown }).focalLength
+  return typeof focalLength === 'string' && focalLength.trim() ? focalLength : shot.lens
+}
+
 function formatDirectorShotLine(shot: StoryboardPackageShot) {
   const fields = [
     ...formatShotField('shotId', shot.shotId),
@@ -200,7 +207,7 @@ function formatDirectorShotLine(shot: StoryboardPackageShot) {
     ...formatShotField('目的', shot.purpose),
     ...formatShotField('场面调度', shot.blocking),
     ...formatShotField('景别', shot.shotSize),
-    ...formatShotField('焦段', shot.lens),
+    ...formatShotField('焦段', getShotFocalLength(shot)),
     ...formatShotField('景深', shot.dof),
     ...formatShotField('角度', shot.angle),
     ...formatShotField('运镜', shot.cameraMovement),
@@ -256,6 +263,8 @@ function mapShotToItem(shot: StoryboardPackageShot): StoryboardPackageImportShot
     title: shot.title || null,
     prompt: formatDirectorShotLine(shot),
     durationSec: shot.durationSec ?? null,
+    focalLength: getShotFocalLength(shot) || null,
+    dof: shot.dof || null,
     shotSize: shot.shotSize || null,
     angle: shot.angle || null,
     cameraMovement: shot.cameraMovement || null,

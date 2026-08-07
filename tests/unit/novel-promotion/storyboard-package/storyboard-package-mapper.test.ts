@@ -176,4 +176,37 @@ describe('storyboard package mapper', () => {
     expect(segment.items[0].prompt).toContain('剪辑=冷开场')
     expect(segment.items[0].prompt).toContain('目的=建立冷静、低照度、无人等待的基调')
   })
+
+  it('uses focalLength as the lens-language alias when present', () => {
+    const pkg = buildValidStoryboardPackage()
+    const segment = pkg.scenes[0].segments[0]
+    const plan = mapStoryboardPackageToImportPlan(buildValidatedPackage({
+      scenes: [{
+        ...pkg.scenes[0],
+        segments: [{
+          ...segment,
+          cinematicPlan: {
+            ...segment.cinematicPlan,
+            shots: [{
+              ...segment.cinematicPlan.shots[0],
+              lens: 'Prime',
+              focalLength: '35mm',
+              dof: '中景景深',
+              lighting: '办公室顶灯为主，屏幕补光形成脸部冷亮',
+            }],
+          },
+        }],
+      }],
+    }))
+
+    expect(plan.segments[0].items[0]).toMatchObject({
+      focalLength: '35mm',
+      dof: '中景景深',
+      lighting: '办公室顶灯为主，屏幕补光形成脸部冷亮',
+    })
+    expect(plan.segments[0].items[0].prompt).toContain('焦段=35mm')
+    expect(plan.segments[0].items[0].prompt).toContain('景深=中景景深')
+    expect(plan.segments[0].items[0].prompt).toContain('打光=办公室顶灯为主，屏幕补光形成脸部冷亮')
+    expect(plan.segments[0].items[0].prompt).not.toContain('焦段=Prime')
+  })
 })

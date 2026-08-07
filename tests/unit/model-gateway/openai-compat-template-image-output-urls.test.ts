@@ -8,6 +8,7 @@ const resolveConfigMock = vi.hoisted(() => vi.fn(async () => ({
 
 vi.mock('@/lib/model-gateway/openai-compat/common', () => ({
   resolveOpenAICompatClientConfig: resolveConfigMock,
+  toUploadFile: vi.fn(async (_image: string, index: number) => new File(['mock'], `ref-${index}.png`, { type: 'image/png' })),
 }))
 
 import { generateImageViaOpenAICompatTemplate } from '@/lib/model-gateway/openai-compat/template-image'
@@ -99,6 +100,54 @@ describe('openai-compat template image output urls', () => {
       prompt: 'draw a cat',
       quality: 'auto',
     })
+  })
+
+  it('routes gpt-image-2 aliases with reference images through multipart edits', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ b64_json: 'ZWRpdC1pbWFnZQ==' }],
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await generateImageViaOpenAICompatTemplate({
+      userId: 'user-1',
+      providerId: 'openai-compatible:test-provider',
+      modelId: 'gpt-image-2-low',
+      modelKey: 'openai-compatible:test-provider::gpt-image-2-low',
+      prompt: 'keep the selected character faces consistent',
+      referenceImages: [
+        'data:image/png;base64,QQ==',
+        'data:image/png;base64,Qg==',
+      ],
+      profile: 'openai-compatible',
+      template: {
+        version: 1,
+        mediaType: 'image',
+        mode: 'sync',
+        create: {
+          method: 'POST',
+          path: '/images/generations',
+          contentType: 'application/json',
+          bodyTemplate: {
+            model: '{{model}}',
+            prompt: '{{prompt}}',
+            quality: '{{quality}}',
+          },
+        },
+        response: {
+          outputUrlPath: '$.data[0].url',
+          outputUrlsPath: '$.data',
+        },
+      },
+    })
+
+    expect(result.imageBase64).toBe('ZWRpdC1pbWFnZQ==')
+    const request = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(request?.[0]).toBe('https://compat.example.com/v1/images/edits')
+    expect(request?.[1]?.headers).not.toHaveProperty('Content-Type')
+    expect(request?.[1]?.body).toBeInstanceOf(FormData)
+    const body = request?.[1]?.body as FormData
+    expect(body.get('model')).toBe('gpt-image-2')
+    expect(body.get('quality')).toBe('low')
+    expect(body.getAll('image[]')).toHaveLength(2)
   })
 
   it('accepts OpenAI-compatible b64_json image responses', async () => {

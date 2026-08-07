@@ -28,6 +28,15 @@ function snippet(value: string | null | undefined, max = 72) {
   return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed
 }
 
+function shotDetails(shot: StoryboardPackageImportPreviewSuccess['segments'][number]['shots'][number]) {
+  return [
+    shot.focalLength ? `焦段 ${shot.focalLength}` : null,
+    shot.dof ? `景深 ${shot.dof}` : null,
+    shot.lighting ? `打光 ${shot.lighting}` : null,
+    shot.cameraMovement ? `运镜 ${shot.cameraMovement}` : null,
+  ].filter(Boolean).join(' · ')
+}
+
 function PreviewSuccess({ preview, tScript }: { preview: StoryboardPackageImportPreviewSuccess; tScript: T }) {
   return (
     <div className="space-y-4">
@@ -89,6 +98,16 @@ function PreviewSuccess({ preview, tScript }: { preview: StoryboardPackageImport
                     >
                       {asset.label}: {asset.status === 'matched' ? tScript('storyboardPackageImport.preview.assetMatched') : tScript('storyboardPackageImport.preview.assetFallback')}
                     </span>
+                  ))}
+                </div>
+              ) : null}
+              {segment.shots.length > 0 ? (
+                <div className="mt-3 space-y-1 rounded-xl bg-[var(--glass-bg-muted)]/40 p-3 text-xs text-[var(--glass-text-secondary)]">
+                  {segment.shots.map((shot) => (
+                    <div key={`${segment.segmentId}:${shot.index}`}>
+                      <span className="font-medium text-[var(--glass-text-primary)]">镜头 {shot.index}{shot.title ? ` · ${shot.title}` : ''}</span>
+                      {shotDetails(shot) ? <span className="ml-2 text-[var(--glass-text-tertiary)]">{shotDetails(shot)}</span> : null}
+                    </div>
                   ))}
                 </div>
               ) : null}

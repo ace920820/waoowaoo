@@ -59,6 +59,14 @@ const preview: StoryboardPackageImportPreviewResult = {
     targetDurationSec: 15,
     templateKey: 'grid-6',
     shotCount: 6,
+    shots: [{
+      index: 1,
+      title: '推近安娜工位',
+      focalLength: '35mm',
+      dof: '中景景深',
+      lighting: '办公室顶灯为主，屏幕补光形成脸部冷亮',
+      cameraMovement: 'push_in',
+    }],
     assetMatches: {
       location: [{
         assetType: 'location',
@@ -127,6 +135,10 @@ describe('storyboard package upload ui', () => {
     expect(html).toContain('旧公寓门口')
     expect(html).toContain('grid-6')
     expect(html).toContain('6 个镜头')
+    expect(html).toContain('推近安娜工位')
+    expect(html).toContain('焦段 35mm')
+    expect(html).toContain('景深 中景景深')
+    expect(html).toContain('打光 办公室顶灯为主，屏幕补光形成脸部冷亮')
     expect(html).toContain('已匹配')
     expect(html).toContain('剧本回退')
     expect(html).toContain('默认保留已有生成媒体')

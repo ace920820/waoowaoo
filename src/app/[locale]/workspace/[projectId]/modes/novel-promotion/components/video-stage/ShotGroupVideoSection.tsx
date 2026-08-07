@@ -153,6 +153,68 @@ const SHOT_GROUP_VISIBLE_CAPABILITY_FIELDS = new Set(['duration', 'resolution', 
 const SEEDED_DIALOGUE_HELPER_TEXT = '已从剧本草稿带入，可在生成前直接改写或清空。'
 const EMPTY_DIALOGUE_HELPER_TEXT = '可选。留空时按当前生产单元的默认语音内容处理。'
 
+type ShotDetailRecord = Record<string, unknown>
+
+function readShotDetailString(record: ShotDetailRecord | null | undefined, ...keys: string[]) {
+  if (!record) return null
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function readShotDetailRecord(value: unknown): ShotDetailRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as ShotDetailRecord : null
+}
+
+function compactUniqueShotDetailValues(values: Array<string | null>) {
+  const seen = new Set<string>()
+  return values.filter((value): value is string => {
+    if (!value || seen.has(value)) return false
+    seen.add(value)
+    return true
+  })
+}
+
+function resolveImportedShotDetails(group: NovelPromotionShotGroup) {
+  const metadata = parseShotGroupDraftMetadata(group.videoReferencesJson)
+  const cinematicPlan = metadata?.cinematicPlan
+  const cinematicShots = Array.isArray(cinematicPlan?.shots)
+    ? cinematicPlan.shots.map(readShotDetailRecord)
+    : []
+
+  return (group.items || []).map((item) => {
+    const source = readShotDetailRecord(item)
+    const cinematicShot = cinematicShots[item.itemIndex]
+    const read = (...keys: string[]) => readShotDetailString(source, ...keys) || readShotDetailString(cinematicShot, ...keys)
+    const movement = [
+      read('cameraMovement', 'camera_movement', 'movement'),
+      read('movementReason', 'movement_reason'),
+    ].filter(Boolean).join(' · ')
+    const camera = compactUniqueShotDetailValues([
+      read('focalLength', 'focal_length'),
+      read('dof', 'depthOfField', 'depth_of_field'),
+      read('lens'),
+      read('angle', 'cameraAngle', 'camera_angle'),
+      read('cameraHeight', 'camera_height', 'height'),
+    ]).join(' · ')
+    const notes = [
+      read('lighting', 'light'),
+      read('colorTemperature', 'color_temperature'),
+      read('notes', 'shootNotes', 'shoot_notes', 'technicalNotes', 'technical_notes'),
+    ].filter(Boolean).join(' · ')
+
+    return {
+      itemIndex: item.itemIndex,
+      title: item.title || `镜头 ${item.itemIndex + 1}`,
+      movement,
+      camera,
+      notes,
+    }
+  }).filter((shot) => shot.movement || shot.camera || shot.notes)
+}
+
 function resolveStatusLabel(params: {
   hasComposite: boolean
   hasVideo: boolean
@@ -728,6 +790,7 @@ function ShotGroupVideoReviewSection({
             const hasStoryboardBoard = Boolean(group.compositeImageUrl)
             const hasReference = hasAuxReference || hasStoryboardBoard
             const isPlaceholder = draftMetadata?.sourceStatus === 'placeholder'
+            const importedShotDetails = resolveImportedShotDetails(group)
             const isSavingReviewDraft = savingGroupId === group.id || updateMutation.isPending
             const isUploadingReference = uploadMutation.isPending && uploadMutation.variables?.shotGroupId === group.id
             const isGeneratingReference = generateMutation.isPending
@@ -792,6 +855,33 @@ function ShotGroupVideoReviewSection({
                 {isPlaceholder ? (
                   <div className="rounded-2xl border border-[var(--glass-tone-warning-border)] bg-[var(--glass-tone-warning-bg)]/70 px-3 py-3 text-sm leading-6 text-[var(--glass-tone-warning-fg)]">
                     该片段槽位已预留，但提示词/参考输入仍不完整。请先修复后再进入视频生成。
+                  </div>
+                ) : null}
+
+                {importedShotDetails.length > 0 ? (
+                  <div className="rounded-2xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/35 p-3">
+                    <div className="mb-3 text-sm font-medium text-[var(--glass-text-primary)]">导入镜头结果字段</div>
+                    <div className="space-y-3">
+                      {importedShotDetails.map((shot) => (
+                        <div key={`${group.id}:${shot.itemIndex}`} className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)]/70 p-3">
+                          <div className="text-xs font-medium text-[var(--glass-text-primary)]">
+                            镜头 {shot.itemIndex + 1} · {shot.title}
+                          </div>
+                          <div className="mt-2 grid gap-2 md:grid-cols-3">
+                            {([
+                              ['Movement', shot.movement],
+                              ['Camera', shot.camera],
+                              ['Notes', shot.notes],
+                            ] as Array<[string, string]>).map(([label, value]) => (
+                              <div key={label} className="rounded-lg bg-[var(--glass-bg-muted)]/50 px-3 py-2">
+                                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--glass-text-tertiary)]">{label}</div>
+                                <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[var(--glass-text-secondary)]">{value || '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 

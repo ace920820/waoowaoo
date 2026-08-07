@@ -54,7 +54,7 @@ function buildShotGroup() {
             informationUnit: '追逐者正在逼近',
             purpose: '建立追逐者优势',
             shotSize: '全景',
-            lens: '28mm',
+            focalLength: '35mm',
             dof: '中深景深',
             angle: '低角度',
             cameraMovement: '手持跟拍',
@@ -148,7 +148,7 @@ describe('shot-group-video-config', () => {
     expect(prompt).toContain('戏剧节拍: 权力压迫')
     expect(prompt).toContain('信息点: 追逐者正在逼近')
     expect(prompt).toContain('目的: 建立追逐者优势')
-    expect(prompt).toContain('焦段: 28mm')
+    expect(prompt).toContain('焦段: 35mm')
     expect(prompt).toContain('景深: 中深景深')
     expect(prompt).toContain('构图: 追逐者中心，被追者边缘')
     expect(prompt).toContain('打光: 巷口冷白路灯')

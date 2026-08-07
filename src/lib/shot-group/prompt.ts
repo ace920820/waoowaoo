@@ -96,7 +96,7 @@ function formatCinematicShotBeats(
       ['informationUnit', '信息点'],
       ['purpose', '目的'],
       ['shotSize', '景别'],
-      ['lens', '焦段'],
+      [record.focalLength ? 'focalLength' : 'lens', '焦段'],
       ['dof', '景深'],
       ['angle', '角度'],
       ['cameraMovement', '运镜'],

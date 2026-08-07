@@ -42,6 +42,14 @@ export type StoryboardPackageImportPreviewSegment = {
   targetDurationSec: number
   templateKey: string
   shotCount: number
+  shots: Array<{
+    index: number
+    title: string | null
+    focalLength: string | null
+    dof: string | null
+    lighting: string | null
+    cameraMovement: string | null
+  }>
   assetMatches: {
     location: StoryboardPackageAssetMatchView[]
     characters: StoryboardPackageAssetMatchView[]

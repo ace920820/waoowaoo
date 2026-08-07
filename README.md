@@ -107,19 +107,20 @@ npm run dev
 仓库内提供了一个轻量本地开发辅助命令，保持现有 `npm run dev` 流程不变，只做状态检查、Redis 辅助启动、日志和安全停止：
 
 ```bash
-# 在任意目录都可以通过脚本绝对路径运行
-/Users/jamiezhao/projects/waoowaoo/bin/waoowaoo status
-/Users/jamiezhao/projects/waoowaoo/bin/waoowaoo up
+# 仓库内直接运行
+bin/waoowaoo status
+bin/waoowaoo up
 ```
 
 默认开发端口与数据位置：
 
 - MySQL：`127.0.0.1:13306`，数据库 `waoowaoo`，数据目录 `~/.local/share/waoowaoo-dev/mysql/data`
-- Redis：`127.0.0.1:16379`，由命令在端口空闲时按本地开发参数启动
+- Redis：`127.0.0.1:16379`，由命令在端口空闲时按本地开发参数启动，数据目录在用户级状态目录下
 - App：`http://localhost:3000/zh`
 - Bull Board：`http://localhost:3010/admin/queues`
+- 状态与日志：默认 `~/.local/share/waoowaoo-dev/run` 和 `~/.local/share/waoowaoo-dev/logs`
 
-安全边界：`bin/waoowaoo` 不会启动、停止或迁移 MySQL；`down` 只停止它自己记录 PID 的 app / Redis 进程，不会按端口杀任意进程。
+安全边界：`bin/waoowaoo` 不会启动、停止或迁移 MySQL；`down` 只停止它自己记录 PID 的 app / Redis 进程，不会按端口杀任意进程或触碰现有 MySQL 数据。
 
 常用命令：
 
@@ -137,17 +138,29 @@ bin/waoowaoo open            # macOS 打开 App 和 Bull Board
 安装为全局命令（非侵入式，不需要 `sudo`）：
 
 ```bash
-mkdir -p ~/bin
-ln -sf /Users/jamiezhao/projects/waoowaoo/bin/waoowaoo ~/bin/waoowaoo
+scripts/install-waoowaoo-cli.sh
 
-# 如果 ~/bin 还不在 PATH，加入你的 shell 配置，例如 ~/.zshrc
-export PATH="$HOME/bin:$PATH"
+# 安装后可在任意目录运行
+waoowaoo status
+waoowaoo up -d
+waoowaoo logs
+waoowaoo down
+```
+
+安装脚本会把仓库内的 `bin/waoowaoo` 软链接到用户级目录（优先使用 PATH 中已有的 `~/.local/bin` 或 `~/bin`，否则使用 `~/.local/bin`），并打印 PATH 提示。也可以手动安装：
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf /Users/jamiezhao/projects/waoowaoo/bin/waoowaoo ~/.local/bin/waoowaoo
+
+# 如果 ~/.local/bin 还不在 PATH，加入你的 shell 配置，例如 ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 也可以在后台模式外层使用 `nohup`，避免终端清理影响启动命令本身：
 
 ```bash
-nohup /Users/jamiezhao/projects/waoowaoo/bin/waoowaoo up -d >/tmp/waoowaoo-up.log 2>&1 &
+nohup waoowaoo up -d >/tmp/waoowaoo-up.log 2>&1 &
 ```
 
 ---
