@@ -12,6 +12,7 @@ import {
   validateProjectDraft,
   type ProjectDraftInput,
 } from '@/lib/projects/validation'
+import { createRemakeProject } from '@/lib/remake-projects/service'
 
 function readProjectDraftBody(body: unknown): ProjectDraftInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -23,6 +24,17 @@ function readProjectDraftBody(body: unknown): ProjectDraftInput {
     name: typeof payload.name === 'string' ? payload.name : '',
     description: typeof payload.description === 'string' ? payload.description : null,
   }
+}
+
+function readProjectType(body: unknown): 'novel_promotion' | 'remake' {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'novel_promotion'
+  return (body as Record<string, unknown>).type === 'remake' ? 'remake' : 'novel_promotion'
+}
+
+function readCreationRequestId(body: unknown): string {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return crypto.randomUUID()
+  const value = (body as Record<string, unknown>).creationRequestId
+  return typeof value === 'string' && value.trim() ? value.trim() : crypto.randomUUID()
 }
 
 // GET - 获取用户的项目（支持分页和搜索）
@@ -203,6 +215,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
 
   const { name, description } = normalizeProjectDraft(draft)
+
+  if (readProjectType(body) === 'remake') {
+    const result = await createRemakeProject({
+      userId: session.user.id,
+      name: name.trim(),
+      description: description?.trim() || null,
+      creationRequestId: readCreationRequestId(body),
+    })
+    return NextResponse.json({ project: result.project }, { status: result.created ? 201 : 200 })
+  }
 
   // 获取用户偏好配置
   const userPreference = await prisma.userPreference.findUnique({

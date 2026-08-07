@@ -5,6 +5,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { normalizeStoryboardMoodPresets } from '@/lib/storyboard-mood-presets'
+import { getRemakeProjectSnapshot } from '@/lib/remake-projects/service'
 
 function readAssetKind(value: Record<string, unknown>): string {
   return typeof value.assetKind === 'string' ? value.assetKind : 'location'
@@ -37,6 +38,12 @@ export const GET = apiHandler(async (
 
   if (project.userId !== session.user.id) {
     throw new ApiError('FORBIDDEN')
+  }
+
+  if (project.type === 'remake') {
+    const snapshot = await getRemakeProjectSnapshot({ projectId, userId: session.user.id })
+    if (!snapshot) throw new ApiError('NOT_FOUND')
+    return NextResponse.json({ project: snapshot.project, remake: snapshot })
   }
 
   // 🔥 更新最近访问时间（异步，不阻塞响应）

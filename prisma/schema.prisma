@@ -432,12 +432,124 @@ model Project {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @default(now()) @updatedAt
   lastAccessedAt     DateTime?
+  type               String                 @default("novel_promotion")
   novelPromotionData NovelPromotionProject?
+  remakeProject      RemakeProject?
   user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageCosts         UsageCost[]
 
   @@index([userId])
   @@map("projects")
+}
+
+model RemakeProject {
+  id                String        @id @default(uuid())
+  projectId         String        @unique
+  creationRequestId String        @unique
+  importStatus      String        @default("not_imported")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @default(now()) @updatedAt
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source            RemakeSource?
+  shots             RemakeShot[]
+
+  @@map("remake_projects")
+}
+
+model RemakeSource {
+  id              String        @id @default(uuid())
+  remakeProjectId String        @unique
+  mediaId         String?
+  status          String        @default("not_imported")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now()) @updatedAt
+  remakeProject   RemakeProject @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId])
+  @@map("remake_sources")
+}
+
+model RemakeShot {
+  id              String                @id @default(uuid())
+  remakeProjectId String
+  stableKey       String
+  externalIdentity String?
+  sequence        Int?
+  reviewStatus    String                @default("pending")
+  needsReview     Boolean               @default(false)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @default(now()) @updatedAt
+  remakeProject   RemakeProject         @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  revisions       RemakeShotRevision[]
+  outputs         RemakeOutputVersion[]
+  provenance      RemakeProvenanceRecord[]
+  invalidations   RemakeInvalidation[]
+
+  @@unique([remakeProjectId, stableKey])
+  @@unique([remakeProjectId, externalIdentity])
+  @@index([remakeProjectId, sequence])
+  @@map("remake_shots")
+}
+
+model RemakeShotRevision {
+  id           String              @id @default(uuid())
+  shotId       String
+  revision     Int
+  changeReason String
+  payload      String?             @db.Text
+  createdAt    DateTime            @default(now())
+  shot         RemakeShot          @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  outputs      RemakeOutputVersion[]
+
+  @@unique([shotId, revision])
+  @@index([shotId])
+  @@map("remake_shot_revisions")
+}
+
+model RemakeOutputVersion {
+  id         String               @id @default(uuid())
+  shotId     String
+  revisionId String?
+  mediaId    String?
+  status     String               @default("pending")
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @default(now()) @updatedAt
+  shot       RemakeShot           @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  revision   RemakeShotRevision?  @relation(fields: [revisionId], references: [id], onDelete: SetNull)
+
+  @@index([shotId])
+  @@index([revisionId])
+  @@map("remake_output_versions")
+}
+
+model RemakeProvenanceRecord {
+  id         String      @id @default(uuid())
+  shotId     String
+  schema     String
+  executor   String?
+  capability String?
+  payload    String?     @db.Text
+  createdAt  DateTime    @default(now())
+  shot       RemakeShot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+
+  @@index([shotId])
+  @@map("remake_provenance_records")
+}
+
+model RemakeInvalidation {
+  id         String      @id @default(uuid())
+  shotId     String
+  revisionId String?
+  outputVersionId String?
+  reason     String
+  status     String      @default("needs_review")
+  createdAt  DateTime    @default(now())
+  shot       RemakeShot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+
+  @@index([shotId])
+  @@index([revisionId])
+  @@index([outputVersionId])
+  @@map("remake_invalidations")
 }
 
 model Session {
