@@ -1,42 +1,148 @@
-# Roadmap: waoowaoo AI 影视 Studio
+# 路线图：waoowaoo AI 影视 Studio
 
-## Milestones
+## 里程碑
 
-- ✅ **v1.0 原剧本生产流程改革** — Phase 1-03.4 已交付，Phase 4 已取消（2026-08-07，覆盖关闭）
-- 🚧 **v1.1 AI 视频翻拍工作台整合** — 下一轮规划中
+- ✅ **v1.0 原剧本生产流程改革** - Phase 1-03.4 已交付，Phase 4 已取消（2026-08-07，覆盖关闭）
+- 🚧 **v1.1 AI 视频翻拍工作台整合** - Phase 5-11，待开始规划
 
 ## 已归档里程碑
 
 <details>
-<summary>✅ v1.0 原剧本生产流程改革 — 2026-08-07 关闭</summary>
+<summary>✅ v1.0 原剧本生产流程改革 - 2026-08-07 关闭</summary>
 
-- [x] Phase 1: Episode Mode Entry — 4 个计划，已实现
-- [x] Phase 2: Multi-Shot Fast Path — 5 个计划，已验证/用户验收
-- [x] Phase 02.1: Multi-Shot Asset Injection — 5 个计划，用户验收
-- [x] Phase 3: Editable Production Handoff — 5 个计划，用户验收
-- [x] Phase 03.1: Multi-Shot Cinematic Prompting — 3 个计划，已实现
-- [x] Phase 03.2: Storyboard Package Import Contract — 3 个计划，已实现
-- [x] Phase 03.3: Import API And Persistence — 3 个计划，已实现
-- [x] Phase 03.4: Script Page Upload UI — 3 个计划，已实现
-- [~] Phase 4: Hardening And Rollout — **已取消**，未执行
+- [x] Phase 1: Episode Mode Entry - 4 个计划，已实现
+- [x] Phase 2: Multi-Shot Fast Path - 5 个计划，已验证/用户验收
+- [x] Phase 02.1: Multi-Shot Asset Injection - 5 个计划，用户验收
+- [x] Phase 3: Editable Production Handoff - 5 个计划，用户验收
+- [x] Phase 03.1: Multi-Shot Cinematic Prompting - 3 个计划，已实现
+- [x] Phase 03.2: Storyboard Package Import Contract - 3 个计划，已实现
+- [x] Phase 03.3: Import API And Persistence - 3 个计划，已实现
+- [x] Phase 03.4: Script Page Upload UI - 3 个计划，已实现
+- [~] Phase 4: Hardening And Rollout - **已取消**，未执行
 
 完整历史路线：`.planning/milestones/v1.0-ROADMAP.md`
 
-关闭说明：实现计划已完成，但早期阶段缺少当前格式的正式 verification 文件；Phase 2 仍有 1 项人工 UAT 缺口。这些内容以 `override_closeout` 记录在 `.planning/STATE.md`，不作为新里程碑的隐含范围。
+关闭说明：实现计划已完成，但早期阶段缺少当前格式的正式 verification 文件；Phase 2 仍有 1 项人工 UAT 缺口。这些内容以 `override_closeout` 记录在 `.planning/STATE.md`，不作为 v1.1 的隐含范围。
 
 </details>
 
-## 当前里程碑
+## 当前里程碑：v1.1 AI 视频翻拍工作台整合
 
-v1.1 的目标、需求和阶段将在本轮 `gsd-new-milestone` 流程中建立。阶段编号延续 v1.0，下一阶段从 **Phase 5** 开始。
+**里程碑目标：** 用户在同一项目内完成原视频导入、Shot 审核、Prompt 与生成版本审核、批量执行和最终素材导出；所有状态由 waoowaoo 持久化，并可追踪、可回退、可恢复。
+
+## 阶段
+
+- [ ] **Phase 5: 翻拍项目与核心工作台** - 建立以 Project、Shot 和 Task 为共同状态中心的可恢复翻拍工作台。
+- [ ] **Phase 6: SceneDetect 镜头与关键帧审核** - 将原视频分析结果接入同一审核界面，并允许人工修订和确认。
+- [ ] **Phase 7: Prompt 分析与人工审核** - 为已确认 Shot 生成、修订、比较和批准结构化图片与 Video Prompt。
+- [ ] **Phase 8: 新关键帧生成与版本选择** - 基于已批准的图片 Prompt 生成、比较和采用新的关键帧。
+- [ ] **Phase 9: 新视频镜头生成与版本选择** - 使用采用的关键帧和已批准 Video Prompt 生成、审核和采用 Shot 视频。
+- [ ] **Phase 10: 批量任务编排与恢复** - 提供受控批量执行、取消、重试、恢复和项目级任务进度。
+- [ ] **Phase 11: 最终素材检查与导出** - 检查每个 Shot 的采用版本完整性，并导出供人工剪辑的素材和 manifest。
+
+## 阶段详情
+
+### Phase 5: 翻拍项目与核心工作台
+**Goal**: 用户可以创建可恢复的视频翻拍项目，并在统一工作台中以稳定的 Shot 和 Task 状态管理整个生产过程。
+**Depends on**: 无；复用 v1.0 已有项目、存储、生成和任务基础设施。
+**Requirements**: RMP-01, RMP-02, RMP-03, RMP-04, RMP-05, RMP-06, TASK-01, TASK-02, TASK-03
+**Success Criteria** (what must be TRUE):
+  1. 用户可以创建“视频翻拍”项目，同时既有剧本/小说推广项目的行为保持不变。
+  2. 用户可以在项目工作台查看原视频、Shot 总数、当前阶段、完成度、失败项、待审核项及关联任务状态。
+  3. 每个 Shot 都以稳定标识关联原始输入、Prompt、生成结果和审核状态；刷新页面、关闭浏览器或服务重启后仍能从真实状态继续。
+  4. 用户修改已完成 Shot 后可以看到下游项目需要复核；旧输入、参数、Executor/模型或 Skill 标识和输出版本仍可追溯。
+  5. 用户可以从项目、Shot 或资产版本定位统一 Task 的排队、运行、成功、失败、取消和重试状态，而无需直接操作 CLI 或进程。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 6: SceneDetect 镜头与关键帧审核
+**Goal**: 用户可以将原视频交由 SceneDetect 分析，并在 waoowaoo 内审核、修订和确认可用于后续生产的 Shot 与关键帧。
+**Depends on**: Phase 5
+**Requirements**: SHOT-01, SHOT-02, SHOT-03, SHOT-04, SHOT-05, SHOT-06, SHOT-07, SHOT-08
+**Success Criteria** (what must be TRUE):
+  1. 用户可以上传受支持的原始影视或动画视频，并清楚看到上传、探测和 SceneDetect 分析状态。
+  2. 用户可以在同一审核界面通过原视频播放器、时间轴和 Shot 列表查看已持久化的镜头边界、原始片段及候选关键帧。
+  3. 用户可以调整、删除、拆分或合并 Shot，并选择或重新提取 Start、Middle、End 关键帧；受影响原始片段会更新。
+  4. 用户可以逐 Shot 或批量确认边界和关键帧；未确认项不会进入默认 Prompt 批量分析，已确认项被修改后会保留旧版本并标记下游需要复核。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 7: Prompt 分析与人工审核
+**Goal**: 用户可以为已确认 Shot 创建、修订、比较和批准可追溯的结构化图片 Prompt 与 Video Prompt。
+**Depends on**: Phase 6
+**Requirements**: IPRM-01, IPRM-02, IPRM-03, IPRM-04, IPRM-05, IPRM-06, IPRM-07, VPRM-01, VPRM-02, VPRM-03, VPRM-04, VPRM-05, VPRM-06, VPRM-07
+**Success Criteria** (what must be TRUE):
+  1. 用户可以对已确认 Shot 的 Start、Middle、End 原始关键帧发起图片 Prompt 分析，得到覆盖主体、构图、机位、光线、材质和画面质感等字段的结构化结果。
+  2. 用户可以并排查看原始关键帧和图片 Prompt，编辑任意字段、比较历史版本并选择当前采用版本；每个结果都记录兼容 Executor 的 Skill 与 Schema 版本。
+  3. 用户可以根据原始 Shot、时间信息和已确认关键帧生成 Video Prompt，并审阅其中的动作、调度、机位、镜头运动、节奏和环境变化。
+  4. 用户可以播放原始 Shot、编辑与比较 Video Prompt 版本并明确批准或人工修订；未批准 Prompt 不会成为默认批量生成输入，失败项可单独重试并显示可理解错误。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 8: 新关键帧生成与版本选择
+**Goal**: 用户可以使用已批准的图片 Prompt，经现有图片模型网关生成、比较和采用可追溯的新关键帧版本。
+**Depends on**: Phase 7
+**Requirements**: KFRM-01, KFRM-02, KFRM-03, KFRM-04, KFRM-05, KFRM-06, KFRM-07
+**Success Criteria** (what must be TRUE):
+  1. 用户可以为 Start、Middle、End 关键帧选择模型、尺寸、质量、参考资产和允许参数，并通过现有图片模型网关发起生成。
+  2. 用户可以对比原始关键帧和多个生成版本，为每个位置选择一个当前采用版本；每次生成都保留 Prompt 版本、参数、任务和输出资产关系。
+  3. 用户修改 Prompt 或重新生成后，旧 Prompt、图片和采用记录不会被覆盖；仅需 Start/End 或模型不支持 Middle Frame 时，界面会显示真实输入合同。
+  4. 未有已批准图片 Prompt 的关键帧不会进入默认批量生成，并会作为项目缺失项呈现给用户。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 9: 新视频镜头生成与版本选择
+**Goal**: 用户可以使用采用的关键帧和已批准 Video Prompt，经现有视频模型网关生成、审核和采用新的 Shot 视频版本。
+**Depends on**: Phase 7, Phase 8
+**Requirements**: VGEN-01, VGEN-02, VGEN-03, VGEN-04, VGEN-05, VGEN-06, VGEN-07
+**Success Criteria** (what must be TRUE):
+  1. 用户可以选择视频模型、时长、分辨率、音频开关和受支持参数，并以 Shot 时长、采用关键帧和批准 Video Prompt 生成新视频镜头。
+  2. 用户可以看到所选模型实际使用的首帧、尾帧、多帧或其他参考模式，而不是被虚构的输入合同误导。
+  3. 用户可以播放原始 Shot 与多个生成视频版本、添加审核备注并选择一个当前采用版本；每个版本保留关键帧、Prompt、参数、任务和输出资产关系。
+  4. 用户修改 Prompt、关键帧或参数后可以重新生成且保留历史；缺少采用关键帧、批准 Video Prompt 或合法参数时，系统会阻止默认批量生成并说明原因。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 10: 批量任务编排与恢复
+**Goal**: 用户可以在不中断审核工作的前提下，可靠地批量运行、停止、重试和恢复翻拍生产任务。
+**Depends on**: Phase 5, Phase 6, Phase 7, Phase 8, Phase 9
+**Requirements**: TASK-04, TASK-05, TASK-06, TASK-07, TASK-08, TASK-09, TASK-10
+**Success Criteria** (what must be TRUE):
+  1. 用户可以选择多个 Shot 批量执行当前阶段，或只执行未处理、待复核或失败项，并能取消未完成任务、重试单项或全部失败项。
+  2. 用户重复点击批量操作或刷新页面时，不会产生无法识别的重复任务，也不会因重试重复生成已经成功的结果。
+  3. Worker 中断或服务重启后，用户可以看到任务已恢复、可重试或明确失败，而不会永久停留在虚假的运行中状态。
+  4. 用户可以在统一 Task Center 查看项目级运行进度并继续审核其他 Shot；错误信息与运行日志不泄露敏感配置且指出可操作的失败原因。
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 11: 最终素材检查与导出
+**Goal**: 用户可以确认 Shot 素材完整、定位需修复项，并导出按镜头顺序组织的可人工剪辑交付物。
+**Depends on**: Phase 9, Phase 10
+**Requirements**: MAT-01, MAT-02, MAT-03, MAT-04, MAT-05
+**Success Criteria** (what must be TRUE):
+  1. 用户可以在最终素材视图逐 Shot 检查边界、关键帧、两类 Prompt、新关键帧、新视频和审核状态是否完整。
+  2. 用户可以筛选缺失、失败、待审核或没有采用视频版本的 Shot，并直接跳转到对应修复位置；导出前会看到完整性检查，并确保每个准备导出的 Shot 恰有一个采用视频版本。
+  3. 用户可以导出按 Shot 顺序命名的视频素材，以及包含时间码、时长、采用版本、Prompt 和生成参数的 manifest；系统不会自动拼接视频、添加音频或发布。
+**Plans**: TBD
+**UI hint**: yes
+
+## 需求覆盖
+
+v1.1 的 57 条需求均已映射，且每条需求仅归属一个阶段：Phase 5（9）、Phase 6（8）、Phase 7（14）、Phase 8（7）、Phase 9（7）、Phase 10（7）、Phase 11（5）。
 
 ## 进度
 
-| 阶段 | 里程碑 | 计划完成 | 状态 |
-|------|--------|----------|------|
-| 1-03.4 | v1.0 | 31/31 | 已交付 |
-| 4 | v1.0 | 0/0 | 已取消 |
-| 5+ | v1.1 | — | 待规划 |
+| 阶段 | 里程碑 | 计划完成 | 状态 | 完成日期 |
+|------|--------|----------|------|----------|
+| 1-03.4 | v1.0 | 31/31 | 已交付 | 2026-08-07 |
+| 4 | v1.0 | 0/0 | 已取消 | 2026-08-07 |
+| 5. 翻拍项目与核心工作台 | v1.1 | 0/TBD | 未开始 | - |
+| 6. SceneDetect 镜头与关键帧审核 | v1.1 | 0/TBD | 未开始 | - |
+| 7. Prompt 分析与人工审核 | v1.1 | 0/TBD | 未开始 | - |
+| 8. 新关键帧生成与版本选择 | v1.1 | 0/TBD | 未开始 | - |
+| 9. 新视频镜头生成与版本选择 | v1.1 | 0/TBD | 未开始 | - |
+| 10. 批量任务编排与恢复 | v1.1 | 0/TBD | 未开始 | - |
+| 11. 最终素材检查与导出 | v1.1 | 0/TBD | 未开始 | - |
 
 ---
-*Last updated: 2026-08-07 after closing v1.0 and canceling Phase 4*
+*Last updated: 2026-08-07 for milestone v1.1 AI 视频翻拍工作台整合*

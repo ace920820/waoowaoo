@@ -121,16 +121,65 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RMP-01..RMP-06 | 待 Roadmap 映射 | Pending |
-| SHOT-01..SHOT-08 | 待 Roadmap 映射 | Pending |
-| IPRM-01..IPRM-07 | 待 Roadmap 映射 | Pending |
-| VPRM-01..VPRM-07 | 待 Roadmap 映射 | Pending |
-| KFRM-01..KFRM-07 | 待 Roadmap 映射 | Pending |
-| VGEN-01..VGEN-07 | 待 Roadmap 映射 | Pending |
-| TASK-01..TASK-10 | 待 Roadmap 映射 | Pending |
-| MAT-01..MAT-05 | 待 Roadmap 映射 | Pending |
+| RMP-01 | Phase 5 | Pending |
+| RMP-02 | Phase 5 | Pending |
+| RMP-03 | Phase 5 | Pending |
+| RMP-04 | Phase 5 | Pending |
+| RMP-05 | Phase 5 | Pending |
+| RMP-06 | Phase 5 | Pending |
+| TASK-01 | Phase 5 | Pending |
+| TASK-02 | Phase 5 | Pending |
+| TASK-03 | Phase 5 | Pending |
+| SHOT-01 | Phase 6 | Pending |
+| SHOT-02 | Phase 6 | Pending |
+| SHOT-03 | Phase 6 | Pending |
+| SHOT-04 | Phase 6 | Pending |
+| SHOT-05 | Phase 6 | Pending |
+| SHOT-06 | Phase 6 | Pending |
+| SHOT-07 | Phase 6 | Pending |
+| SHOT-08 | Phase 6 | Pending |
+| IPRM-01 | Phase 7 | Pending |
+| IPRM-02 | Phase 7 | Pending |
+| IPRM-03 | Phase 7 | Pending |
+| IPRM-04 | Phase 7 | Pending |
+| IPRM-05 | Phase 7 | Pending |
+| IPRM-06 | Phase 7 | Pending |
+| IPRM-07 | Phase 7 | Pending |
+| VPRM-01 | Phase 7 | Pending |
+| VPRM-02 | Phase 7 | Pending |
+| VPRM-03 | Phase 7 | Pending |
+| VPRM-04 | Phase 7 | Pending |
+| VPRM-05 | Phase 7 | Pending |
+| VPRM-06 | Phase 7 | Pending |
+| VPRM-07 | Phase 7 | Pending |
+| KFRM-01 | Phase 8 | Pending |
+| KFRM-02 | Phase 8 | Pending |
+| KFRM-03 | Phase 8 | Pending |
+| KFRM-04 | Phase 8 | Pending |
+| KFRM-05 | Phase 8 | Pending |
+| KFRM-06 | Phase 8 | Pending |
+| KFRM-07 | Phase 8 | Pending |
+| VGEN-01 | Phase 9 | Pending |
+| VGEN-02 | Phase 9 | Pending |
+| VGEN-03 | Phase 9 | Pending |
+| VGEN-04 | Phase 9 | Pending |
+| VGEN-05 | Phase 9 | Pending |
+| VGEN-06 | Phase 9 | Pending |
+| VGEN-07 | Phase 9 | Pending |
+| TASK-04 | Phase 10 | Pending |
+| TASK-05 | Phase 10 | Pending |
+| TASK-06 | Phase 10 | Pending |
+| TASK-07 | Phase 10 | Pending |
+| TASK-08 | Phase 10 | Pending |
+| TASK-09 | Phase 10 | Pending |
+| TASK-10 | Phase 10 | Pending |
+| MAT-01 | Phase 11 | Pending |
+| MAT-02 | Phase 11 | Pending |
+| MAT-03 | Phase 11 | Pending |
+| MAT-04 | Phase 11 | Pending |
+| MAT-05 | Phase 11 | Pending |
 
-**Coverage:** 57 个 v1.1 需求，待 Roadmap 完成 100% 映射。
+**Coverage:** 57/57 个 v1.1 需求已映射到一个且仅一个 Roadmap 阶段。
 
 ---
-*Last updated: 2026-08-07 after defining v1.1 requirements*
+*Last updated: 2026-08-07 after mapping all v1.1 requirements to the roadmap*
