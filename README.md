@@ -102,6 +102,54 @@ npm run dev
 > [!WARNING]
 > 跳过 `npx prisma db push` 会导致所有数据库表不存在，启动后报错 `The table 'tasks' does not exist`。请务必先运行此命令再启动开发服务器。
 
+#### 本地一键开发命令（可选）
+
+仓库内提供了一个轻量本地开发辅助命令，保持现有 `npm run dev` 流程不变，只做状态检查、Redis 辅助启动、日志和安全停止：
+
+```bash
+# 在任意目录都可以通过脚本绝对路径运行
+/Users/jamiezhao/projects/waoowaoo/bin/waoowaoo status
+/Users/jamiezhao/projects/waoowaoo/bin/waoowaoo up
+```
+
+默认开发端口与数据位置：
+
+- MySQL：`127.0.0.1:13306`，数据库 `waoowaoo`，数据目录 `~/.local/share/waoowaoo-dev/mysql/data`
+- Redis：`127.0.0.1:16379`，由命令在端口空闲时按本地开发参数启动
+- App：`http://localhost:3000/zh`
+- Bull Board：`http://localhost:3010/admin/queues`
+
+安全边界：`bin/waoowaoo` 不会启动、停止或迁移 MySQL；`down` 只停止它自己记录 PID 的 app / Redis 进程，不会按端口杀任意进程。
+
+常用命令：
+
+```bash
+bin/waoowaoo up              # 前台运行 npm run dev，适合日常终端使用
+bin/waoowaoo up -d           # 后台运行，日志写入 ~/.local/share/waoowaoo-dev/logs/app.log
+bin/waoowaoo status          # 查看 MySQL / Redis / App / Bull Board 状态
+bin/waoowaoo logs            # tail -f app 日志
+bin/waoowaoo logs redis      # tail -f Redis 日志
+bin/waoowaoo down            # 仅停止该工具启动并记录的进程
+bin/waoowaoo restart -d      # 安全重启记录进程后后台启动
+bin/waoowaoo open            # macOS 打开 App 和 Bull Board
+```
+
+安装为全局命令（非侵入式，不需要 `sudo`）：
+
+```bash
+mkdir -p ~/bin
+ln -sf /Users/jamiezhao/projects/waoowaoo/bin/waoowaoo ~/bin/waoowaoo
+
+# 如果 ~/bin 还不在 PATH，加入你的 shell 配置，例如 ~/.zshrc
+export PATH="$HOME/bin:$PATH"
+```
+
+也可以在后台模式外层使用 `nohup`，避免终端清理影响启动命令本身：
+
+```bash
+nohup /Users/jamiezhao/projects/waoowaoo/bin/waoowaoo up -d >/tmp/waoowaoo-up.log 2>&1 &
+```
+
 ---
 
 访问 [http://localhost:13000](http://localhost:13000)（方式一、二）或 [http://localhost:3000](http://localhost:3000)（方式三）开始使用！

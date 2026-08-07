@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 03.4 Complete
-last_updated: "2026-04-27T00:33:00+08:00"
+status: Awaiting next milestone
+last_updated: "2026-08-07T05:49:53.120Z"
+last_activity: 2026-08-07
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
-  total_phases: 9
+  total_phases: 8
   completed_phases: 8
-  total_plans: 28
-  completed_plans: 28
-  percent: 100
+  total_plans: 31
+  completed_plans: 31
 ---
 
 # STATE
@@ -19,7 +20,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-04-19)
 
 **Core value:** 用户在完成剧本后，必须能用更短路径、更少无效编辑成本进入可生产的视频生成阶段
-**Current focus:** Phase 03.4 complete and ready for user acceptance/UAT; next step is real workspace upload verification, then Phase 4 hardening.
+**Current focus:** Close and archive v1.0 with Phase 4 formally canceled, then start v1.1 AI 视频翻拍工作台整合.
 
 ## Current Roadmap Status
 
@@ -31,7 +32,37 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 - Phase 03.2: Storyboard Package Import Contract — implemented
 - Phase 03.3: Import API And Persistence — implemented
 - Phase 03.4: Script Page Upload UI — implemented
-- Phase 4: Hardening And Rollout — pending
+- Phase 4: Hardening And Rollout — canceled 2026-08-07; will not be executed
+
+## Deferred Items
+
+Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are audit metadata gaps or work records, not claims that the corresponding implementation is incomplete.
+
+| Category | Item | Status |
+|----------|------|--------|
+| quick_task | `260424-fkk-add-progressive-code-disclosure-protocol` | unknown |
+| quick_task | `260424-lens-language-phase-31-prompts` | unknown |
+| quick_task | `260424-vbw-multi-shot-cinematic-prompt-plan` | unknown |
+| quick_task | `260426-mj1-fix-storyboard-package-import-review-fin` | unknown |
+| quick_task | `260426-rln-fix-storyboard-import-dialog-opacity-and` | unknown |
+| quick_task | `260426-u23-imageurl-referenceimages` | unknown |
+| quick_task | `260427-0dt-seedance-2-0-contentitems` | unknown |
+| quick_task | `260427-seedance-reference-consistency` | missing |
+| quick_task | `260428-sy7-storyboard-package-mapper-prompt-formatt` | unknown |
+| quick_task | `260428-w7y-gpt-image-2-high-medium-low-auto-quality` | unknown |
+| quick_task | `260428-x6i-shot-group-reference-image-model` | unknown |
+| quick_task | `260502-trl-implement-lightweight-one-command-local-` | missing |
+| quick_task | `260507-cpz-fix-frontend-result-page-missing-fields-` | unknown |
+| quick_task | `260507-dh5-fix-frontend-result-page-grouped-field-m` | unknown |
+| quick_task | `260703-lqd-fix-shot-group-videoreferencesjson-overf` | unknown |
+| uat_gap | `Phase 02 / 02-HUMAN-UAT.md` | partial; 1 open scenario |
+| verification_gap | `Phase 02 / 02-VERIFICATION.md` | human_needed |
+
+### Milestone Closeout Override
+
+- Closeout type: `override_closeout`
+- Phase 4 was explicitly canceled by the user and is not counted as delivered.
+- 31/31 implementation plans across Phases 1-03.4 have summaries, but only Phase 3 has a current-format passing verification report; missing or human-needed reports remain documented as known verification overrides.
 
 ## Accumulated Context
 
@@ -49,6 +80,7 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 | 2026-04-28 | `260428-sy7-storyboard-package-mapper-prompt-formatt` | Enriched storyboard package import mapping so visible prompts and final model prompts include director per-shot cinematic fields without schema changes. |
 | 2026-04-28 | `260428-w7y-gpt-image-2-high-medium-low-auto-quality` | Exposed OpenAI-compatible `gpt-image-2` as high/medium/low/auto quality aliases; follow-ups allowed the `{{quality}}` placeholder and accepted `b64_json` template image responses. |
 | 2026-04-28 | `260428-x6i-shot-group-reference-image-model` | Added project-level auxiliary reference image model selection (`shotGroupReferenceImageModel`) and routed multi-shot reference image generation to it while keeping storyboard board generation on `storyboardModel`. |
+| 2026-05-07 | `260507-cpz-fix-frontend-result-page-missing-fields-` | Fixed storyboard package frontend result/preview rendering for shot-level `focalLength`, `dof`, and `lighting` while preserving backend generation contracts. |
 | 2026-07-03 | `260703-lqd-fix-shot-group-videoreferencesjson-overf` | Widened `NovelPromotionShotGroup.videoReferencesJson` to MySQL `LONGTEXT` so imported cinematic plans and submitted storyboard prompts can persist without overflowing the column. |
 
 ### UAT / Verification Notes
@@ -90,3 +122,14 @@ See: `.planning/PROJECT.md` (updated 2026-04-19)
 
 ---
 *Initialized: 2026-04-19*
+
+## Current Position
+
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-07 — Milestone v1.0 completed and archived
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
