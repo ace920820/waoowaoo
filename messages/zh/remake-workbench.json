@@ -1,0 +1,19 @@
+{
+  "eyebrow": "视频翻拍工作台",
+  "loading": "正在恢复项目…",
+  "loadFailed": "项目加载失败",
+  "stageNavigation": "翻拍阶段",
+  "summary": "项目概览",
+  "source": "源视频",
+  "sourceStatus": { "not_imported": "尚未导入", "uploaded": "已上传", "analyzed": "已分析" },
+  "shots": "镜头数",
+  "review": "待审核",
+  "shotList": "镜头概览",
+  "noShots": "暂无镜头。导入和分析将在后续阶段开放。",
+  "needsReview": "需要审核",
+  "tasks": "任务",
+  "taskCount": "任务数量",
+  "noTasks": "暂无任务",
+  "close": "关闭",
+  "stages": { "overview": "项目概览", "scenedetect": "视频分析 / 镜头审核" }
+}

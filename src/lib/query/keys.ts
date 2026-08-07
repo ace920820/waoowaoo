@@ -99,6 +99,12 @@ export const queryKeys = {
         data: (projectId: string) => ['project', projectId, 'data'] as const,
     },
 
+    remake: {
+        project: (projectId: string) => ['remake-project', projectId] as const,
+        snapshot: (projectId: string) => ['remake-project', projectId, 'snapshot'] as const,
+        tasks: (projectId: string) => ['remake-project', projectId, 'tasks'] as const,
+    },
+
     // ============ 顶层便捷函数 ============
     /**
      * 项目基础数据

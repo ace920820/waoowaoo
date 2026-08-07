@@ -1,0 +1,19 @@
+{
+  "eyebrow": "Video remake workbench",
+  "loading": "Restoring project…",
+  "loadFailed": "Unable to load project",
+  "stageNavigation": "Remake stages",
+  "summary": "Project overview",
+  "source": "Source video",
+  "sourceStatus": { "not_imported": "Not imported", "uploaded": "Uploaded", "analyzed": "Analyzed" },
+  "shots": "Shots",
+  "review": "Needs review",
+  "shotList": "Shot overview",
+  "noShots": "No shots yet. Import and analysis will open in a later phase.",
+  "needsReview": "Needs review",
+  "tasks": "Tasks",
+  "taskCount": "Task count",
+  "noTasks": "No tasks",
+  "close": "Close",
+  "stages": { "overview": "Project overview", "scenedetect": "Video analysis / shot review" }
+}

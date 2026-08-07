@@ -23,7 +23,7 @@ export interface SceneDetectShot {
   modifiedSource: 'AI' | 'USER'
   tags: string[]
   notes: string
-  confidence?: number | null
+  confidence?: number
 }
 
 export interface SceneDetectProject {
@@ -93,7 +93,11 @@ export function parseSceneDetectInput(input: unknown): SceneDetectProject {
   const candidate = record && !('schemaVersion' in record) && record.project
     ? record.project
     : input
-  return assertFrameBounds(projectShape.parse(candidate) as SceneDetectProject)
+  const parsed = projectShape.parse(candidate) as unknown as SceneDetectProject
+  return assertFrameBounds({
+    ...parsed,
+    shots: parsed.shots.map((shot) => ({ ...shot, confidence: shot.confidence ?? undefined })),
+  })
 }
 
 type Snapshot = {
@@ -136,7 +140,7 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
         modifiedSource: payload.modifiedSource ?? 'AI',
         tags: payload.tags ?? [],
         notes: payload.notes ?? '',
-        confidence: payload.confidence ?? null,
+        confidence: payload.confidence ?? undefined,
       }
     }),
   }

@@ -238,6 +238,12 @@ export {
 } from './useProjectData'
 
 export {
+    useRemakeProject,
+    useRefreshRemakeProject,
+    type RemakeSnapshot,
+} from './useRemakeProject'
+
+export {
     useTaskTargetStateMap,
 } from './useTaskTargetStateMap'
 

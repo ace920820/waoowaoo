@@ -1,0 +1,96 @@
+.scenedetect-stage-root {
+  min-height: min(720px, calc(100vh - 220px));
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #101317;
+  color: #f3f4f6;
+}
+
+.scenedetect-stage-app {
+  min-height: inherit;
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.scenedetect-stage-disabled {
+  display: grid;
+  min-height: inherit;
+  place-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  color: #c7cbd1;
+}
+
+.scenedetect-stage-disabled strong {
+  color: #fff;
+  font-size: 18px;
+}
+
+.scenedetect-stage-disabled span {
+  font-size: 13px;
+}
+
+.remake-workbench,
+.remake-workbench-loading,
+.remake-workbench-error {
+  min-height: calc(100vh - 96px);
+  color: #1d252c;
+  background: #f6f8f9;
+}
+
+.remake-workbench-loading,
+.remake-workbench-error {
+  display: grid;
+  place-items: center;
+  padding: 48px;
+}
+
+.remake-project-bar,
+.remake-stage-nav,
+.remake-overview,
+.remake-stage-main {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding-inline: clamp(16px, 3vw, 40px);
+}
+
+.remake-project-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-block: 28px 20px; border-bottom: 1px solid #dce2e6; }
+.remake-eyebrow { margin: 0 0 6px; color: #63717b; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.remake-project-bar h1, .remake-section-heading h2 { margin: 0; font-weight: 650; }
+.remake-project-bar h1 { font-size: clamp(22px, 3vw, 32px); }
+.remake-project-bar p:last-child { margin: 8px 0 0; color: #63717b; }
+.remake-task-button, .remake-stage-nav button { border: 1px solid #cbd5db; background: #fff; color: #27323a; cursor: pointer; }
+.remake-task-button { padding: 9px 13px; border-radius: 6px; }
+.remake-task-button span { margin-left: 6px; color: #63717b; }
+.remake-stage-nav { display: flex; gap: 4px; padding-block: 14px; }
+.remake-stage-nav button { padding: 8px 12px; border-radius: 5px; }
+.remake-stage-nav button.is-active { border-color: #1d252c; background: #1d252c; color: #fff; }
+.remake-overview { display: grid; gap: 18px; padding-block: 12px 40px; }
+.remake-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.remake-summary-item { display: grid; gap: 6px; padding: 18px; border: 1px solid #dce2e6; border-radius: 6px; background: rgba(255,255,255,.72); }
+.remake-summary-item span { color: #63717b; font-size: 12px; }
+.remake-summary-item strong { font-size: 22px; }
+.remake-shot-panel { border-top: 1px solid #dce2e6; }
+.remake-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 16px; }
+.remake-section-heading h2 { font-size: 18px; }
+.remake-shot-panel ul, .remake-task-drawer ul { margin: 0; padding: 0; list-style: none; }
+.remake-shot-panel li, .remake-task-drawer li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid #e5eaed; }
+.remake-shot-panel code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #42515b; }
+.remake-shot-panel em, .remake-task-drawer em { color: #63717b; font-size: 12px; font-style: normal; }
+.remake-empty { padding-block: 24px; color: #63717b; }
+.remake-stage-main { padding-inline: 0; }
+.remake-task-overlay { position: fixed; inset: 0; z-index: 40; background: rgba(13, 19, 23, .32); }
+.remake-task-drawer { position: absolute; top: 0; right: 0; width: min(400px, 92vw); height: 100%; overflow: auto; padding: 22px; background: #fff; box-shadow: -12px 0 30px rgba(13, 19, 23, .16); }
+.remake-task-drawer li { grid-template-columns: minmax(0, 1fr) auto; }
+.remake-task-drawer button { border: 0; background: transparent; color: #27323a; cursor: pointer; font-size: 22px; }
+@media (max-width: 700px) {
+  .remake-project-bar { align-items: stretch; flex-direction: column; }
+  .remake-task-button { align-self: flex-start; }
+  .remake-summary-grid { grid-template-columns: 1fr; }
+  .remake-shot-panel li { grid-template-columns: 44px minmax(0, 1fr); }
+  .remake-shot-panel em { grid-column: 2; }
+}
