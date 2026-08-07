@@ -443,29 +443,42 @@ model Project {
 }
 
 model RemakeProject {
-  id                String        @id @default(uuid())
-  projectId         String        @unique
-  creationRequestId String        @unique
-  importStatus      String        @default("not_imported")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @default(now()) @updatedAt
-  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  source            RemakeSource?
+  id                String         @id @default(uuid())
+  projectId         String         @unique
+  creationRequestId String         @unique
+  currentSourceId   String?        @unique
+  importStatus      String         @default("not_imported")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @default(now()) @updatedAt
+  project           Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceHistory     RemakeSource[] @relation("RemakeProjectSources")
+  currentSource     RemakeSource?  @relation("RemakeProjectCurrentSource", fields: [currentSourceId], references: [id], onDelete: SetNull)
   shots             RemakeShot[]
 
   @@map("remake_projects")
 }
 
 model RemakeSource {
-  id              String        @id @default(uuid())
-  remakeProjectId String        @unique
-  mediaId         String?
-  status          String        @default("not_imported")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @default(now()) @updatedAt
-  remakeProject   RemakeProject @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  id                String         @id @default(uuid())
+  remakeProjectId   String
+  sourceRevision    Int            @default(1)
+  operationKey      String?
+  mediaId           String?
+  storageKey        String?
+  fileName          String?
+  contentType       String?
+  byteSize          BigInt?
+  probeMetadata     String?        @db.Text
+  status            String         @default("uploaded_pending")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @default(now()) @updatedAt
+  remakeProject     RemakeProject  @relation("RemakeProjectSources", fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  currentForProject RemakeProject? @relation("RemakeProjectCurrentSource")
 
   @@index([mediaId])
+  @@unique([remakeProjectId, sourceRevision])
+  @@unique([remakeProjectId, operationKey])
+  @@index([remakeProjectId, createdAt])
   @@map("remake_sources")
 }
 
@@ -477,6 +490,8 @@ model RemakeShot {
   sequence        Int?
   reviewStatus    String                @default("pending")
   needsReview     Boolean               @default(false)
+  currentRevision Int?
+  version         Int                   @default(0)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @default(now()) @updatedAt
   remakeProject   RemakeProject         @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
@@ -497,12 +512,21 @@ model RemakeShotRevision {
   revision     Int
   changeReason String
   payload      String?             @db.Text
+  lifecycleState String             @default("active")
+  sourceRevision Int?
+  keyframeFrames String?            @db.Text
+  keyframeMediaRefs String?         @db.Text
+  analysisTaskId String?
+  keyframeTaskId String?
   createdAt    DateTime            @default(now())
   shot         RemakeShot          @relation(fields: [shotId], references: [id], onDelete: Cascade)
   outputs      RemakeOutputVersion[]
 
   @@unique([shotId, revision])
   @@index([shotId])
+  @@index([sourceRevision])
+  @@index([analysisTaskId])
+  @@index([keyframeTaskId])
   @@map("remake_shot_revisions")
 }
 
