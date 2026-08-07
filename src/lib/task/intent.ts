@@ -66,6 +66,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'process',
   [TASK_TYPE.SCENEDETECT_ANALYZE]: 'analyze',
   [TASK_TYPE.SCENEDETECT_EXTRACT_KEYFRAMES]: 'process',
+  [TASK_TYPE.REMAKE_PROJECT_INITIALIZE]: 'build',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {

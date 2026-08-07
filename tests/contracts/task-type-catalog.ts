@@ -53,6 +53,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'tests/unit/worker/reference-to-character.test.ts',
   [TASK_TYPE.SCENEDETECT_ANALYZE]: 'tests/unit/remake-projects/scenedetect-task-contract.test.ts',
   [TASK_TYPE.SCENEDETECT_EXTRACT_KEYFRAMES]: 'tests/unit/remake-projects/scenedetect-task-contract.test.ts',
+  [TASK_TYPE.REMAKE_PROJECT_INITIALIZE]: 'tests/integration/api/remake-project-core.test.ts',
 } as const satisfies Record<TaskType, string>
 
 export const TASK_TYPE_CATALOG: ReadonlyArray<TaskTypeCoverageEntry> = (Object.values(TASK_TYPE) as TaskType[])

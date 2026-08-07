@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { TASK_TYPE } from '@/lib/task/types'
 
 type Row = Record<string, unknown>
 
@@ -47,7 +48,7 @@ export async function createRemakeProject(input: {
       data: {
         userId: input.userId,
         projectId: String(project.id),
-        type: 'remake_project_initialize',
+        type: TASK_TYPE.REMAKE_PROJECT_INITIALIZE,
         targetType: 'remake_project',
         targetId: String(remakeProject.id),
         status: 'queued',
