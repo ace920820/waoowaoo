@@ -48,6 +48,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
         assetPicker,
         layout,
         workspaceRedesign,
+        remakeWorkbench,
         home
     ] = await Promise.all([
         import(`../messages/${locale}/common.json`),
@@ -81,6 +82,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
         import(`../messages/${locale}/assetPicker.json`),
         import(`../messages/${locale}/layout.json`),
         import(`../messages/${locale}/workspaceRedesign.json`),
+        import(`../messages/${locale}/remake-workbench.json`),
         import(`../messages/${locale}/home.json`)
     ]);
 
@@ -118,6 +120,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
             assetPicker: assetPicker.default,
             layout: layout.default,
             workspaceRedesign: workspaceRedesign.default,
+            remakeWorkbench: remakeWorkbench.default,
             home: home.default
         }
     };
