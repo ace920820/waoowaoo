@@ -18,6 +18,7 @@ export interface BaseProject {
   userId: string
   createdAt: Date
   updatedAt: Date
+  type?: 'novel_promotion' | 'remake' | string
 }
 
 // ============================================

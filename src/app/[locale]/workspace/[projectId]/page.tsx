@@ -391,7 +391,19 @@ export default function ProjectDetailPage() {
       {/* 主内容区 - 占满全部宽度 */}
       <main className="flex-1 overflow-y-auto">
         <div className="container mx-auto px-4 py-8">
-          {isGlobalAssetsView && project.novelPromotionData ? (
+          {project.type === 'remake' ? (
+            <section className="glass-surface p-8" data-project-mode="remake">
+              <h1 className="text-2xl font-semibold text-[var(--glass-text-primary)] mb-3">
+                {t('remakeWorkbench.title')}
+              </h1>
+              <p className="text-[var(--glass-text-secondary)] mb-2">
+                {t('remakeWorkbench.notImported')}
+              </p>
+              <p className="text-sm text-[var(--glass-text-tertiary)]">
+                {t('remakeWorkbench.description')}
+              </p>
+            </section>
+          ) : isGlobalAssetsView && project.novelPromotionData ? (
             // 全局资产视图（确保数据准备好）
             <div>
               <h1 className="text-2xl font-bold text-[var(--glass-text-primary)] mb-6">{t('globalAssets')}</h1>

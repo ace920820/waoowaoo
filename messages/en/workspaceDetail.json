@@ -7,6 +7,11 @@
   "projectNotFound": "Project not found",
   "backToWorkspace": "Back to Workspace",
   "episode": "Episode",
+  "remakeWorkbench": {
+    "title": "Video Remake Workbench",
+    "notImported": "Source video not imported",
+    "description": "Shots and keyframes will appear here after the source video is imported and analyzed by SceneDetect."
+  },
   "modelSetup": {
     "title": "Set up default models before starting",
     "description": "No default analysis model is configured for this account. Smart split and downstream AI flows cannot run until it is set.",
