@@ -24,7 +24,7 @@
 
 - 旧 `workspace/page.tsx` 的渐变新建卡与项目卡 hover 特效，违反 UI 合同的无渐变、操作型工作台要求。
 - 现有小说推广阶段集合（`config/script/assets/...`）及 `NovelPromotionWorkspace` 的业务含义；翻拍阶段导航必须独立，不得改变剧本/小说推广的路由行为。
-- SceneDetect 上传/时间轴、Prompt/版本生成、批量取消重试和素材导出；均属于 Phase 6-11，不应在本阶段预建假数据或控制入口。
+- 不要把 SceneDetect 的 Timeline、ShotInspector、KeyframeSelector 等子组件当作 Waoo 页面模板后重新编排；复用对象是包含 `App.tsx` 状态机和布局的完整应用。本阶段建立 canonical vendoring、adapter/runtime contract、接入状态和 Waoo 数据投影；Phase 6 才开放真实 embedded app。Prompt/版本生成、批量取消重试和素材导出仍属于 Phase 7-11。
 
 ## File Classification
 
@@ -32,7 +32,7 @@
 |---|---|---|---|---|
 | `prisma/schema.prisma` | model | CRUD / transform | `Project`、`Task`、`GraphRun` | 精确（基础实体） |
 | `prisma/migrations/<timestamp>_add_remake_project_core/migration.sql` | migration | transform | `20260415113000_add_shot_group_phase1/migration.sql` | role-match |
-| `src/lib/remake-projects/*` | service / utility | CRUD / transform | `src/lib/task/service.ts`、`src/lib/projects/validation.ts` | role-match |
+| `src/lib/remake-projects/*` | service / adapter / utility | CRUD / transform / external capability | `src/lib/task/service.ts`、`src/lib/projects/validation.ts`、SceneDetect API contract | role-match |
 | `src/app/api/projects/route.ts` | route | request-response / CRUD | 同文件 `POST` | 精确（扩展项目类型分支） |
 | `src/app/api/remake-projects/[projectId]/route.ts` | route | request-response / CRUD | `src/app/api/projects/[projectId]/data/route.ts` + `src/app/api/tasks/route.ts` | role-match |
 | `src/app/api/remake-projects/[projectId]/shots/route.ts` | route | request-response / CRUD | `src/app/api/novel-promotion/[projectId]/episodes/*` | role-match |
@@ -43,6 +43,10 @@
 | `src/app/[locale]/workspace/[projectId]/page.tsx` | controller component | request-response | URL `stage`/`episode` 处理 | role-match（需模式分派） |
 | `src/app/[locale]/workspace/[projectId]/modes/remake/*` | component / hook | CRUD / request-response | `NovelPromotionWorkspace` 的 shell 边界 + `useProjectData` | role-match |
 | `src/lib/query/{keys,hooks/useRemakeProject}.ts` | hook / config | request-response | `useProjectData`、`useTaskStatus` | 精确 |
+| `src/lib/remake-projects/scenedetect/*` | external adapter / contract | transform / event-driven | `src/lib/task/submitter.ts`、SceneDetect `backend/main.py` | role-match |
+| `src/vendor/scenedetect/**` + `VENDOR.json` | canonical vendored application | embedded stateful app | SceneDetect `src/App.tsx`、`src/types.ts`、`src/utils/projectStore.ts` | exact-source |
+| `scripts/vendor-scenedetect.mjs` | vendor sync / provenance | transform / build-time | SceneDetect source tree + manifest/hash | no local analog |
+| `src/lib/remake-projects/scenedetect/integration-runtime.ts` + `modes/remake/scenedetect/SceneDetectStageHost.tsx` | runtime port / embedded host | stateful / request-response | SceneDetect native App/types contract | boundary-match |
 | `messages/{zh,en}/remake-workbench.json` 与 focused tests | config / test | transform / request-response | `workspace.json`、项目创建与 Task route tests | role-match |
 
 ## Pattern Assignments
@@ -95,7 +99,7 @@ CREATE UNIQUE INDEX novel_promotion_shot_group_items_shotGroupId_itemIndex_key
   ON novel_promotion_shot_group_items (shotGroupId, itemIndex);
 ```
 
-**Phase 5 适用结论：**新增 `RemakeProject`/`RemakeShot`/provenance（具体拆分由 planner 决定）应以 `Project.id` 与不可变 `Shot.id` 关联。对 Shot 的下游失效应存为可审计记录/状态，而非删除 `Task.result` 或覆盖旧版本。`Task` 可通过 `targetType='remake_shot'`、`targetId=shot.id` 关联；不要增加第二张平行的任务状态表。若需要 Run 级元数据，采用 `GraphRun.taskId` 与现有 `workflowVersion`，而不是自造队列事实来源。
+**Phase 5 适用结论：**新增 `RemakeProject`/`RemakeShot`/provenance（具体拆分由 planner 决定）应以 `Project.id` 与不可变 `Shot.id` 关联。SceneDetect 的外部序号、帧范围、媒体 URL 和审核字段先经过 `scenedetect` adapter，再写入 Waoo revision/Asset/Review。对 Shot 的下游失效应存为可审计记录/状态，而非删除 `Task.result` 或覆盖旧版本。`Task` 可通过 `targetType='remake_shot'`、`targetId=shot.id` 关联；不要增加第二张平行的任务状态表。若需要 Run 级元数据，采用 `GraphRun.taskId` 与现有 `workflowVersion`，而不是自造队列事实来源。
 
 ---
 
@@ -224,7 +228,7 @@ const { data: project, isLoading: loading, error: projectError } = useProjectDat
 // 失败时保留 Navbar，并提供返回工作区命令
 ```
 
-**Phase 5 适用结论：**在此入口做项目类型判别，再将翻拍项目交给 `modes/remake` shell；不要把新的翻拍阶段混进 `VALID_STAGES` 或 `NovelPromotionWorkspace`。翻拍 shell 读取 `stage=overview`、`shot`、可选 `task`，默认选择服务端首个 Shot；用户操作以 `router.replace(..., { scroll: false })` 更新 URL。其余六阶段使用不可导航的 `aria-disabled` 控件，而非空白路由。加载时按 UI 合同渲染各面板骨架，不复制该旧页面全屏 loading。
+**Phase 5 适用结论：**在此入口做项目类型判别，再将翻拍项目交给 `modes/remake` shell；不要把新的翻拍阶段混进 `VALID_STAGES` 或 `NovelPromotionWorkspace`。翻拍 shell 读取 `stage=overview`、`shot`、可选 `task`，默认选择服务端首个 Shot；用户操作以 `router.replace(..., { scroll: false })` 更新 URL。项目概览可以按 UI-SPEC 渲染只读三栏；SceneDetect stage 必须走独立的全宽 host，不复用该三栏重新编排编辑器。未开放阶段使用不可导航的 `aria-disabled` 控件，而非空白路由。
 
 ---
 
@@ -272,6 +276,22 @@ if (!response.ok) setCreateError(await readApiErrorMessage(response, t('createFa
 
 ---
 
+### SceneDetect canonical vendoring 与整应用 host（embedded stateful app）
+
+**Canonical source:** `/Volumes/KINGSTON/projects/SceneDetect/src/App.tsx`、`src/types.ts`、`src/utils/projectStore.ts` 及 App 的完整静态 import closure。
+
+**Phase 5 适用结论：**使用 `scripts/vendor-scenedetect.mjs` 将完整前端 source closure 同步到唯一的 `src/vendor/scenedetect/`，忽略 macOS `._*` 文件，并生成 `VENDOR.json`。manifest 至少记录 source repo/path、source commit 或不可变版本、纳入文件及 hash、同步命令、同步时间、允许的 integration patches。`src/vendor/scenedetect/index.ts` 只导出 `SceneDetectEmbeddedApp`、原生类型和 runtime port 所需合同；Waoo 业务目录不得越过该入口直接导入 vendor 内的 Timeline、ShotInspector 等组件。
+
+StageHost 合同从 SceneDetect 原生类型向外收敛：输入为 `SceneDetectProject`/`VideoMetadata` 所需的初始项目上下文，编辑数据仍使用原生 `Shot[]`；Waoo adapter 负责 `Waoo snapshot <-> SceneDetect native model` 的双向转换。最小 `SceneDetectIntegrationRuntime` 提供 load/save project、resolve media、submit analyze/extract task、progress/result 回调，以及项目/导出入口策略。它替换副作用边界，不接管或复制 `App.tsx` 中的编辑状态编排。
+
+Phase 5 只建立 compile-only/disabled harness 和类型兼容证据；Phase 6 才注入真实 runtime 并开放用户操作。允许 patch 仅限 embedded root height/overflow、modal portal containment、runtime 注入、Waoo 项目入口替换和 Phase 11 前导出入口策略，且逐项写入 manifest。
+
+### SceneDetect 样式作用域（embedded visual boundary）
+
+SceneDetect host 使用明确的 scoped root（例如 `data-scenedetect-embedded`）和独立 style entry。Waoo glass tokens 只控制项目栏、阶段导航、概览和 Task drawer；vendored app 保留自身深色主题、组件尺寸和层级。Task drawer 采用 overlay，不新增常驻列压缩编辑器；modal/portal、keyboard 和 viewport height 的 containment 由 host 解决，不修改内部布局。
+
+---
+
 ### Focused tests（test，request-response / event-driven）
 
 **Analogs:** `tests/integration/api/specific/project-create-default-audio-model.test.ts:1-109`、`tests/integration/api/contract/task-infra-routes.test.ts:1-280`。
@@ -297,7 +317,7 @@ expect(prismaMock.project.create).toHaveBeenCalledWith(...)
 - 项目创建 route：旧类型回归、翻拍分支的 Project + 首 Shot + 初始化 Task 原子写入、无效名称/type 的 400；
 - Shot CRUD route：所有权 401/403/404、创建稳定 ID、PATCH 提升 revision 且产生 `needs_review`，旧下游记录仍存在；
 - Task contract：翻拍 Task 可按 `projectId`/`targetType`/`targetId` 查询，错误只返回规范化/脱敏字段；
-- workspace/component：URL `stage/shot/task` 恢复选择、未开放阶段不可导航、成功创建后的真实数据读回路径。视觉回归覆盖 1280、768、<768 宽度的三/二/一栏与超长内容。
+- workspace/component：URL `stage/shot/task` 恢复选择、未开放阶段不可导航、成功创建后的真实数据读回路径；canonical StageHost 只能加载完整 App，runtime props 与 SceneDetect 原生类型编译兼容。视觉回归分别覆盖概览三/二/一栏和 SceneDetect 全宽 stage，检查深色视觉隔离、原布局、overlay Task drawer、modal containment、无第二套 Timeline/ShotInspector 及无页面级横向溢出。
 
 ## Shared Patterns
 
@@ -334,7 +354,7 @@ URL 保存阶段和选中稳定 ID；React Query 只缓存服务端快照，写�
 **来源：**`messages/{zh,en}/workspace.json`、`SegmentedControl.tsx`、`TaskStatusInline.tsx`。  
 **应用到：**翻拍创建、摘要、状态、错误、空状态。
 
-所有用户可见文案做中英成对 message；沿用 `AppIcon`、glass tokens 和现有可控组件 API。新增工作台需遵守 `05-UI-SPEC.md` 的浅色静态操作界面、固定面板尺寸、无渐变/装饰卡片和可访问状态语义，不能照搬旧页面的视觉实现。
+所有 Waoo 外壳可见文案做中英成对 message；沿用 `AppIcon`、glass tokens 和现有可控组件 API。浅色静态操作界面、固定面板尺寸、无渐变/装饰卡片约束只适用于 Waoo 外壳与概览。SceneDetect stage 保留原深色视觉，通过 scoped host 隔离，不得为追求外壳一致而重做原应用。
 
 ## No Analog Found
 
@@ -342,7 +362,9 @@ URL 保存阶段和选中稳定 ID；React Query 只缓存服务端快照，写�
 |---|---|---|---|
 | 翻拍 Shot 的 provenance 领域投影 | model / service | CRUD / transform | 当前库没有同等通用 provenance 实体；以 `Task.payload/result`、`GraphRun.input/output` 的 JSON 兼容方式设计显式、可扩展字段，且记录 schema/执行版本。 |
 | 下游 `needs_review` 传播服务 | service | event-driven / transform | 当前库没有翻拍版失效图；实现为翻拍领域服务，在事务中保留旧记录、记录原因/影响范围并更新审核状态。 |
-| 三栏翻拍工作台 | component | request-response | 没有同布局的完整 analog；复用项目详情的路由/URL/query 壳与 glass primitives，按 UI-SPEC 独立实现响应式网格与抽屉。 |
+| 项目概览三栏 | component | request-response | 没有同布局的完整 analog；复用项目详情的路由/URL/query 壳与 glass primitives，按 UI-SPEC 独立实现只读响应式网格与抽屉。不得拿它包裹 SceneDetect stage。 |
+| SceneDetect 整应用嵌入 runtime | embedded adapter | stateful / event-driven | 以 SceneDetect 原生 App/types 为 canonical contract；本库没有 analog，只新增 host/runtime 边界，不重写内部编排。 |
+| Vendor 来源/hash 门禁 | build/test guard | transform / compile-time | 本库没有同等 source provenance 工具；由同步脚本、`VENDOR.json`、hash/import graph/type tests 共同建立。 |
 
 ## Metadata
 

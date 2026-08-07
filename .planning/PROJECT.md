@@ -14,12 +14,13 @@ waoowaoo 是一个面向 AI 影视生产的 Web 工作台，现有系统已经�
 
 ## Current Milestone: v1.1 AI 视频翻拍工作台整合
 
-**Goal:** 在 waoowaoo 内打通一个可实际使用的人机协作闭环：原视频导入 → 镜头与关键帧确认 → 图片 Prompt → 新关键帧 → Video Prompt → 新视频镜头 → 素材完整性检查与导出。
+**Goal:** 在 waoowaoo 内打通一个可实际使用的人机协作闭环：原视频导入 → 复用 SceneDetect 完成镜头与关键帧确认 → 图片 Prompt → 新关键帧 → Video Prompt → 新视频镜头 → 素材完整性检查与导出。
 
 **Target features:**
 
 - 新建“视频翻拍”项目模式，并以 Shot 作为跨阶段共享的核心业务对象
 - 接入 SceneDetect 的视频导入、镜头边界与关键帧数据，保留人工调整和确认
+- 复用 SceneDetect 已有的前端交互、后端分析和关键帧提取能力；仅在数据口径、鉴权、持久化和任务执行边界不一致处增加适配器
 - 接入 Codex/GPT-5.6 的结构化图片 Prompt 与 Video Prompt 分析能力
 - 复用 waoowaoo 现有图片/视频模型网关、任务队列、Worker、存储和生成页面能力
 - 为 Prompt、关键帧和视频结果提供版本、选中版本、人工审核、单镜头/批量重试
@@ -71,6 +72,7 @@ waoowaoo 是一个面向 AI 影视生产的 Web 工作台，现有系统已经�
 
 - **Brownfield:** 必须沿用现有 Next.js、Prisma、Redis/BullMQ、存储、模型网关、任务运行时和多语言结构
 - **Integration First:** 优先建立明确的数据合同和边界适配层，避免复制 SceneDetect 或生成模块业务逻辑
+- **SceneDetect Reuse:** 不在 waoowaoo 重写镜头检测、时间轴编辑、Shot 拆分/合并、关键帧选择或关键帧提取；这些能力通过外部能力适配器和可复用 UI 组件接入
 - **Human Review:** Shot 边界、关键帧、Prompt 和生成结果都必须有可见审核状态与人工覆盖能力
 - **Version Safety:** AI 输出和人工修订必须追加版本；不能用新结果静默覆盖已采用版本
 - **Recoverability:** 长任务必须可观察、可取消、可重试，刷新或重启后可恢复真实状态
@@ -82,7 +84,9 @@ waoowaoo 是一个面向 AI 影视生产的 Web 工作台，现有系统已经�
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | waoowaoo 作为最终产品和工作台基础 | 已具备项目、生成、队列、存储和 UI，整合成本显著低于从 SceneDetect 侧重建 | — Pending |
-| SceneDetect 通过清晰合同提供镜头和关键帧分析 | 保留成熟边界识别能力，同时避免两个项目的数据模型互相渗透 | — Pending |
+| SceneDetect 通过清晰合同提供镜头和关键帧分析 | 保留成熟边界识别能力，同时避免两个项目的数据模型互相渗透 | v1.1 planning decision |
+| SceneDetect 前端作为可复用能力接入 | 保留已有时间轴、Shot Inspector、关键帧选择和审核交互；在 Next/waoowaoo 外壳中替换本地状态与存储适配 | v1.1 planning decision |
+| Waoo 只保存规范化后的项目状态 | SceneDetect 的本地 IndexedDB、JSON 项目文件和 runtime 路径不是产品事实来源；导入结果映射到 Waoo Project/Shot/Asset/Review/Task | v1.1 planning decision |
 | Shot 是翻拍流程的核心业务对象 | 所有分析、Prompt、资产、版本和审核都需要稳定的共同连接点 | — Pending |
 | Task 是后台执行的统一抽象，Executor 可替换 | Codex、图片模型和视频模型属于不同执行器，不能在业务代码中写死 | — Pending |
 | Codex/GPT-5.6 作为后台分析 Executor | 产品需要执行能力和结构化结果，而不是让用户操作 CLI 或维护 Session | — Pending |
@@ -108,4 +112,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-07 for milestone v1.1 AI 视频翻拍工作台整合*
+*Last updated: 2026-08-07 after SceneDetect reuse boundary review*

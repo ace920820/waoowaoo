@@ -10,7 +10,7 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 
 # Phase 5 — 翻拍项目与核心工作台 UI 设计合同
 
-> 本合同定义 Phase 5 的可视与交互边界。它只覆盖“视频翻拍”项目创建、核心工作台壳、一个持久化 Project/Shot/Task 读写路径和状态可见性；不覆盖后续阶段的镜头时间轴、Prompt 编辑、版本比较、生成参数、批量调度或导出。
+> 本合同定义 Phase 5 的可视与交互边界，以及 Phase 6 整体嵌入 SceneDetect App 时必须遵守的宿主合同。Phase 5 覆盖“视频翻拍”项目创建、核心工作台壳、SceneDetect 接入状态、适配器驱动的 Project/Shot/Task 真实数据路径、canonical vendor stage host 和状态可见性；不在 Waoo 重做 SceneDetect 的页面布局、镜头时间轴、Shot 编辑、关键帧选择器或 `App.tsx` 状态编排，也不覆盖 Prompt 编辑、版本比较、生成参数、批量调度或导出。
 
 ---
 
@@ -25,7 +25,7 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 | 字体 | `var(--font-geist-sans)`；中文回退 `Arial, Helvetica, sans-serif` |
 | 已复用令牌 | `--glass-bg-*`、`--glass-text-*`、`--glass-stroke-*`、`--glass-tone-*`、`--glass-space-*` |
 
-**来源与约束：** `globals.css`、`ui-tokens-glass.css` 和现有 workspace 已定义以上令牌与组件模式。Phase 5 新界面使用 `glass-page`、`glass-surface`、`glass-btn-*`、`glass-input-base`，但不使用 `AnimatedBackground`、装饰性浮层、渐变填充或营销式卡片墙。既有剧本/小说推广 workspace 的路由、阶段和视觉行为不得改动。
+**来源与约束：** `globals.css`、`ui-tokens-glass.css` 和现有 workspace 已定义以上令牌与组件模式。Phase 5 的 Waoo 外壳、项目概览和 Task 抽屉使用 `glass-page`、`glass-surface`、`glass-btn-*`、`glass-input-base`，但不使用 `AnimatedBackground`、装饰性浮层、渐变填充或营销式卡片墙。vendored SceneDetect stage 不继承这套视觉要求：它保留原应用深色主题，并在 scoped root 中隔离。既有剧本/小说推广 workspace 的路由、阶段和视觉行为不得改动。
 
 ---
 
@@ -36,25 +36,27 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 - 在现有项目入口新增文本加图标命令 `新建翻拍项目`；图标使用 `AppIcon` 的 `plus`/`video` 语义图标。
 - 新建弹窗标题为 `新建视频翻拍项目`。项目类型使用现有 `SegmentedControl` 或等价单选组；`视频翻拍` 为本次新增选项，其他既有类型和其默认值保持原样。
 - 表单仅含必填的 `项目名称` 与项目类型。名称为空、超长或服务端校验失败时，在字段下显示文字错误；提交按钮为 `创建项目`，提交期间显示加载图标并禁用重复提交。
-- 创建成功后跳转到该项目的翻拍工作台，后端同时持久化项目、至少一个初始 Shot 草稿和“项目初始化”统一 Task。前端不得用本地临时对象伪造此链路。
+- 创建成功后跳转到该项目的翻拍工作台，后端持久化项目、SceneDetect 接入状态和“项目初始化”统一 Task；没有外部分析结果时不创建伪造 Shot。使用 adapter fixture 的测试可以验证一个外部 Shot 映射，但不能把 fixture 变成生产数据。
 - 原视频上传不在本阶段提供。新项目摘要中的原视频区域只显示真实的“未导入”状态，不显示假播放器、假进度或上传控件。
 
 ### 工作台壳
 
 1. 保留应用全局导航；其下为 64px 项目栏，左侧是返回工作区图标按钮、项目名称与 `视频翻拍` 类型标签，右侧是项目级任务计数按钮。
-2. 项目栏下为 44px 阶段导航：`项目概览`、`视频分析`、`镜头审核`、`Prompt 审核`、`关键帧`、`视频生成`、`最终素材`。本阶段仅 `项目概览` 可用；其余项以锁图标、`aria-disabled` 和悬浮提示 `后续阶段开放` 表达不可用，不能跳到空白路由。
+2. 项目栏下为 44px 阶段导航：`项目概览`、`视频分析`、`镜头审核`、`Prompt 审核`、`关键帧`、`视频生成`、`最终素材`。本阶段提供 `项目概览`、SceneDetect 接入状态和 disabled/compile-only 的完整应用 StageHost 合同；Phase 6 在 `视频分析`/`镜头审核` 阶段通过同一 canonical 入口开放实际编辑器。其他项以锁图标、`aria-disabled` 和悬浮提示 `后续阶段开放` 表达不可用，不能跳到空白路由。
 3. 概览顶部是无嵌套卡片的摘要带：原视频状态、Shot 总数、当前阶段、完成度、失败项、待审核项。每一项为固定高度的紧凑统计单元，数值和标签始终同时出现；缺失数据显示 `--` 与原因标签，不用零值冒充真实数据。
-4. 摘要带下是唯一工作区：Shot 列表、所选 Shot 详情、项目 Task 面板同处一个网格上下文。列表项和 Task 行是可重复的独立项目，可有 8px 圆角；不将整个页面或每个分区包装成层层卡片。
-5. 项目、Shot 和 Task 状态必须从真实 API/数据库查询得到。刷新、重新打开浏览器、服务重启后的骨架屏结束后重新读取真实状态；URL 保存 `projectId`、当前阶段、`shot` 和可选 `task`，而非以组件内存作为选择状态来源。
+4. `项目概览` 的摘要带下是三栏只读工作区：Shot 列表、所选 Shot 摘要、项目 Task 面板同处一个网格上下文。列表项和 Task 行是可重复的独立项目，可有 8px 圆角；不将整个页面或每个分区包装成层层卡片。该三栏布局不得复用于 SceneDetect 阶段。
+5. `视频分析`/`镜头审核` 的主体是无卡片包裹、占满项目栏和阶段栏以下可用空间的 `SceneDetectStageHost`。Host 只能加载 canonical vendored `SceneDetectEmbeddedApp`；应用内部原布局、播放器、Timeline、ShotInspector、undo/redo 和弹窗层级保持原样，Waoo 不再渲染第二套 Shot 列表或详情编排。
+6. 项目、Shot 和 Task 状态必须从真实 API/数据库查询得到。刷新、重新打开浏览器、服务重启后的骨架屏结束后重新读取真实状态；URL 保存 `projectId`、当前阶段、`shot` 和可选 `task`，而非以组件内存作为选择状态来源。SceneDetect App 可保留编辑会话所需的本地 UI state，但持久化事实必须经 runtime 写回 Waoo。
 
-**视觉焦点：** 所选 Shot 的详情区是主屏首要视觉锚点；项目摘要带用于第二层快速扫描；Shot 列表和 Task 面板是定位与辅助信息。强调色、标题层级和可用宽度都必须服从这个顺序，不能让 Task 状态或统计数字压过当前 Shot 的审核上下文。
+**视觉焦点：** 在项目概览中，所选 Shot 的摘要区是首要视觉锚点；进入 SceneDetect 阶段后，完整 SceneDetect 编辑器是唯一主体视觉锚点。Waoo Task 状态只从项目栏打开覆盖式右/底抽屉，不通过新增常驻栏压缩、重排或遮挡原编辑器。
 
-### 一条真实读写路径
+### 一条真实数据路径
 
-- 创建项目后自动进入 `项目概览`；默认选中服务端持久化的第一个 Shot 草稿。
-- Shot 列表提供 `新建镜头` 命令。弹窗只允许录入镜头名称；不出现时间轴、关键帧或生成参数。成功后返回服务端创建的稳定 Shot ID 并选中新行。
-- 所选 Shot 的详情区提供 `编辑镜头`，只编辑名称和本阶段允许的工作状态。`保存镜头` 写入真实 revision；保存前后的 stable ID 不变。
-- 当该 Shot 已有下游记录时，保存上游更改后必须保留旧记录，并立即显示 `需要复核`、受影响数量和影响范围。不得以删除结果、自动批准或静默覆盖代替失效标记。
+- 创建项目后自动进入 `项目概览`；若已有 SceneDetect 导入结果，默认选中服务端持久化的第一个 Shot，否则显示 `尚未导入原视频`，不自动生成 Shot。
+- Phase 5 不提供手工 `新建镜头`，避免绕过 SceneDetect 输入合同。Shot 列表和详情只读取适配器导入的真实 Shot；Phase 6 才接入 SceneDetect 既有的时间轴和 Shot 编辑动作。
+- Phase 5 的概览 Shot 详情为只读，不提供编辑、保存、拆分、合并或删除命令。revision、stable ID 和下游 invalidation 的合同由 adapter fixture、service 与 API 集成测试验证；用户可见的 Shot 写回由 Phase 6 整体挂载 SceneDetect App，并通过注入的 Waoo runtime/adapter 完成。
+- Phase 5 的 StageHost 只做 canonical App 的 compile-only/disabled harness 和接入状态，不使用 normalized Waoo Shot props 重建界面；Phase 6 才为其注入真实 `SceneDetectProject` 初始状态、媒体解析、保存和分析 Task ports。
+- 当 adapter fixture 表示上游 revision 已变化时，工作台只读展示 `需要复核`、受影响数量和影响范围。不得以删除结果、自动批准或静默覆盖代替失效标记。
 - 创建项目产生的初始化 Task、Shot 关联 Task 和项目级 Task 均可在右侧面板定位；点击行把 `task` 写入 URL 并展开只读详情。页面只展示任务与可理解错误，绝不展示 CLI 命令、Session 标识、环境变量或未脱敏日志。
 
 ---
@@ -63,9 +65,9 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 
 | 断点 | 布局 | 稳定尺寸与行为 |
 |---|---|---|
-| >= 1280px | 三栏工作区 | Shot 列表 288px；详情区 `minmax(520px, 1fr)`；Task 面板 320px。项目栏 64px、阶段栏 44px、摘要单元 112px 高。三个面板各自纵向滚动，页面不产生横向滚动。 |
-| 768–1279px | 双栏工作区 | Shot 列表 280px；详情区占余量且最小 488px；Task 面板改为右侧 400px 抽屉，由项目级任务图标按钮打开。摘要为两列或三列自动网格，统计单元高度不变。 |
-| < 768px | 单栏顺序工作区 | 项目栏固定 56px；标题单行省略，任务、返回与更多操作保持 44px 触控目标。阶段栏横向滚动且不换行。摘要固定两列；先显示 Shot 列表，选中后在同页显示详情；Task 使用底部抽屉。 |
+| >= 1280px | 概览三栏 / SceneDetect 全宽 stage | 概览：Shot 列表 288px、详情区 `minmax(520px, 1fr)`、Task 面板 320px。SceneDetect：host 占满剩余宽高，Task 改为覆盖式右抽屉；不得给原应用增加常驻侧栏。页面不产生横向滚动。 |
+| 768–1279px | 概览双栏 / SceneDetect 全宽 stage | 概览：Shot 列表 280px、详情区占余量且最小 488px，Task 为右侧 400px 抽屉。SceneDetect：保留原应用布局的响应式行为，host 负责边界裁切/内部滚动，Task 仍为覆盖式抽屉。 |
+| < 768px | 概览单栏 / SceneDetect 独立 stage | 项目栏固定 56px，阶段栏横向滚动。概览按 Shot 列表、详情顺序显示，Task 使用底部抽屉。SceneDetect host 占满剩余视口；只允许为嵌入修复 root height/overflow 与 modal containment，不在 Waoo 重排其内部组件。 |
 
 - 页面内边距：桌面 24px，平板 16px，手机 16px；不随视窗宽度放大字号。
 - 列表行高度固定 56px，详情标题区最小 72px，状态标签最小高度 24px；加载、长名称和状态变化不得改变这些基础尺寸。
@@ -80,11 +82,12 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 |---|---|---|
 | 项目摘要带 | 原视频、Shot 总数、当前阶段、完成度、失败、待审核六项 | 每项显示图标、可读标签和数值/状态；失败与待审核是可点击筛选入口，计数为 0 时仍保留。 |
 | 阶段导航 | 七个固定阶段项 | 当前项使用文字、底边和 `aria-current="page"`；未开放项用锁图标和文字提示，不能只靠灰色。 |
-| Shot 列表 | 编号、名称、人工审核状态、失效状态、关联 Task 摘要 | 单选列表；选中项有边框、背景和 `aria-selected`。状态按稳定 ID 排序；项目无 Shot 时显示空状态。 |
+| Shot 列表 | 外部序号/稳定 ID、人工审核状态、失效状态、关联 Task 摘要 | 单选列表；选中项有边框、背景和 `aria-selected`。状态按稳定 Waoo ID 与外部 sequence 排序；项目无 Shot 时显示空状态。 |
 | Shot 详情 | 稳定 Shot ID、名称、人工审核、下游复核、原视频关联、provenance 摘要 | 详情不可用时显示 `选择一个镜头查看详情`。ID 以可复制等宽文本显示；显示值而非数组索引。 |
 | 复核提示 | `需要复核`、变更原因、影响项数量与范围 | 使用警示图标、文字和可见边框；例如 `镜头资料已更新，2 项下游结果需要复核`。Task 成功不得自动移除此提示。 |
 | Task 面板 | 状态、任务类型、能力名称、Shot/项目关联、创建/更新时间 | 行点击展开只读详情；失败行显示脱敏原因与 `查看任务详情`。面板可在后台任务运行时保持浏览 Shot。 |
 | provenance 摘要 | 输入资产/版本、参数摘要、Executor、capability、模型或 Skill、Schema/执行版本、Task、输出版本 | 尚无执行记录时明确写 `尚无执行记录`；字段缺失用 `未提供`，不得省略后让用户误认为已记录。 |
+| SceneDetect StageHost | canonical vendored `SceneDetectEmbeddedApp` 完整应用；host 只提供 SceneDetect-native 初始项目与 `SceneDetectIntegrationRuntime` | Phase 5 为 disabled/compile-only harness；Phase 6 开放真实 runtime。禁止直接导入 vendor 内 Timeline/ShotInspector 等子组件重新编排。 |
 | 图标按钮 | 返回、任务抽屉、关闭、复制 ID | 使用 `AppIcon` 与 `aria-label`；非自解释图标必须有 tooltip；44px 最小点击区。 |
 
 ---
@@ -115,7 +118,7 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 | 首次加载 | 摘要、列表、详情、Task 区各渲染对应尺寸的骨架屏；不以单个全屏 spinner 替代已知结构。 |
 | 后台刷新 | 保留上次成功数据，标题附近显示小型 `正在更新` 状态；只在没有任何成功数据时显示骨架。 |
 | 项目加载失败 | 显示复制合同中的错误文字、`刷新` 主按钮和 `返回工作区` 次按钮；不展示陈旧项目数据。 |
-| 空项目/无 Shot | 显示空状态及 `新建镜头` 命令；不自动伪造列表行。 |
+| 空项目/无 Shot | 显示 `尚未导入原视频` 与 `进入视频分析`（锁定或 Phase 6 未开放）状态；不自动伪造列表行。 |
 | 无原视频 | 摘要项显示 `未导入`，详情项显示 `原视频尚不可用`；没有播放器控件。 |
 | 详情未选中 | 显示 `选择一个镜头查看详情`，保持详情面板的最小高度。 |
 | 部分 provenance | 已知字段正常展示，未知字段标 `未提供`；不阻断查看其他 Shot。 |
@@ -126,7 +129,7 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 
 - 项目名称、Shot 名称在导航和列表中单行省略，完整文本放在 `title`/tooltip；详情标题允许最多两行，之后省略。稳定 ID、模型/Skill 标识和错误原因使用可复制、可横向滚动的单行等宽块，绝不挤压操作按钮。
 - 摘要中的 `失败项`、`待审核项` 和 `需要复核` 点击后只筛选 Shot 列表，并在列表标题显示文字筛选条件与图标清除按钮；不以颜色提示当前筛选。
-- 键盘顺序为项目栏、阶段导航、摘要筛选、Shot 列表、详情操作、Task 面板。列表支持上下方向键移动选中项、Enter/Space 打开详情；抽屉和弹窗使用焦点陷阱，Escape 关闭。
+- 概览键盘顺序为项目栏、阶段导航、摘要筛选、Shot 列表、详情操作、Task 面板。SceneDetect 阶段在阶段导航之后把焦点交给原应用 root；Waoo Task 抽屉打开时使用焦点陷阱，关闭后把焦点还给触发按钮，不劫持 SceneDetect 自有快捷键。modal portal 必须限制在 embedded host 的可见层级内。
 - 焦点使用现有 `--glass-stroke-focus` 与可见 2px 环；文本与背景至少达到正文可读对比度。状态永远由图标、文字和颜色共同表达。
 
 ---
@@ -168,14 +171,14 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 
 | 角色 | 值 | 用途 |
 |---|---|---|
-| 主导色（60%） | `#F3F4F6` / `--glass-bg-canvas` | 页面画布、未选中背景和大面积留白 |
+| 主导色（60%） | `#F3F4F6` / `--glass-bg-canvas` | Waoo 外壳、概览画布、未选中背景和大面积留白 |
 | 次要色（30%） | `rgba(255,255,255,0.88–0.96)` / `--glass-bg-surface*` | 项目栏、阶段栏、摘要带、列表与抽屉表面 |
 | 强调色（10%） | `#1D63E8` / `--glass-tone-info-fg` | 当前阶段、当前 Shot 轮廓、主按钮、可见焦点环、可点击摘要筛选 |
 | 危险色 | `#CB3A3A` / `--glass-tone-danger-fg` | 任务失败、校验错误和不可逆操作（本阶段无不可逆操作） |
 
-强调色仅保留给：当前阶段、当前 Shot、`新建翻拍项目`/`创建项目`/`保存镜头` 主操作、键盘焦点和已激活的摘要筛选。成功、警告和中性状态继续使用现有 `--glass-tone-success-*`、`--glass-tone-warning-*`、`--glass-tone-neutral-*`，但不得单独依赖色彩传达含义。
+强调色仅保留给：当前阶段、当前 Shot、`新建翻拍项目`/`创建项目` 主操作、键盘焦点和已激活的摘要筛选。成功、警告和中性状态继续使用现有 `--glass-tone-success-*`、`--glass-tone-warning-*`、`--glass-tone-neutral-*`，但不得单独依赖色彩传达含义。
 
-不新增紫色、蓝紫渐变、装饰性光球、bokeh 或深色后台。工作台采用现有浅色 glass 表面，但背景保持静止、低对比且面向扫描。
+Waoo 外壳不新增紫色、蓝紫渐变、装饰性光球、bokeh 或新的深色后台，采用现有浅色 glass 表面。SceneDetect stage 是明确例外：保留原应用 `bg-slate-950 text-slate-100` 等深色视觉，不将其改造成 glass，也不让其样式泄漏到项目栏、阶段导航、概览或 Task 抽屉。
 
 ---
 
@@ -185,9 +188,9 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 |---|---|
 | 主 CTA | `新建翻拍项目` |
 | 创建提交 | `创建项目` |
-| Shot 写入 | `新建镜头`、`保存镜头` |
-| 空状态标题 | `尚未建立镜头` |
-| 空状态正文 | `新建镜头后，即可在此查看镜头状态、审核状态与关联任务。` |
+| Shot 写入 | Phase 5 不提供手工 Shot 写入；Phase 6 复用 SceneDetect 编辑器并通过 Waoo API 保存 |
+| 空状态标题 | `尚未导入原视频` |
+| 空状态正文 | `导入原视频并完成 SceneDetect 分析后，镜头和关键帧会出现在这里。` |
 | 无原视频 | `尚未导入原视频`；详情值为 `原视频尚不可用` |
 | 详情未选中 | `选择一个镜头查看详情` |
 | 加载 | `正在加载项目状态`；后台刷新为 `正在更新` |
@@ -207,18 +210,18 @@ reviewed_at: 2026-08-07T14:31:00+08:00
 
 ### Covered truths
 
-- 项目创建、Shot 新建/编辑及响应式弹窗在空字段、部分填写、服务端校验失败和正常提交时，分别使用字段级错误、保留用户输入、明确提交状态与已定义的成功跳转；不会以空白弹窗或本地假对象代替真实状态。（empty、error、partial、long-text）
+- 项目创建与 SceneDetect 接入状态在空字段、部分填写、服务端校验失败和正常查询时，分别使用字段级错误、保留用户输入、明确状态与已定义的成功跳转；不会以空白弹窗或本地假对象代替真实状态。（empty、error、partial、long-text）
 - 阶段导航始终显示七个固定阶段；当前项、锁定项、加载/查询失败和移动端长标签均保留文字、图标及可访问状态，不会跳转到空白路由。（error、long-text）
 - 项目摘要、Shot 列表、Shot 详情、Task 面板和原视频区域在真实数据可用时分别展示六项摘要、稳定 ID 列表、provenance、关联任务及媒体状态；任何缺失值都显示原因而不是伪造零值、播放器、进度或版本。（empty、populated、partial）
-- 项目查询、Shot 保存和 Task 执行失败时，界面保留仍可用的真实数据并显示已定义的恢复入口或脱敏原因；Task 成功不会推导为人工已批准，Shot 更新也不会清除需要复核状态。（error、partial）
-- Shot 与 Task 集合在零项、一项和多项时分别使用空状态、稳定默认选择和稳定 ID 排序；摘要计数始终显示数值，筛选条件始终以文字和图标呈现。（zero-one-many、populated）
+- 项目查询、adapter 导入状态读取和 Task 执行失败时，界面保留仍可用的真实数据并显示已定义的恢复入口或脱敏原因；Task 成功不会推导为人工已批准，上游 revision 更新也不会清除需要复核状态。（error、partial）
+- SceneDetect 导入前后的 Shot 与 Task 集合在零项、一项和多项时分别使用接入空状态、稳定默认选择和稳定 ID 排序；摘要计数始终显示数值，筛选条件始终以文字和图标呈现。（zero-one-many、populated）
 - 原视频未导入、详情未选中、provenance 不完整和未来阶段未开放时，界面分别显示 `未导入`、选择提示、`未提供` 和锁定状态，且不制造假媒体、假数据或可执行入口。（empty、partial）
 
 ### Verification backstops
 
 - statement: 加载与后台刷新状态必须保持项目栏、阶段栏、摘要、Shot 列表、Shot 详情和 Task 面板的稳定尺寸；桌面、平板、手机视觉回归均不得出现布局跳变、全屏 spinner 取代已知结构或伪进度。
   verification: backstop
-- statement: 阶段导航、三栏面板、抽屉、项目/Shot 名称、稳定 ID、模型或 Skill 标识及错误文本在桌面、平板、手机和超长内容样本下必须按合同滚动、换行或省略；不得产生页面级横向滚动、文字遮挡或按钮压缩。
+- statement: 阶段导航、概览三栏、SceneDetect 全宽 stage、抽屉、项目/Shot 名称、稳定 ID、模型或 Skill 标识及错误文本在桌面、平板、手机和超长内容样本下必须按合同滚动、换行或省略；不得产生页面级横向滚动、文字遮挡或按钮压缩；SceneDetect 原布局和深色视觉不得被 glass 覆盖，页面不得出现第二套 Timeline/ShotInspector。
   verification: backstop
 
 ---

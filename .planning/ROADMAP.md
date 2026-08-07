@@ -28,7 +28,7 @@
 
 ## 当前里程碑：v1.1 AI 视频翻拍工作台整合
 
-**里程碑目标：** 用户在同一项目内完成原视频导入、Shot 审核、Prompt 与生成版本审核、批量执行和最终素材导出；所有状态由 waoowaoo 持久化，并可追踪、可回退、可恢复。
+**里程碑目标：** 用户在同一项目内完成原视频导入、复用 SceneDetect 的 Shot/关键帧分析与审核、Prompt 与生成版本审核、批量执行和最终素材导出；所有项目状态由 waoowaoo 持久化，并可追踪、可回退、可恢复。
 
 ## 阶段
 
@@ -43,27 +43,38 @@
 ## 阶段详情
 
 ### Phase 5: 翻拍项目与核心工作台
-**Goal**: 用户可以创建可恢复的视频翻拍项目，并在统一工作台中以稳定的 Shot 和 Task 状态管理整个生产过程。
-**Depends on**: 无；复用 v1.0 已有项目、存储、生成和任务基础设施。
+**目标：** 建立支持“视频翻拍项目”类型的页面框架、公共 Project/Shot/Task/版本合同、SceneDetect 适配器边界，以及可整体承载 SceneDetect 应用的 stage host，为后续实际接入镜头分析和生成阶段提供稳定入口。
+**依赖：** 无；复用 v1.0 已有项目、存储、生成和任务基础设施，并登记 SceneDetect 外部能力合同。
 **Requirements**: RMP-01, RMP-02, RMP-03, RMP-04, RMP-05, RMP-06, TASK-01, TASK-02, TASK-03
 **Success Criteria** (what must be TRUE):
   1. 用户可以创建“视频翻拍”项目，同时既有剧本/小说推广项目的行为保持不变。
-  2. 用户可以在项目工作台查看原视频、Shot 总数、当前阶段、完成度、失败项、待审核项及关联任务状态。
-  3. 每个 Shot 都以稳定标识关联原始输入、Prompt、生成结果和审核状态；刷新页面、关闭浏览器或服务重启后仍能从真实状态继续。
-  4. 用户修改已完成 Shot 后可以看到下游项目需要复核；旧输入、参数、Executor/模型或 Skill 标识和输出版本仍可追溯。
-  5. 用户可以从项目、Shot 或资产版本定位统一 Task 的排队、运行、成功、失败、取消和重试状态，而无需直接操作 CLI 或进程。
-**Plans**: TBD
+  2. 用户可以进入翻拍工作台框架，查看原视频接入状态、当前阶段、完成度、失败项、待审核项和关联任务状态；未接入视频时不生成虚假 Shot。
+  3. Waoo 定义稳定 Shot、revision、媒体引用、审核和 provenance 合同；外部 SceneDetect Shot 通过适配器映射，不把外部序号或前端数组下标当作主键。
+  4. Phase 5 以源码 vendoring 建立 SceneDetect 完整应用的 canonical vendor 入口、来源清单、同步/hash 合同和编译期类型边界；StageHost 挂载的是完整 `SceneDetectApp`，不得拆出 Timeline、ShotInspector 等组件后在 Waoo 重写 `App.tsx` 编排。
+  5. StageHost/runtime 合同由 SceneDetect 原生 `SceneDetectProject`、`Shot`、`VideoMetadata` 类型及最小 integration runtime 推导，而不是由 Waoo DTO 倒推；真实 runtime 注入和编辑闭环留给 Phase 6。
+  6. Waoo 的 Task/GraphRun 成为唯一执行状态中心；SceneDetect 只作为可替换 executor/capability，不产生第二套队列、项目存储或任务中心。
+**计划：** 6 个计划
+
+- [x] `05-01-PLAN.md` — 建立翻拍项目类型、稳定领域模型和真实工作台入口，不创建伪造 Shot
+- [x] `05-02-PLAN.md` — 定义 SceneDetect schema/API、稳定身份、媒体和幂等导入适配合同
+- [x] `05-03-PLAN.md` — 将 SceneDetect executor/capability 接入既有 Task/GraphRun
+- [x] `05-04-PLAN.md` — 建立 SceneDetect 完整应用 canonical vendor、原生 runtime/type 合同及正反复用门禁
+- [x] `05-05-PLAN.md` — 在 canonical App 上建立 Waoo 工作台/StageHost，并完成查询与响应式嵌入验证
+- [x] `05-06-PLAN.md` — 汇总旧模式兼容、正反复用门禁和 Phase 5 最终目标回归
 **UI hint**: yes
 
 ### Phase 6: SceneDetect 镜头与关键帧审核
-**Goal**: 用户可以将原视频交由 SceneDetect 分析，并在 waoowaoo 内审核、修订和确认可用于后续生产的 Shot 与关键帧。
-**Depends on**: Phase 5
+**目标：** 将 vendored SceneDetect 完整应用作为一个 stage 整体接入 waoowaoo，保留其布局、播放器、时间轴、Shot 管理、关键帧审核和 `App.tsx` 编辑状态机，只替换与 Waoo 集成所必需的数据与执行边界。
+**依赖：** Phase 5 的翻拍工作台框架、canonical vendor 入口、原生类型驱动的 integration runtime、SceneDetect 适配器合同、稳定身份和媒体存储合同。
 **Requirements**: SHOT-01, SHOT-02, SHOT-03, SHOT-04, SHOT-05, SHOT-06, SHOT-07, SHOT-08
 **Success Criteria** (what must be TRUE):
-  1. 用户可以上传受支持的原始影视或动画视频，并清楚看到上传、探测和 SceneDetect 分析状态。
-  2. 用户可以在同一审核界面通过原视频播放器、时间轴和 Shot 列表查看已持久化的镜头边界、原始片段及候选关键帧。
-  3. 用户可以调整、删除、拆分或合并 Shot，并选择或重新提取 Start、Middle、End 关键帧；受影响原始片段会更新。
-  4. 用户可以逐 Shot 或批量确认边界和关键帧；未确认项不会进入默认 Prompt 批量分析，已确认项被修改后会保留旧版本并标记下游需要复核。
+  1. 用户可以在 waoowaoo 上传原视频，并通过既有 Task/SceneDetect executor 看到上传、探测、关键帧提取和失败恢复状态。
+  2. SceneDetect 的分析结果通过版本化适配器导入 Waoo，持久化原视频引用、原始/当前边界、候选关键帧和外部分析 provenance。
+  3. waoowaoo 通过 canonical vendor 入口整体挂载 `SceneDetectApp`，保留其 `App.tsx` 编排、布局、undo/redo、拆分/合并/删除和关键帧选择逻辑；Waoo 不抽取子组件重新搭建编辑器。
+  4. integration runtime 将 IndexedDB/projectStore 替换为 Waoo API，将 Blob/runtime 媒体 URL 替换为 Waoo 对象存储签名引用，将直接分析调用替换为 Waoo Task/GraphRun；Task 进度适配为 SceneDetect 现有回调，不重写其分析弹窗状态机。
+  5. 用户修改结果时只通过 Waoo API 写入稳定 Shot revision，并按现有失效合同标记下游需要复核；确认状态作为后续 Prompt 阶段的门禁。
+  6. SceneDetect 阶段保留自身深色视觉并做样式作用域隔离；Waoo 浅色 glass 只用于项目栏、阶段导航、概览和 Task 抽屉，不重排 SceneDetect 主体。
+  7. 只允许 embedded root 高度/overflow、modal portal containment、项目入口隐藏和 Phase 11 前导出入口禁用等必要 integration patch；现有 SceneDetect 项目 JSON 可迁移，但 IndexedDB、runtime 文件和独立 JSON API 不成为 Waoo 最终事实来源。
 **Plans**: TBD
 **UI hint**: yes
 
@@ -78,6 +89,25 @@
   4. 用户可以播放原始 Shot、编辑与比较 Video Prompt 版本并明确批准或人工修订；未批准 Prompt 不会成为默认批量生成输入，失败项可单独重试并显示可理解错误。
 **Plans**: TBD
 **UI hint**: yes
+
+## v1.1 集成边界
+
+### SceneDetect 复用原则
+
+1. **后端优先复用：** 复用 SceneDetect 的 `pySceneDetect` 分析、帧边界换算、首/中/尾关键帧提取和按修订边界重新提取能力；Waoo 只负责任务编排、鉴权、媒体存储、结果导入和状态持久化。
+2. **前端整应用复用：** 复用单元是 SceneDetect 的完整应用及其 `App.tsx` 编排，不是播放器、Timeline、ShotInspector、KeyframeSelector 等零散组件。Waoo 不重写编辑状态机、undo/redo、分析流程或页面布局。
+3. **适配器负责口径转换：** SceneDetect schema/API 的 `shotNumber`、帧范围、媒体 URL、关键帧和审核字段必须先转换为 Waoo 的稳定 Shot UUID、revision、Asset/Output 引用、Review 状态和 provenance。
+4. **单一事实来源：** SceneDetect 可以作为分析执行器和可复用 UI 能力提供者，但 Waoo 数据库、对象存储和既有 Task/GraphRun 是项目状态、版本和任务状态的唯一事实来源。
+5. **源码 vendoring：** SceneDetect 前端通过 canonical vendor root 引入；`VENDOR.json` 记录源仓库/路径、commit 或版本、文件 hash、同步命令和允许的 integration patches。当前不选 iframe，也不在本里程碑开始前抽 npm 包。
+6. **原生类型驱动：** StageHost 和 `SceneDetectIntegrationRuntime` 从 SceneDetect 原生 `SceneDetectProject`、`Shot`、`VideoMetadata` 与回调合同推导；Waoo snapshot 先经 adapter 转换，不把 normalized Waoo Shot DTO 直接当编辑器 props。
+7. **视觉与嵌入边界：** SceneDetect stage 保留自身深色主题并做样式作用域隔离；glass 只约束 Waoo 外壳。允许最小 embedded integration patch，但不得改造原页面布局或重复学习成本高的交互。
+8. **禁止重复实现：** Phase 5/6 不新增第二套镜头检测算法、时间轴状态、Shot 项目文件、关键帧提取服务、编辑器编排、队列或 Task Center；如接口不兼容，只新增边界 adapter/runtime 和兼容测试。
+
+### Phase 5/6 交付顺序
+
+`Phase 5 项目框架与适配器合同` → `Phase 6 SceneDetect 实际接入与审核闭环` → `Phase 7 Prompt 分析` → `Phase 8/9 生成`。
+
+Phase 5 的 tracer 可以使用固定的 SceneDetect adapter fixture 验证稳定 Shot 映射，并通过 compile-only/disabled harness 验证 vendored 完整 App、原生类型和 StageHost 合同，但不能创建没有原视频来源的伪造业务 Shot，也不开放真实编辑阶段。Phase 6 才负责注入真实 Waoo runtime，完成上传、分析、导入和编辑回写。
 
 ### Phase 8: 新关键帧生成与版本选择
 **Goal**: 用户可以使用已批准的图片 Prompt，经现有图片模型网关生成、比较和采用可追溯的新关键帧版本。
