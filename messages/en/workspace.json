@@ -11,6 +11,14 @@
   "noResults": "No matching projects found",
   "noResultsDesc": "Try using different search terms",
   "createProject": "New Project",
+  "projectType": "Project Type",
+  "projectTypeNovel": "AI Anime Production",
+  "projectTypeRemake": "Video Remake",
+  "remakeWorkbench": {
+    "title": "Video Remake Workbench",
+    "notImported": "No source video imported yet",
+    "description": "Import a source video to start AI remake creation. This capability will open in a later phase."
+  },
   "editProject": "Edit Project",
   "deleteProject": "Delete Project",
   "deleteConfirm": "Are you sure you want to delete project \"{name}\"? This action cannot be undone.",

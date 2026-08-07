@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRemakeProject } from '@/lib/query/hooks/useRemakeProject'
 import { SceneDetectStageHost } from './scenedetect/SceneDetectStageHost'
+import './scenedetect/scenedetect-stage.css'
 
 const STAGES = ['overview', 'scenedetect'] as const
 type RemakeStage = typeof STAGES[number]

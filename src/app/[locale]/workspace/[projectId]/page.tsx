@@ -11,6 +11,7 @@ import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { useProjectData, useEpisodeData, useUserModels } from '@/lib/query/hooks'
 import { queryKeys } from '@/lib/query/keys'
 import NovelPromotionWorkspace from './modes/novel-promotion/NovelPromotionWorkspace'
+import RemakeWorkbench from './modes/remake/RemakeWorkbench'
 import SmartImportWizard, { SplitEpisode } from './modes/novel-promotion/components/SmartImportWizard'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { resolveSelectedEpisodeId } from './episode-selection'
@@ -112,6 +113,8 @@ export default function ProjectDetailPage() {
   // 🚧 剪辑阶段 (editor) 暂时禁用，自动重定向到成片阶段 (videos)
   const effectiveStage = currentUrlStage === 'editor' ? 'videos' : (currentUrlStage || 'config')
 
+  const isRemakeProject = project?.type === 'remake'
+
   // 获取剧集列表
   const novelPromotionData = project?.novelPromotionData as NovelPromotionData | undefined
   const episodes = useMemo<Episode[]>(() => {
@@ -140,7 +143,7 @@ export default function ProjectDetailPage() {
   // 零状态：无剧集且非导入中 → 自动创建第一集
   const isZeroState = episodes.length === 0
   const shouldShowImportWizard = importStatus === 'pending' // 仅分集预览中才显示 wizard
-  const shouldAutoCreateEpisode = isZeroState && importStatus !== 'pending'
+  const shouldAutoCreateEpisode = !isRemakeProject && isZeroState && importStatus !== 'pending'
   const autoCreateTriggered = useRef(false)
 
   useEffect(() => {
@@ -343,7 +346,7 @@ export default function ProjectDetailPage() {
   // 排除：如果要显示导入向导，则不需要等待剧集数据
   const isInitializing = loading ||
     (!shouldShowImportWizard && !isGlobalAssetsView && episodes.length > 0 && (!selectedEpisodeId || !currentEpisode)) ||
-    (project && !project.novelPromotionData)
+    (!isRemakeProject && project && !project.novelPromotionData)
   const initLoadingState = resolveTaskPresentationState({
     phase: 'processing',
     intent: 'generate',
@@ -392,17 +395,7 @@ export default function ProjectDetailPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="container mx-auto px-4 py-8">
           {project.type === 'remake' ? (
-            <section className="glass-surface p-8" data-project-mode="remake">
-              <h1 className="text-2xl font-semibold text-[var(--glass-text-primary)] mb-3">
-                {t('remakeWorkbench.title')}
-              </h1>
-              <p className="text-[var(--glass-text-secondary)] mb-2">
-                {t('remakeWorkbench.notImported')}
-              </p>
-              <p className="text-sm text-[var(--glass-text-tertiary)]">
-                {t('remakeWorkbench.description')}
-              </p>
-            </section>
+            <RemakeWorkbench projectId={projectId} onStageChange={updateUrlStage} />
           ) : isGlobalAssetsView && project.novelPromotionData ? (
             // 全局资产视图（确保数据准备好）
             <div>

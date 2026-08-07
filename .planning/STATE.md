@@ -93,6 +93,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 | 2026-04-28 | `260428-x6i-shot-group-reference-image-model` | Added project-level auxiliary reference image model selection (`shotGroupReferenceImageModel`) and routed multi-shot reference image generation to it while keeping storyboard board generation on `storyboardModel`. |
 | 2026-05-07 | `260507-cpz-fix-frontend-result-page-missing-fields-` | Fixed storyboard package frontend result/preview rendering for shot-level `focalLength`, `dof`, and `lighting` while preserving backend generation contracts. |
 | 2026-07-03 | `260703-lqd-fix-shot-group-videoreferencesjson-overf` | Widened `NovelPromotionShotGroup.videoReferencesJson` to MySQL `LONGTEXT` so imported cinematic plans and submitted storyboard prompts can persist without overflowing the column. |
+| 2026-08-07 | `260807-vrz-remakeworkbench` | Verified the video-remake creation entry and `RemakeWorkbench` mount; 7 focused tests and typecheck passed. |
 
 ### UAT / Verification Notes
 

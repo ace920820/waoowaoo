@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import Navbar from '@/components/Navbar'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
+import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { AppIcon, IconGradientDefs } from '@/components/ui/icons'
 import { shouldGuideToModelSetup } from '@/lib/workspace/model-setup'
@@ -75,7 +76,8 @@ export default function WorkspacePage() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
-    description: ''
+    description: '',
+    type: 'novel_promotion' as 'novel_promotion' | 'remake'
   })
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -187,6 +189,17 @@ export default function WorkspacePage() {
       })
 
       if (response.ok) {
+        const created = await response.json().catch(() => null) as { project?: { id?: string; type?: string } } | null
+        const createdProjectId = created?.project?.id
+
+        // 视频翻拍项目：创建成功后直接进入翻拍工作台（不依赖模型配置）
+        if (formData.type === 'remake' && createdProjectId) {
+          setShowCreateModal(false)
+          setCreateLoading(false)
+          router.push({ pathname: `/workspace/${createdProjectId}` })
+          return
+        }
+
         let shouldOpenModelSetup = true
         const preferenceResponse = await apiFetch('/api/user-preference')
         if (preferenceResponse.ok) {
@@ -202,7 +215,7 @@ export default function WorkspacePage() {
         setPagination(prev => ({ ...prev, page: 1 }))
         void fetchProjects(1, '')
         setShowCreateModal(false)
-        setFormData({ name: '', description: '' })
+        setFormData({ name: '', description: '', type: 'novel_promotion' })
 
         if (shouldOpenModelSetup) {
           alert(t('analysisModelRequiredAfterCreate'))
@@ -603,6 +616,25 @@ export default function WorkspacePage() {
             )}
             <form onSubmit={handleCreateProject}>
               <div className="mb-4">
+                <label className="glass-field-label block mb-2">
+                  {t('projectType')} *
+                </label>
+                <SegmentedControl
+                  options={[
+                    { value: 'novel_promotion', label: t('projectTypeNovel') },
+                    { value: 'remake', label: t('projectTypeRemake') }
+                  ]}
+                  value={formData.type}
+                  onChange={(value) => {
+                    setFormData({ ...formData, type: value as 'novel_promotion' | 'remake' })
+                    if (createError) {
+                      setCreateError(null)
+                    }
+                  }}
+                  layout="fill"
+                />
+              </div>
+              <div className="mb-4">
                 <label htmlFor="name" className="glass-field-label block mb-2">
                   {t('projectName')} *
                 </label>
@@ -653,7 +685,7 @@ export default function WorkspacePage() {
                   onClick={() => {
                     setShowCreateModal(false)
                     setCreateError(null)
-                    setFormData({ name: '', description: '' })
+                    setFormData({ name: '', description: '', type: 'novel_promotion' })
                   }}
                   className="glass-btn-base glass-btn-secondary px-4 py-2"
                   disabled={createLoading}
