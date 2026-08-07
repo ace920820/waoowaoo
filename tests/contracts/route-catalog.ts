@@ -162,6 +162,8 @@ const ROUTE_FILES = [
   'src/app/api/tasks/[taskId]/route.ts',
   'src/app/api/tasks/dismiss/route.ts',
   'src/app/api/tasks/route.ts',
+  'src/app/api/remake-projects/[projectId]/scenedetect/import/route.ts',
+  'src/app/api/remake-projects/[projectId]/tasks/route.ts',
   'src/app/api/user-preference/route.ts',
   'src/app/api/user/api-config/route.ts',
   'src/app/api/user/assistant/chat/route.ts',
