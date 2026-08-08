@@ -1,0 +1,3 @@
+# registered patch: embedded-runtime
+# Runtime integration is maintained in the canonical vendored closure.
+# This marker is replayed deterministically by vendor-scenedetect.mjs.

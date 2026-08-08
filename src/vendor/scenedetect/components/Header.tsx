@@ -19,6 +19,7 @@ import { SAMPLE_VIDEOS, SampleVideoPreset } from '../utils/sampleVideos';
 import { formatDuration, formatFileSize } from '../utils/timecode';
 
 interface HeaderProps {
+  embedded?: boolean;
   status: AnalysisStatus;
   metadata: VideoMetadata | null;
   shots: Shot[];
@@ -36,6 +37,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  embedded = false,
   status,
   metadata,
   shots,
@@ -152,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Sample Videos Selector */}
-            <div className="relative">
+            {!embedded && <div className="relative">
               <button
                 onClick={() => setShowSampleDropdown(!showSampleDropdown)}
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
@@ -182,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Upload Video Button */}
             <button
@@ -214,7 +216,7 @@ export const Header: React.FC<HeaderProps> = ({
             ) : null}
 
             {/* Export Button */}
-            <button
+            {!embedded && <button
               onClick={onProjectClick}
               className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
               title="打开项目管理"
@@ -223,16 +225,16 @@ export const Header: React.FC<HeaderProps> = ({
               <span>项目</span>
               <span className="max-w-28 truncate text-slate-400">{projectName}</span>
               {isProjectDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-            </button>
+            </button>}
 
-            <button
+            {!embedded && <button
               onClick={onExportClick}
               disabled={shots.length === 0}
               className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>导出结果</span>
-            </button>
+            </button>}
 
           </div>
         </div>

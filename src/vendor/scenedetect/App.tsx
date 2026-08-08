@@ -57,21 +57,28 @@ import {
   SceneDetectProject,
   projectToMetadata,
 } from './utils/projectStore';
+import type { SceneDetectIntegrationRuntime } from '@/lib/remake-projects/scenedetect/integration-runtime';
 
-export default function App() {
+export type SceneDetectEmbeddedAppProps = {
+  embedded?: boolean;
+  initialProject?: SceneDetectProject | null;
+  runtime?: SceneDetectIntegrationRuntime | null;
+};
+
+export default function App({ embedded = false, initialProject = null, runtime = null }: SceneDetectEmbeddedAppProps = {}) {
   // Application Main State
   const [status, setStatus] = useState<AnalysisStatus>('analyzed_review');
-  const [metadata, setMetadata] = useState<VideoMetadata | null>(SAMPLE_VIDEOS[0].metadata);
-  const [shots, setShots] = useState<Shot[]>(SAMPLE_VIDEOS[0].shots);
-  const [activeShotId, setActiveShotId] = useState<string | null>(SAMPLE_VIDEOS[0].shots[0]?.id || null);
+  const [metadata, setMetadata] = useState<VideoMetadata | null>(() => embedded ? null : SAMPLE_VIDEOS[0].metadata);
+  const [shots, setShots] = useState<Shot[]>(() => embedded ? [] : SAMPLE_VIDEOS[0].shots);
+  const [activeShotId, setActiveShotId] = useState<string | null>(() => embedded ? null : SAMPLE_VIDEOS[0].shots[0]?.id || null);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
   const [previewShot, setPreviewShot] = useState<Shot | null>(null);
   const [projectRecord, setProjectRecord] = useState<SceneDetectProject | null>(() =>
-    createProject('示例项目', SAMPLE_VIDEOS[0].metadata, SAMPLE_VIDEOS[0].shots, 'analyzed_review', 0, SAMPLE_VIDEOS[0].shots[0]?.id || null),
+    initialProject || (embedded ? null : createProject('示例项目', SAMPLE_VIDEOS[0].metadata, SAMPLE_VIDEOS[0].shots, 'analyzed_review', 0, SAMPLE_VIDEOS[0].shots[0]?.id || null)),
   );
-  const [projectName, setProjectName] = useState('示例项目');
+  const [projectName, setProjectName] = useState(initialProject?.project.name || (embedded ? '未命名项目' : '示例项目'));
   const [isProjectDirty, setIsProjectDirty] = useState(false);
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
@@ -196,6 +203,11 @@ export default function App() {
       isSample: false,
     };
 
+    if (embedded && runtime) {
+      const uploaded = await runtime.uploadSource({ file, operationKey: `upload:${Date.now()}` });
+      setProjectRecord((previous) => previous ? { ...previous, source: { ...previous.source, ...uploaded.metadata }, project: { ...previous.project, updatedAt: new Date().toISOString() } } : null);
+    }
+
     setMetadata(newMeta);
     setShots([]);
     setActiveShotId(null);
@@ -220,6 +232,20 @@ export default function App() {
     setStageMessage('准备分析视频...');
 
     try {
+      if (embedded && runtime && projectRecord) {
+        const submitted = await runtime.submitAnalyze({ projectId: projectRecord.project.id, sourceRevision: 1, operationKey: `analyze:${Date.now()}` });
+        await new Promise<void>((resolve, reject) => {
+          const unsubscribe = runtime.onTaskUpdate(submitted.taskId, (update) => {
+            if (update.kind === 'progress') { setStageMessage(update.stage || '正在处理镜头...'); setAnalysisProgress(update.indeterminate ? 0 : update.progress); }
+            if (update.kind === 'failed') { unsubscribe(); reject(new Error(update.error)); }
+            if (update.kind === 'canceled') { unsubscribe(); reject(new Error('SceneDetect task canceled')); }
+            if (update.kind === 'completed') { unsubscribe(); resolve(); }
+          });
+        });
+        const reloaded = await runtime.reloadProject(projectRecord.project.id);
+        if (reloaded) { setProjectRecord(reloaded); setProjectName(reloaded.project.name); setMetadata(projectToMetadata(reloaded, reloaded.source.videoUrl || '')); setShots(reloaded.shots); setActiveShotId(reloaded.view.activeShotId); setStatus(reloaded.analysis.status); }
+        return;
+      }
       const source = pendingVideoFile || metadata.url;
       const result = await analyzeVideoShots(source, (phase, progress, msg) => {
         setAnalysisPhase(phase);
@@ -540,6 +566,10 @@ export default function App() {
     setProjectName(projectToSave.project.name);
     setProjectRecord(projectToSave);
     setIsProjectDirty(false);
+    if (embedded && runtime) {
+      void runtime.saveProject(projectToSave.project.id, projectToSave, { operationKey: `save:${Date.now()}` }).then((result) => { if (result?.project) setProjectRecord(result.project); setIsProjectDirty(false); }).catch(() => setIsProjectDirty(true));
+      return;
+    }
     saveProjectToServer(projectToSave).then(() => {
       saveRecentProject(projectToSave).then(() => listRecentProjects().then(setRecentProjects)).catch(() => undefined);
     }).catch(() => {
@@ -615,6 +645,7 @@ export default function App() {
   // Restore the newest local project on startup. The saved media URL is used first;
   // the project manager is only opened when the source can no longer be reached.
   useEffect(() => {
+    if (embedded) { setIsRestoringRecentProject(false); return; }
     let cancelled = false;
     const restoreRecentProject = async () => {
       try {
@@ -675,6 +706,7 @@ export default function App() {
 
       {/* Header Navigation */}
       <Header
+        embedded={embedded}
         status={status}
         metadata={metadata}
         shots={shots}
@@ -805,15 +837,15 @@ export default function App() {
       )}
 
       {/* Export Modal */}
-      <ExportModal
+      {!embedded && <ExportModal
         isOpen={isExportModalOpen}
         shots={shots}
         metadata={metadata}
         onClose={() => setIsExportModalOpen(false)}
             onExportSuccess={() => setStatus('exported')}
-          />
+          />}
 
-      <ProjectManager
+      {!embedded && <ProjectManager
         isOpen={isProjectManagerOpen}
         currentProject={currentProject}
         recentProjects={recentProjects}
@@ -825,7 +857,7 @@ export default function App() {
         onDeleteRecent={(id) => {
           deleteRecentProject(id).then(() => listRecentProjects().then(setRecentProjects)).catch(() => undefined);
         }}
-      />
+      />}
 
       {previewShot && metadata && (
         <ShotPreviewOverlay

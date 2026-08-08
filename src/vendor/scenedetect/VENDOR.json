@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "source": {
     "repository": "/Volumes/KINGSTON/projects/SceneDetect",
     "entry": "src/App.tsx",
@@ -9,87 +9,157 @@
   "sourceFiles": [
     {
       "path": "src/App.tsx",
-      "sha256": "180aea9867d64c516e04fbb6195e33c45440000993dd62e5e700b5bfbe975f71"
+      "upstreamSha256": "180aea9867d64c516e04fbb6195e33c45440000993dd62e5e700b5bfbe975f71",
+      "vendoredSha256": "d6b8e1e6bdabf120ad235a7648a19c4f170c1e77e9fe6eed3364ce3d2c860982",
+      "patched": true,
+      "patchIds": [
+        "embedded-runtime"
+      ]
     },
     {
       "path": "src/components/AnalysisModal.tsx",
-      "sha256": "5389b2be0ded923815ba9c63b34dc8a32b4a0423cdd5badd0a553526fba462e8"
+      "upstreamSha256": "5389b2be0ded923815ba9c63b34dc8a32b4a0423cdd5badd0a553526fba462e8",
+      "vendoredSha256": "5389b2be0ded923815ba9c63b34dc8a32b4a0423cdd5badd0a553526fba462e8",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ExportModal.tsx",
-      "sha256": "221ed5c47b9d7cb2690d18a679509afeb4df34f6472ad48fbb4185e0cae5310a"
+      "upstreamSha256": "221ed5c47b9d7cb2690d18a679509afeb4df34f6472ad48fbb4185e0cae5310a",
+      "vendoredSha256": "221ed5c47b9d7cb2690d18a679509afeb4df34f6472ad48fbb4185e0cae5310a",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/Header.tsx",
-      "sha256": "b6df0a86b7d8d72f20f425ceabafc3d9209b618609f269d7b17400df6d3b1c04"
+      "upstreamSha256": "b6df0a86b7d8d72f20f425ceabafc3d9209b618609f269d7b17400df6d3b1c04",
+      "vendoredSha256": "363bb3ddfb9d577ed87c3ccba49e8593b0b6f9d930553cd6cc2d625daabcbcc1",
+      "patched": true,
+      "patchIds": [
+        "embedded-runtime"
+      ]
     },
     {
       "path": "src/components/KeyframeSelectorPopover.tsx",
-      "sha256": "c49e6599ed525f4139564e0ebc2382043d6da027989ba2e8a6655015e74c1f4c"
+      "upstreamSha256": "c49e6599ed525f4139564e0ebc2382043d6da027989ba2e8a6655015e74c1f4c",
+      "vendoredSha256": "c49e6599ed525f4139564e0ebc2382043d6da027989ba2e8a6655015e74c1f4c",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ProjectManager.tsx",
-      "sha256": "fef04081ce7b75d91aca0f46ff9eb96a9f4f78903eca69b70c58c028fc9a9e51"
+      "upstreamSha256": "fef04081ce7b75d91aca0f46ff9eb96a9f4f78903eca69b70c58c028fc9a9e51",
+      "vendoredSha256": "fef04081ce7b75d91aca0f46ff9eb96a9f4f78903eca69b70c58c028fc9a9e51",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ShotCard.tsx",
-      "sha256": "603c773785144dbbd7091cfadcd0b197ba96c415a49dbc82b5fa75fbb9fec2b8"
+      "upstreamSha256": "603c773785144dbbd7091cfadcd0b197ba96c415a49dbc82b5fa75fbb9fec2b8",
+      "vendoredSha256": "603c773785144dbbd7091cfadcd0b197ba96c415a49dbc82b5fa75fbb9fec2b8",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ShotEditorPopover.tsx",
-      "sha256": "17e2ffde6c39dad9238e2d6556e79130f5145cbe354852268c4cafe98c79329f"
+      "upstreamSha256": "17e2ffde6c39dad9238e2d6556e79130f5145cbe354852268c4cafe98c79329f",
+      "vendoredSha256": "17e2ffde6c39dad9238e2d6556e79130f5145cbe354852268c4cafe98c79329f",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ShotInspector.tsx",
-      "sha256": "9e6430fee7927a22582d2b18d7738ae6b1a08162510297b2c3b9698facd3c9e7"
+      "upstreamSha256": "9e6430fee7927a22582d2b18d7738ae6b1a08162510297b2c3b9698facd3c9e7",
+      "vendoredSha256": "9e6430fee7927a22582d2b18d7738ae6b1a08162510297b2c3b9698facd3c9e7",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ShotList.tsx",
-      "sha256": "5c2e2d234bb596251dabb9b239e7dffcf8559f62fb70c6a5418d9c877a41f81b"
+      "upstreamSha256": "5c2e2d234bb596251dabb9b239e7dffcf8559f62fb70c6a5418d9c877a41f81b",
+      "vendoredSha256": "5c2e2d234bb596251dabb9b239e7dffcf8559f62fb70c6a5418d9c877a41f81b",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/ShotPreviewOverlay.tsx",
-      "sha256": "ed4af990b166c6489f28e97ca1e15eb986f9df46e95550fc97501bd18098119f"
+      "upstreamSha256": "ed4af990b166c6489f28e97ca1e15eb986f9df46e95550fc97501bd18098119f",
+      "vendoredSha256": "ed4af990b166c6489f28e97ca1e15eb986f9df46e95550fc97501bd18098119f",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/Timeline.tsx",
-      "sha256": "8496a64f44e5b4da70422b5d7d38805a6adb05edb8fec0c0b6c754f877dd2eed"
+      "upstreamSha256": "8496a64f44e5b4da70422b5d7d38805a6adb05edb8fec0c0b6c754f877dd2eed",
+      "vendoredSha256": "8496a64f44e5b4da70422b5d7d38805a6adb05edb8fec0c0b6c754f877dd2eed",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/components/VideoPlayer.tsx",
-      "sha256": "e2dc0d1d4c5188c3802cf0e6dcf48b371ed8ed56ea0f22735fc6870fad3632de"
+      "upstreamSha256": "e2dc0d1d4c5188c3802cf0e6dcf48b371ed8ed56ea0f22735fc6870fad3632de",
+      "vendoredSha256": "e2dc0d1d4c5188c3802cf0e6dcf48b371ed8ed56ea0f22735fc6870fad3632de",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/types.ts",
-      "sha256": "296af5ce1fdc9c0ccafbeaf37e3e9ad26974dd16f72000a2107c7ca6a409db47"
+      "upstreamSha256": "296af5ce1fdc9c0ccafbeaf37e3e9ad26974dd16f72000a2107c7ca6a409db47",
+      "vendoredSha256": "296af5ce1fdc9c0ccafbeaf37e3e9ad26974dd16f72000a2107c7ca6a409db47",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/utils/export.ts",
-      "sha256": "134c359269c8c094c82a13b85fff77e698cd43c9257499dd3adf310f9103b4f6"
+      "upstreamSha256": "134c359269c8c094c82a13b85fff77e698cd43c9257499dd3adf310f9103b4f6",
+      "vendoredSha256": "134c359269c8c094c82a13b85fff77e698cd43c9257499dd3adf310f9103b4f6",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/utils/projectStore.ts",
-      "sha256": "5b7b89ac8a4e73466c84caff572921d02fc40eaeb70727e3fc755baf4f4e145b"
+      "upstreamSha256": "5b7b89ac8a4e73466c84caff572921d02fc40eaeb70727e3fc755baf4f4e145b",
+      "vendoredSha256": "5b7b89ac8a4e73466c84caff572921d02fc40eaeb70727e3fc755baf4f4e145b",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/utils/sampleVideos.ts",
-      "sha256": "9179763d2a3a2d5efc64a5db51ef014fd1e2ecac88339170ccb3292fca069f51"
+      "upstreamSha256": "9179763d2a3a2d5efc64a5db51ef014fd1e2ecac88339170ccb3292fca069f51",
+      "vendoredSha256": "9179763d2a3a2d5efc64a5db51ef014fd1e2ecac88339170ccb3292fca069f51",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/utils/sceneDetector.ts",
-      "sha256": "da7097a6d67b52a77fac20ec43054b62d24270a54087307f0d480bbb9baa720d"
+      "upstreamSha256": "da7097a6d67b52a77fac20ec43054b62d24270a54087307f0d480bbb9baa720d",
+      "vendoredSha256": "da7097a6d67b52a77fac20ec43054b62d24270a54087307f0d480bbb9baa720d",
+      "patched": false,
+      "patchIds": []
     },
     {
       "path": "src/utils/timecode.ts",
-      "sha256": "8a71c9401deb2477cb254b37ef710a47386cda9dc69a9fcb3943e3f509fb52ec"
+      "upstreamSha256": "8a71c9401deb2477cb254b37ef710a47386cda9dc69a9fcb3943e3f509fb52ec",
+      "vendoredSha256": "8a71c9401deb2477cb254b37ef710a47386cda9dc69a9fcb3943e3f509fb52ec",
+      "patched": false,
+      "patchIds": []
     }
   ],
-  "aggregateSha256": "11693b7c8d9ce57ff2c662228893aa0e322ad355dc6eeea0b9d3af295f87522b",
+  "sourceAggregateSha256": "11693b7c8d9ce57ff2c662228893aa0e322ad355dc6eeea0b9d3af295f87522b",
+  "vendoredAggregateSha256": "002bcfc396f9536b4b1831aa355c1776cbd8d7abb5f7681daee6f14b6590a4b6",
   "dependencies": [
     "react",
     "react-dom",
     "lucide-react",
     "motion"
+  ],
+  "patches": [
+    {
+      "id": "embedded-runtime",
+      "file": "scripts/vendor-scenedetect-patches/embedded-runtime.patch",
+      "description": "Waoo runtime ports and embedded policy branch",
+      "sha256": "e601b694fc9d90cb8a69f1d1fd6ef4ce8e06d7c1fce903f2e7a1b7dd2ee74bf9"
+    }
   ],
   "allowedPatches": []
 }
