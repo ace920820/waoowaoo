@@ -5,7 +5,7 @@
   "stageNavigation": "翻拍阶段",
   "summary": "项目概览",
   "source": "源视频",
-  "sourceStatus": { "not_imported": "尚未导入", "uploaded": "已上传", "analyzed": "已分析" },
+  "sourceStatus": { "not_imported": "尚未导入", "uploaded": "已上传", "uploaded_pending": "已上传，待分析", "analyzed": "已分析" },
   "shots": "镜头数",
   "review": "待审核",
   "shotList": "镜头概览",

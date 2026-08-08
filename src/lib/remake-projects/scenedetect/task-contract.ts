@@ -35,7 +35,7 @@ export function buildSceneDetectTaskDescriptor(input: SceneDetectTaskInput) {
 
 export function parseSceneDetectTaskPayload(payload: unknown): Pick<SceneDetectTaskInput, 'detector' | 'threshold' | 'frameTuple' | 'sourceRevision' | 'shotRevision' | 'shotId' | 'operationKey' | 'operation'> {
   const value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {}
-  const allowed = new Set(['detector', 'threshold', 'frameTuple', 'sourceRevision', 'shotRevision', 'shotId', 'operationKey', 'operation'])
+  const allowed = new Set(['detector', 'threshold', 'frameTuple', 'sourceRevision', 'shotRevision', 'shotId', 'operationKey', 'operation', 'flowId', 'flowStageIndex', 'flowStageTotal', 'flowStageTitle', 'meta'])
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`SCENEDETECT_TASK_FIELD_NOT_ALLOWED:${key}`)
   const operation = value.operation
   if (operation !== 'analyze' && operation !== 'extract_keyframes') throw new Error('SCENEDETECT_OPERATION_INVALID')

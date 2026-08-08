@@ -5,7 +5,7 @@
   "stageNavigation": "Remake stages",
   "summary": "Project overview",
   "source": "Source video",
-  "sourceStatus": { "not_imported": "Not imported", "uploaded": "Uploaded", "analyzed": "Analyzed" },
+  "sourceStatus": { "not_imported": "Not imported", "uploaded": "Uploaded", "uploaded_pending": "Uploaded, awaiting analysis", "analyzed": "Analyzed" },
   "shots": "Shots",
   "review": "Needs review",
   "shotList": "Shot overview",
