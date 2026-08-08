@@ -2,45 +2,15 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { extractStorageKey, getObjectBuffer } from '@/lib/storage'
-import { parsePromptAnalysis, promptInputSnapshotSchema, type PromptInputSnapshot, type PromptTargetKey } from '@/lib/remake-projects/prompt/contracts'
-import { persistImagePromptVersion, persistVideoPromptRunAtomically, promptInputFingerprint } from '@/lib/remake-projects/prompt/service'
+import { parsePromptAnalysis, type PromptInputSnapshot, type PromptTargetKey } from '@/lib/remake-projects/prompt/contracts'
+import { persistImagePromptVersion, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
+import { parseRemakePromptTaskPayload, type RemakePromptImageTaskPayload } from '@/lib/remake-projects/prompt/task-contract'
 import { runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import { assertTaskActive } from '../utils'
 
 type Row = Record<string, any>
-type RemakePromptImageTaskPayload = {
-  kind: 'image'
-  slot: 'start' | 'middle' | 'end'
-  operationKey: string
-  inputSnapshot: PromptInputSnapshot
-  inputFingerprint: string
-}
-type RemakePromptVideoTaskPayload = {
-  kind: 'video'
-  operationKey: string
-  sourceRevision: number
-  snapshots: PromptInputSnapshot[]
-  inputFingerprint: string
-}
-
-function parseRemakePromptTaskPayload(payload: unknown): RemakePromptImageTaskPayload | RemakePromptVideoTaskPayload {
-  const value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Row : null
-  if (!value || typeof value.operationKey !== 'string' || !value.operationKey.trim()) throw new Error('REMAKE_PROMPT_TASK_INVALID')
-  if (value.kind === 'image') {
-    if (!['start', 'middle', 'end'].includes(String(value.slot))) throw new Error('REMAKE_PROMPT_SLOT_INVALID')
-    const inputSnapshot = promptInputSnapshotSchema.parse(value.inputSnapshot)
-    const inputFingerprint = promptInputFingerprint(inputSnapshot)
-    if (value.inputFingerprint !== inputFingerprint) throw new Error('REMAKE_PROMPT_FINGERPRINT_INVALID')
-    return { kind: 'image', slot: value.slot, operationKey: value.operationKey.trim(), inputSnapshot, inputFingerprint }
-  }
-  if (value.kind !== 'video' || !Number.isSafeInteger(value.sourceRevision) || Number(value.sourceRevision) < 1 || !Array.isArray(value.snapshots)) throw new Error('REMAKE_PROMPT_TASK_INVALID')
-  const snapshots = value.snapshots.map((snapshot) => promptInputSnapshotSchema.parse(snapshot))
-  const inputFingerprint = promptInputFingerprint({ snapshots, sourceRevision: value.sourceRevision } as unknown as PromptInputSnapshot)
-  if (value.inputFingerprint !== inputFingerprint) throw new Error('REMAKE_PROMPT_FINGERPRINT_INVALID')
-  return { kind: 'video', operationKey: value.operationKey.trim(), sourceRevision: value.sourceRevision, snapshots, inputFingerprint }
-}
 
 function mediaKey(value: string | undefined): string {
   const key = extractStorageKey(value || '') || value || ''

@@ -7,6 +7,7 @@ export const QUEUE_NAME = {
   VIDEO: 'waoowaoo-video',
   VOICE: 'waoowaoo-voice',
   TEXT: 'waoowaoo-text',
+  PROMPT_IMAGE: 'waoowaoo-prompt-image',
 } as const
 
 const defaultJobOptions: JobsOptions = {
@@ -39,7 +40,12 @@ export const textQueue = new Queue<TaskJobData>(QUEUE_NAME.TEXT, {
   defaultJobOptions,
 })
 
-const ALL_QUEUES = [imageQueue, videoQueue, voiceQueue, textQueue]
+export const promptImageQueue = new Queue<TaskJobData>(QUEUE_NAME.PROMPT_IMAGE, {
+  connection: queueRedis,
+  defaultJobOptions,
+})
+
+const ALL_QUEUES = [imageQueue, videoQueue, voiceQueue, textQueue, promptImageQueue]
 
 const IMAGE_TYPES = new Set<TaskType>([
   TASK_TYPE.IMAGE_PANEL,
@@ -63,9 +69,12 @@ const VOICE_TYPES = new Set<TaskType>([
 const SINGLE_ATTEMPT_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.STORY_TO_SCRIPT_RUN,
   TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN,
+  TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE,
+  TASK_TYPE.REMAKE_VIDEO_PROMPT_ANALYZE,
 ])
 
 export function getQueueTypeByTaskType(type: TaskType): QueueType {
+  if (type === TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE) return 'prompt-image'
   if (IMAGE_TYPES.has(type)) return 'image'
   if (VIDEO_TYPES.has(type)) return 'video'
   if (VOICE_TYPES.has(type)) return 'voice'
@@ -81,6 +90,9 @@ export function getQueueByType(type: QueueType) {
     case 'voice':
       return voiceQueue
     case 'text':
+      return textQueue
+    case 'prompt-image':
+      return promptImageQueue
     default:
       return textQueue
   }

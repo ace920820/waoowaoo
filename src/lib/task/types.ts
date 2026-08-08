@@ -89,7 +89,7 @@ export const TASK_TYPE = {
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]
 
-export type QueueType = 'image' | 'video' | 'voice' | 'text'
+export type QueueType = 'image' | 'video' | 'voice' | 'text' | 'prompt-image'
 
 export type BillingMode = 'OFF' | 'SHADOW' | 'ENFORCE'
 
