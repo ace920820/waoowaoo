@@ -30,22 +30,24 @@ SceneDetectHttpError: SceneDetect request failed (404)
    - `App.tsx:236`：`runtime.submitAnalyze({ projectId: projectRecord.project.id, ... })` → 随机 UUID → waoowaoo 404
 
 ## Root Cause
-vendored SceneDetect 应用的项目 ID 与宿主 waoowaoo projectId **脱钩**：
-- 上传路径用宿主 projectId（StageHost 的 `projectId` prop → uploadSource），✅
-- 分析路径用 App 内部 `projectRecord.project.id`（首次为空时被 `createProject` 用 `crypto.randomUUID()` 生成），❌
-- StageHost 虽然异步 loadProject 成功，但结果未在 App **首次渲染前**注入（useState 初始化不响应 prop 变化）
+vendored SceneDetect 应用的项目 ID 与宿主 waoowaoo projectId **脱钩**，且根因有两层：
 
-## Fix Plan（最小修复，write set=1 文件）
-`SceneDetectStageHost.tsx`：等待 `runtime.loadProject(projectId)` 完成（loadState='ready'）**再挂载** canonical App，`initialProject` 传加载后的服务端项目（id=宿主 projectId），并加 `key={projectId}` 防止项目切换时状态残留。加载中显示占位。
+**第一层（已修，StageHost）**：`RemakeWorkbench.tsx:69` 传 `initialProject={null}`；StageHost 异步 loadProject 的结果未在 App 首次渲染前注入（useState 初始化不响应 prop 变化）→ App 挂载时 projectRecord=null。
 
-不改 `RemakeWorkbench.tsx`（`initialProject={null}` 保留，StageHost 自管加载）。
-不改 vendored `App.tsx` / `projectStore.ts`（保持 canonical 完整性，VENDOR.json 校验不变）。
+**第二层（本次修正，runtime 绑定）**：App.tsx:216-217 `handleUpload` 在上传后用 `createProject(..., null)` **无条件重建 projectRecord → 每次上传生成新的随机 UUID**（ec37eb9a → 80a40de6 → e21f2d62，每次点击都不同）。随后 App 所有用 `projectRecord.project.id` 的操作（submitAnalyze/reloadProject/saveProject）都打到这个随机 UUID → waoowaoo DB 无此项目 → `ApiError('NOT_FOUND')` → 404。
+
+**修复语义**：embedded 场景下 runtime 由宿主创建时绑定 projectId（`createSceneDetectRuntime(projectId)`），runtime 层**忽略 App 传入的任意 id**，统一用绑定 projectId（analyze/save/reload/poll/upload）。vendored App 内部 projectRecord 的随机 UUID 不再影响请求目标。src/lib 层修复，不改 vendored（保持 VENDOR provenance 校验）。
+
+## Fix Plan（write set=2 文件）
+1. ~~`SceneDetectStageHost.tsx`：等待 loadProject 完成再挂载 canonical App（已提交 cae1dc5）~~
+2. `src/lib/remake-projects/scenedetect/runtime-client.ts`：submitAnalyze / saveProject / reloadProject 忽略调用方 id，改用绑定 projectId（已完成）
 
 ## Verification
-1. typecheck + lint（相关文件）
-2. browser 实测：打开工作台 → 上传视频 → 点分析 → 请求应为 `POST /api/remake-projects/e44be650-.../scenedetect/analyze` → 202（而非 404）
-3. 任务在 Bull 队列出现，worker 消费，前端进度更新
+1. typecheck ✅ lint ✅（全量）
+2. 路由层 401 探测 ✅
+3. browser 实测（用户）：上传视频 → 点分析 → 日志应出现 `POST /api/remake-projects/e44be650-.../scenedetect/analyze`（宿主 id）且非 404
 
 ## Status Log
 - 2026-08-08 19:4x：diagnosed，root cause 确认，修复待实施
-- 2026-08-08 19:47：fix implemented（SceneDetectStageHost.tsx + css），typecheck ✅ lint ✅ 路由层 401 验证 ✅；待用户浏览器实测（analyze 应 202 而非 404）
+- 2026-08-08 19:47：fix #1 implemented（StageHost），typecheck ✅ lint ✅；用户实测仍 404 → 日志显示每次点击新随机 UUID（80a40de6/e21f2d62）
+- 2026-08-08 19:5x：root cause 修正（两层），fix #2 implemented（runtime-client 绑定宿主 id），typecheck ✅ lint ✅；待用户实测

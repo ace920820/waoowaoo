@@ -33,12 +33,15 @@ export function createSceneDetectRuntime(projectId: string): SceneDetectIntegrat
   return {
     uploadSource: async ({ file, operationKey }) => json<Awaited<ReturnType<SceneDetectIntegrationRuntime['uploadSource']>>>(await apiFetch(`/api/remake-projects/${encodeURIComponent(projectId)}/source`, { method: 'POST', body: (() => { const form = new FormData(); form.set('file', file); form.set('operationKey', operationKey); return form })() })),
     loadProject: async (id) => { const result = await json<{ project: SceneDetectProject; empty?: boolean; token?: string }>(await apiFetch(`${base(id)}/project`)); token = result.token; return result.empty ? null : result.project },
-    reloadProject: async (id) => { const result = await json<{ project: SceneDetectProject; empty?: boolean; token?: string }>(await apiFetch(`${base(id)}/project`)); token = result.token; return result.empty ? null : result.project },
+    // Embedded 模式下 runtime 绑定宿主 projectId：忽略调用方传入的任意 id，
+    // 避免 vendored App 内部 projectRecord 被 createProject() 重建为随机 UUID 时
+    // 请求打到不存在的项目（ApiError NOT_FOUND → 404）。
+    reloadProject: async () => { const result = await json<{ project: SceneDetectProject; empty?: boolean; token?: string }>(await apiFetch(`${base(projectId)}/project`)); token = result.token; return result.empty ? null : result.project },
     saveProject: async (id, project, options = {}) => {
-      const request = (nextId: string, nextProject: SceneDetectProject, nextOptions: { baseRevision?: number; operationKey?: string }) => {
+      const request = (_nextId: string, nextProject: SceneDetectProject, nextOptions: { baseRevision?: number; operationKey?: string }) => {
         const headers: Record<string, string> = { 'content-type': 'application/json' }
         if (token) headers['if-match'] = token
-        return apiFetch(`${base(nextId)}/project`, { method: 'PUT', headers, body: JSON.stringify({ project: nextProject, operationKey: nextOptions.operationKey || `native-save:${Date.now()}` }) }).then((response) => json<Awaited<ReturnType<SceneDetectIntegrationRuntime['saveProject']>>>(response))
+        return apiFetch(`${base(projectId)}/project`, { method: 'PUT', headers, body: JSON.stringify({ project: nextProject, operationKey: nextOptions.operationKey || `native-save:${Date.now()}` }) }).then((response) => json<Awaited<ReturnType<SceneDetectIntegrationRuntime['saveProject']>>>(response))
       }
       if (inFlight) {
         return new Promise<Awaited<ReturnType<SceneDetectIntegrationRuntime['saveProject']>>>((resolve, reject) => { pending = { id, project, options, resolve: resolve as (value: unknown) => void, reject } })
@@ -76,7 +79,7 @@ export function createSceneDetectRuntime(projectId: string): SceneDetectIntegrat
       return inFlight as Promise<Awaited<ReturnType<SceneDetectIntegrationRuntime['saveProject']>>>
     },
     resolveMediaRef: async (mediaId) => `${base(projectId)}/media/${encodeURIComponent(mediaId)}`,
-    submitAnalyze: async (input) => json(await apiFetch(`${base(input.projectId)}/analyze`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ operationKey: input.operationKey, threshold: input.threshold }) })),
+    submitAnalyze: async (input) => json(await apiFetch(`${base(projectId)}/analyze`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ operationKey: input.operationKey, threshold: input.threshold }) })),
     submitExtractKeyframes: async () => { throw new Error('SceneDetect keyframe extraction endpoint is not available') },
     onTaskUpdate: (taskId, listener) => { const set = listeners.get(taskId) || new Set(); set.add(listener); listeners.set(taskId, set); if (!pollers.has(taskId)) { void poll(taskId); pollers.set(taskId, setInterval(() => void poll(taskId), 1000)) } return () => { set.delete(listener); if (!set.size) { listeners.delete(taskId); stop(taskId) } } },
     canEnterProject: () => true,
