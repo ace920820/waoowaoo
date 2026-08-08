@@ -48,6 +48,7 @@ describe('remake prompt Codex executor', () => {
   it('fails closed for ambiguous sessions or invalid final schemas', () => {
     expect(() => parseCodexJsonl('{"type":"thread.started","thread_id":"a"}\n{"type":"thread.started","thread_id":"b"}\n{"type":"final","result":{}}', 'image:start')).toThrow('CODEX_SESSION_AMBIGUOUS')
     expect(() => parseCodexJsonl('{"type":"final","result":{}}', 'image:start')).toThrow()
+    expect(() => parseCodexJsonl(`{"type":"final","result":${JSON.stringify(imageAnalysis)}}\n{"type":"final","result":${JSON.stringify(imageAnalysis)}}`, 'image:start')).toThrow('CODEX_FINAL_RESULT_MISSING')
   })
 
   it('redacts URLs, absolute paths, and secret-looking values before errors project outward', () => {
