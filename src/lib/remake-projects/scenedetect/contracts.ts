@@ -159,7 +159,8 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
     analysis: { detector: 'pySceneDetect', detectorType: 'content', threshold: 27, analyzedAt: now, status: 'analyzed_review' },
     view: { currentFrame: 0, activeShotId: null },
     shots: snapshot.shots.filter((shot) => {
-      // 只保留当前 sourceRevision 的镜头（无 revision 的孤立 shot 不显示）
+      // 只保留当前 sourceRevision 的镜头；无 revision 的孤立 shot 保持 round-trip 兼容
+      if (!shot.revisions?.length) return true
       return Boolean(activeRevisionForSource(shot, currentSourceRevision))
     }).map((shot) => {
       const latest = activeRevisionForSource(shot, currentSourceRevision)
