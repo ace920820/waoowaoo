@@ -63,7 +63,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   const client = remakeClient()
   const project = await client.project.findUnique({
     where: { id: input.projectId },
-    include: { remakeProject: { include: { source: true, shots: { include: { revisions: true, provenance: true }, orderBy: [{ sequence: 'asc' }, { id: 'asc' }] } } } },
+    include: { remakeProject: { include: { currentSource: true, shots: { include: { revisions: true, provenance: true }, orderBy: [{ sequence: 'asc' }, { id: 'asc' }] } } } },
   })
   if (!project) return null
   const projectRow = project as Row
@@ -76,15 +76,27 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   })
   return {
     project: { id: projectRow.id, name: projectRow.name, description: projectRow.description, type: projectRow.type },
-    source: { status: (remake?.source as Row | null | undefined)?.status ?? remake?.importStatus ?? 'not_imported', mediaId: (remake?.source as Row | null | undefined)?.mediaId ?? null },
+    source: (() => {
+      const current = remake?.currentSource as Row | null | undefined
+      return {
+        status: current?.status ?? remake?.importStatus ?? 'not_imported',
+        mediaId: current?.mediaId ?? null,
+        ...(current ? {
+          sourceRevision: current.sourceRevision ?? null,
+          metadata: current.probeMetadata ? (typeof current.probeMetadata === 'string' ? JSON.parse(current.probeMetadata) : current.probeMetadata) : null,
+        } : {}),
+      }
+    })(),
     shots: ((remake?.shots as Row[] | undefined) ?? []).map((shot) => ({
       id: shot.id,
       stableKey: shot.stableKey,
       sequence: shot.sequence,
       reviewStatus: shot.reviewStatus,
       needsReview: shot.needsReview,
-      revisions: ((shot.revisions as Row[] | undefined) ?? []).map((revision) => ({ id: revision.id, revision: revision.revision, changeReason: revision.changeReason })),
-      provenance: ((shot.provenance as Row[] | undefined) ?? []).map((record) => ({ id: record.id, schema: record.schema, executor: record.executor, capability: record.capability })),
+      currentRevision: shot.currentRevision ?? null,
+      version: shot.version ?? 0,
+      revisions: ((shot.revisions as Row[] | undefined) ?? []).map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
+      provenance: ((shot.provenance as Row[] | undefined) ?? []).map((record) => ({ id: record.id, schema: record.schema, executor: record.executor, capability: record.capability, payload: record.payload ?? null })),
     })),
     tasks,
   }

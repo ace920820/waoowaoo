@@ -6,14 +6,14 @@ current_phase: 06
 current_phase_name: scenedetect
 status: executing
 stopped_at: Phase 5 verification complete; Phase 6 handoff recorded
-last_updated: "2026-08-08T01:56:30.000Z"
+last_updated: "2026-08-08T07:44:47.032Z"
 last_activity: 2026-08-08
-last_activity_desc: Phase 06 plan 06-01 completed; source ingest committed
+last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 14
-  completed_plans: 4
+  completed_plans: 6
   percent: 0
 ---
 
@@ -138,15 +138,15 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 06 (scenedetect) — EXECUTING
-Plan: 2 of 8
+Plan: 6 of 8
 Status: Executing Phase 06
-Last activity: 2026-08-08 — Phase 06 plan 06-01 completed; continuing with 06-02
+Last activity: 2026-08-08 — Phase 06 execution resumed (wave continue)
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [███████░░░] 75%
 
 ## Operator Next Steps
 
-- 继续执行 Phase 06 的 06-02 计划：版本化 SceneDetect result envelope 与事务导入边界
+- 继续执行 Phase 06 的 06-07 计划：SceneDetect embedded UI 与浏览器交互验证
 
 ## Session
 
