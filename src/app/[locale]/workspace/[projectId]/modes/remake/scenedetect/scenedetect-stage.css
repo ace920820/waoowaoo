@@ -73,6 +73,7 @@
 .remake-stage-nav button { padding: 8px 12px; border-radius: 5px; }
 .remake-stage-nav button.is-active { border-color: #1d252c; background: #1d252c; color: #fff; }
 .remake-overview { display: grid; gap: 18px; padding-block: 12px 40px; }
+.remake-overview.is-context-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .remake-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .remake-summary-item { display: grid; gap: 6px; padding: 18px; border: 1px solid #dce2e6; border-radius: 6px; background: rgba(255,255,255,.72); }
 .remake-summary-item span { color: #63717b; font-size: 12px; }
@@ -86,6 +87,7 @@
 .remake-shot-panel em, .remake-task-drawer em { color: #63717b; font-size: 12px; font-style: normal; }
 .remake-empty { padding-block: 24px; color: #63717b; }
 .remake-stage-main { padding-inline: 0; }
+.remake-stage-main[data-stage-active="false"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .remake-task-overlay { position: fixed; inset: 0; z-index: 40; background: rgba(13, 19, 23, .32); }
 .remake-task-drawer { position: absolute; top: 0; right: 0; width: min(400px, 92vw); height: 100%; overflow: auto; padding: 22px; background: #fff; box-shadow: -12px 0 30px rgba(13, 19, 23, .16); }
 .remake-task-drawer li { grid-template-columns: minmax(0, 1fr) auto; }

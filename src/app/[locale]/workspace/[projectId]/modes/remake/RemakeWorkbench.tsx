@@ -52,8 +52,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
         ))}
       </nav>
 
-      {stage === 'overview' ? (
-        <main className="remake-overview" data-testid="remake-overview">
+      <main className={stage === 'overview' ? 'remake-overview' : 'remake-overview is-context-hidden'} data-testid="remake-overview" aria-hidden={stage !== 'overview'}>
           <section className="remake-summary-grid" aria-label={t('summary')}>
             <div className="remake-summary-item"><span>{t('source')}</span><strong>{t(`sourceStatus.${snapshot.source.status}` as 'sourceStatus.not_imported')}</strong></div>
             <div className="remake-summary-item"><span>{t('shots')}</span><strong>{snapshot.shots.length}</strong></div>
@@ -66,11 +65,9 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
             )}
           </section>
         </main>
-      ) : (
-        <main className="remake-stage-main">
-          <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
-        </main>
-      )}
+      <main className="remake-stage-main" data-stage-active={stage === 'scenedetect' ? 'true' : 'false'}>
+        <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
+      </main>
 
       {taskDrawerOpen ? <div className="remake-task-overlay" role="presentation" onMouseDown={() => setTaskDrawerOpen(false)}>
         <aside className="remake-task-drawer" role="dialog" aria-modal="true" aria-label={t('tasks')} onMouseDown={(event) => event.stopPropagation()}>

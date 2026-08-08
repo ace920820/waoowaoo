@@ -13,7 +13,7 @@ progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 14
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -138,15 +138,15 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 06 (scenedetect) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Executing Phase 06
 Last activity: 2026-08-08 — Phase 06 execution resumed (wave continue)
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100%
 
 ## Operator Next Steps
 
-- 继续执行 Phase 06 的 06-08 计划：production stage 与浏览器闭环验证
+- Phase 06 执行完成；下一步进行 phase verification / milestone audit
 
 ## Session
 
