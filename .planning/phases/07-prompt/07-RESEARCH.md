@@ -63,7 +63,7 @@
 | VPRM-04 | 播放原始 Shot、看关键帧、编辑并追加版本 | snapshot media refs、version API、前端双页签 |
 | VPRM-05 | 重分析、比较历史、为每 Shot 选择当前采用 Video Prompt | 每 Shot 独立 track 的批准并采用操作 |
 | VPRM-06 | 明确批准，未批准不可作为默认视频生成输入 | adoption gate，仅读取 approved + adopted + valid 的版本 |
-| VPRM-07 | Video Prompt 失败时可保留成功结果并重试失败 Shot | 与 D-03 对齐为重试整段 Task；不创建“部分成功”的新版本 |
+| VPRM-07 | Video Prompt 失败时保留既有成功历史并可重试 | 按 D-03 解释为重试整段 Task；本次失败不创建“部分成功”的新版本 |
 </phase_requirements>
 
 ## Summary
@@ -412,11 +412,11 @@ The repository’s configured Vitest test timeout is 30 seconds and Playwright h
 |---|---|---|---|---|
 | IPRM-01/02/03 | valid confirmed frame creates structured version with skill/schema/executor provenance | unit + Worker integration | `vitest run tests/unit/remake-projects/prompt-contract.test.ts tests/unit/worker/remake-prompt.test.ts` | Wave 0 |
 | IPRM-04/05/06 | edit appends; approve/adopt is per slot; pending is not downstream eligible | API integration | `vitest run tests/integration/api/remake-projects-prompt-review.test.ts` | Wave 0 |
-| IPRM-07 | malformed/failed image task is retryable and does not affect siblings | Worker/API integration | `vitest run tests/integration/task/remake-prompt-image.integration.test.ts` | Wave 0 |
-| VPRM-01/02/03 | one video invocation receives full input and maps exact stable Shot IDs | executor contract + Worker integration | `vitest run tests/unit/remake-projects/prompt-video-contract.test.ts tests/integration/task/remake-prompt-video.integration.test.ts` | Wave 0 |
+| IPRM-07 | malformed/failed image task is retryable and does not affect siblings | Worker/API integration | `vitest run tests/integration/task/remake-prompt-image.test.ts` | Wave 0 |
+| VPRM-01/02/03 | one video invocation receives full input and maps exact stable Shot IDs | executor contract + Worker integration | `vitest run tests/integration/task/remake-prompt-video-atomic.test.ts` | Wave 0 |
 | VPRM-04/05/06 | per-Shot video edit/history/adopt gate | API integration + E2E | `vitest run tests/integration/api/remake-projects-prompt-review.test.ts` | Wave 0 |
-| VPRM-07 | whole-run failure writes no new versions and leaves old versions | Worker integration | `vitest run tests/integration/task/remake-prompt-video-atomic.integration.test.ts` | Wave 0 |
-| D-07 | 4 rapid image submissions yield at most 3 running and queued overflow | concurrency integration + E2E | `vitest run tests/integration/task/remake-prompt-concurrency.integration.test.ts`; `playwright test tests/e2e/remake-prompt.spec.ts` | Wave 0 |
+| VPRM-07 | whole-run failure writes no new versions and leaves old versions | Worker integration | `vitest run tests/integration/task/remake-prompt-video-atomic.test.ts` | Wave 0 |
+| D-07 | 4 rapid image submissions yield at most 3 running and queued overflow | concurrency integration + E2E | `vitest run tests/integration/task/remake-prompt-concurrency.test.ts`; `playwright test tests/e2e/remake-prompt.spec.ts` | Wave 0 |
 | D-15 | real route, refresh recovery, responsive no-overflow and one real Codex path | E2E/manual gate | `playwright test tests/e2e/remake-prompt.spec.ts` | Wave 0 |
 
 ### Wave 0 Gaps
@@ -460,25 +460,17 @@ The repository’s configured Vitest test timeout is 30 seconds and Playwright h
 | # | Claim | Section | Risk if wrong |
 |---|---|---|---|
 | A1 | The recommended PromptTrack/PromptVersion/PromptRun split is the smallest maintainable Prisma design. | Summary/Architecture | Migration shape or query complexity changes; user/planner confirmation required. |
-| A2 | `codex exec --json` JSONL can expose a session/thread identifier that the parser can capture from an event, or the runner can record a nullable ID plus full bounded event metadata. | Standard Stack/CLI | Session provenance field may need a CLI-specific adapter test or alternate metadata source. |
-| A3 | A Redis-backed semaphore or dedicated Prompt worker is acceptable for the fixed image concurrency of 3. | Architecture Pattern 4 | A deployment-specific queue design decision remains before implementation. |
+| A2 | `codex exec --json` JSONL 的 parser 以 fixture 锁定 final structured result 和可用的 session metadata；session id 可以为空，但执行元数据必须保存。 | Standard Stack/CLI | 真实 CLI 若事件字段变化，只需替换 adapter；不能伪造 session id 或把未完成输出当成功。 |
+| A3 | 图片 Prompt 使用 Redis semaphore/lease，跨多个 Worker 仍保持全局最多 3 个活动执行。 | Architecture Pattern 4 | Redis 不可用时任务不得假装 processing；必须保持 queued 或明确失败。 |
+| A4 | Prompt snapshot 使用现有项目级媒体 API URL，不向浏览器暴露 storage key。 | Interfaces | 外部前端不依赖存储实现；media URL 合同由 snapshot/API 测试锁定。 |
 
 These are design assumptions, not verified facts. The current CLI help verified flags and resume syntax but not the exact JSONL event schema; planner should add a focused smoke/fixture test before locking the parser.[VERIFIED: local `codex exec --help` and `codex exec resume --help`, 2026-08-08]
 
-## Open Questions
+## Resolved Questions
 
-1. **What exact `codex exec --json` event contains the session ID and final answer?**
-   - What we know: installed CLI provides JSONL mode, output schema and resume by session ID.[VERIFIED: local `codex exec --help`, 2026-08-08]
-   - What's unclear: this session did not run a live account-backed CLI request, and Context7/ctx7 was unavailable.
-   - Recommendation: make a fake JSONL fixture plus one opt-in smoke test against the installed binary; fail closed if no final structured result is captured.
-2. **Where should the Prompt image concurrency gate live in production?**
-   - What we know: global Text Worker concurrency is currently 10.[VERIFIED: src/lib/workers/text.worker.ts:712-720]
-   - What's unclear: deployment runs one worker process or multiple replicas.
-   - Recommendation: use a Redis semaphore with lease/renewal if multiple replicas are possible; otherwise a dedicated prompt-image worker with concurrency 3 is simpler.
-3. **Which media URL/storage contract does the external frontend consume?**
-   - What we know: SceneDetect media URLs are Waoo API URLs built from project/media IDs.[VERIFIED: src/app/api/remake-projects/[projectId]/scenedetect/project/route.ts:21-35]
-   - What's unclear: the external frontend branch is not present in this worktree.
-   - Recommendation: expose the same stable project-scoped media URL shape in Prompt snapshot and avoid exposing storage keys.
+1. **Codex JSONL event contract:** parser tests use checked-in JSONL fixtures. A final structured result is mandatory; session id is captured when present and otherwise stored as nullable metadata. Missing final result, malformed JSON or incomplete schema fails the task.
+2. **Image concurrency contract:** use a Redis semaphore with expiring lease, renewal and `finally` release. The lease is acquired before the task is projected as processing, so multiple Worker replicas share the hard limit of three.
+3. **Media contract:** snapshot and track APIs return the existing project-scoped Waoo media API URLs only. Storage keys, signed URLs, local paths and CLI internals never cross the API boundary.
 
 ## Sources
 
