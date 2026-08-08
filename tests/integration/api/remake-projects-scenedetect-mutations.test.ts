@@ -12,6 +12,7 @@ const state = vi.hoisted(() => {
     remakeProject: { findUnique: vi.fn(async () => structuredClone(project.remakeProject)) },
     remakeShot: { create: vi.fn(async ({ data }: any) => ({ id: 'shot-new', ...data, currentRevision: null, version: 0, revisions: [], outputs: [] })), update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     remakeShotRevision: { create: vi.fn(async ({ data }: any) => ({ id: `rev-${data.revision}`, ...data })), update: vi.fn(async () => ({})) },
+    remakePromptTrack: { findMany: vi.fn(async () => [{ adoptedVersionId: 'prompt-version-1' }]) },
     remakeInvalidation: { createMany: vi.fn(async () => ({ count: 1 })) },
     $transaction: vi.fn(async (callback: any) => callback(prisma)),
   }
@@ -51,6 +52,7 @@ describe('native SceneDetect mutations', () => {
     expect(result.changed).toBe(true)
     expect(state.prisma.remakeShotRevision.create).toHaveBeenCalledTimes(1)
     expect(state.prisma.remakeInvalidation.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: [expect.objectContaining({ outputVersionId: 'output-1' })] }))
+    expect(state.prisma.remakeInvalidation.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: [expect.objectContaining({ promptVersionId: 'prompt-version-1' })] }))
   })
 
   it('rejects stale tokens atomically', async () => {

@@ -598,7 +598,6 @@ model RemakePromptTrack {
 
   @@unique([shotId, targetKey])
   @@index([remakeProjectId])
-  @@index([adoptedVersionId])
   @@map("remake_prompt_tracks")
 }
 

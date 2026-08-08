@@ -10,7 +10,6 @@ CREATE TABLE `remake_prompt_tracks` (
   UNIQUE INDEX `remake_prompt_tracks_adoptedVersionId_key` (`adoptedVersionId`),
   UNIQUE INDEX `remake_prompt_tracks_shotId_targetKey_key` (`shotId`, `targetKey`),
   INDEX `remake_prompt_tracks_remakeProjectId_idx` (`remakeProjectId`),
-  INDEX `remake_prompt_tracks_adoptedVersionId_idx` (`adoptedVersionId`),
   PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

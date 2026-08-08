@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { evaluateSceneDetectReviewGate } from '../scenedetect/review-gate'
 import {
   imagePromptAnalysisSchema,
   parsePromptAnalysis,
@@ -54,6 +55,18 @@ async function currentInput(tx: Client, input: { projectId: string; shotId: stri
   })
   const revision = shot?.revisions?.find((row: any) => Number(row.revision) === Number(shot.currentRevision))
   if (!shot || shot.remakeProject?.project?.id !== input.projectId || !revision || revision.lifecycleState === 'retired' || !shot.remakeProject.currentSource) throw new Error('REMAKE_PROMPT_INPUT_STALE')
+  let payload: Record<string, unknown> = {}
+  try { payload = revision.payload ? JSON.parse(revision.payload) : {} } catch { payload = {} }
+  const refs = keyframeRefs(revision.keyframeMediaRefs)
+  const gate = evaluateSceneDetectReviewGate({
+    status: payload.status === 'keep' || payload.status === 'discard' ? payload.status : 'pending',
+    needsReview: Boolean(shot.needsReview),
+    revisionState: revision.lifecycleState,
+    sourceRevision: Number(revision.sourceRevision),
+    currentSourceRevision: Number(shot.remakeProject.currentSource.sourceRevision),
+    keyframeMediaRefs: refs,
+  })
+  if (!gate.promptEligible) throw new Error('REMAKE_PROMPT_INPUT_STALE')
   return promptInputSnapshotSchema.parse({
     projectId: input.projectId,
     remakeProjectId: shot.remakeProject.id,
@@ -62,7 +75,7 @@ async function currentInput(tx: Client, input: { projectId: string; shotId: stri
     sourceRevision: Number(shot.remakeProject.currentSource.sourceRevision),
     shotRevision: Number(revision.revision),
     shotRevisionId: revision.id,
-    keyframeMediaRefs: keyframeRefs(revision.keyframeMediaRefs),
+    keyframeMediaRefs: refs,
   })
 }
 
@@ -95,6 +108,7 @@ export async function appendPromptVersion(input: {
 }) {
   const targetKey = promptTargetKeySchema.parse(input.targetKey)
   const snapshot = promptInputSnapshotSchema.parse(input.inputSnapshot)
+  if (snapshot.projectId !== input.projectId || snapshot.shotId !== input.shotId) throw new Error('REMAKE_PROMPT_INPUT_MISMATCH')
   const provenance = promptProvenanceSchema.parse(input.provenance ?? {})
   const analysis = parsePromptAnalysis(targetKey, input.content.parsedSections)
   const promptFields = targetKey === 'video'
@@ -139,18 +153,108 @@ export async function approveAndAdoptPromptVersion(input: { projectId: string; s
       where: { id: input.versionId },
       include: { track: true },
     })
-    if (!version || version.track.shotId !== input.shotId || version.track.remakeProject?.projectId === undefined) {
-      const track = version?.track
-      if (!track) throw new Error('REMAKE_PROMPT_VERSION_NOT_FOUND')
-    }
+    if (!version) throw new Error('REMAKE_PROMPT_VERSION_NOT_FOUND')
     const track = version.track
-    const project = await tx.remakeProject.findUnique({ where: { id: track.remakeProjectId }, select: { projectId: true } })
-    if (!project || project.projectId !== input.projectId || track.shotId !== input.shotId) throw new Error('REMAKE_PROMPT_ACCESS_DENIED')
+    const project = await tx.remakeProject.findUnique({ where: { id: track.remakeProjectId }, include: { project: { select: { id: true, userId: true } } } })
+    if (!project || project.projectId !== input.projectId || project.project.userId !== input.reviewerId || track.shotId !== input.shotId) throw new Error('REMAKE_PROMPT_ACCESS_DENIED')
     await assertPromptInputCurrent(tx, promptInputSnapshotSchema.parse(version.inputSnapshot))
     await tx.remakePromptVersion.update({ where: { id: version.id }, data: { status: 'approved', reviewerId: input.reviewerId, reviewedAt: new Date() } })
     return tx.remakePromptTrack.update({ where: { id: track.id }, data: { adoptedVersionId: version.id } })
   }
   return input.tx ? write(input.tx) : (prisma as Client).$transaction(write)
+}
+
+export async function persistImagePromptVersion(input: {
+  projectId: string
+  shotId: string
+  targetKey: Exclude<PromptTargetKey, 'video'>
+  inputSnapshot: PromptInputSnapshot
+  analysis: unknown
+  rawOutput?: string | null
+  provenance?: PromptProvenance
+}) {
+  return appendPromptVersion({
+    ...input,
+    content: {
+      parsedSections: input.analysis,
+      integratedGenerationPrompt: imagePromptAnalysisSchema.parse(input.analysis).integratedGenerationPrompt,
+      negativeConstraints: imagePromptAnalysisSchema.parse(input.analysis).negativeConstraints,
+      rawOutput: input.rawOutput,
+    },
+  })
+}
+
+type VideoPromptResult = {
+  stableShotId: string
+  analysis: unknown
+  rawOutput?: string | null
+}
+
+function assertExactStableShotSet(expectedStableShotIds: string[], results: VideoPromptResult[]) {
+  if (!expectedStableShotIds.length || expectedStableShotIds.length !== new Set(expectedStableShotIds).size) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
+  const actualStableShotIds = results.map((result) => result.stableShotId)
+  if (actualStableShotIds.length !== expectedStableShotIds.length || new Set(actualStableShotIds).size !== actualStableShotIds.length || actualStableShotIds.some((id) => !expectedStableShotIds.includes(id))) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
+}
+
+export async function persistVideoPromptRunAtomically(input: {
+  projectId: string
+  expectedStableShotIds: string[]
+  results: VideoPromptResult[]
+  provenance?: PromptProvenance
+  rawOutput?: string | null
+}) {
+  const provenance = promptProvenanceSchema.parse(input.provenance ?? {})
+  assertExactStableShotSet(input.expectedStableShotIds, input.results)
+  const parsedResults = input.results.map((result) => ({ ...result, analysis: videoPromptAnalysisSchema.parse(result.analysis) }))
+  if (input.rawOutput && Buffer.byteLength(input.rawOutput, 'utf8') > MAX_RAW_OUTPUT_BYTES) throw new Error('REMAKE_PROMPT_RAW_OUTPUT_TOO_LARGE')
+  return (prisma as Client).$transaction(async (tx: Client) => {
+    const remakeProject = await tx.remakeProject.findUnique({
+      where: { projectId: input.projectId },
+      include: { shots: { select: { id: true, stableKey: true } } },
+    })
+    if (!remakeProject) throw new Error('REMAKE_PROJECT_NOT_FOUND')
+    const shotsByStableKey = new Map<string, any>(remakeProject.shots.map((shot: any) => [shot.stableKey, shot]))
+    if (shotsByStableKey.size !== input.expectedStableShotIds.length || input.expectedStableShotIds.some((stableKey) => !shotsByStableKey.has(stableKey))) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
+    const snapshots = await Promise.all(parsedResults.map(async (result) => ({ result, snapshot: await currentInput(tx, { projectId: input.projectId, shotId: shotsByStableKey.get(result.stableShotId).id }) })))
+    const runFingerprint = createHash('sha256').update(stableJson(snapshots.map(({ snapshot }) => promptInputFingerprint(snapshot)))).digest('hex')
+    const run = await tx.remakePromptRun.create({
+      data: {
+        remakeProjectId: remakeProject.id,
+        taskId: provenance.taskId ?? null,
+        targetKey: 'video',
+        inputFingerprint: runFingerprint,
+        schemaVersion: provenance.schemaVersion ?? null,
+        modelVersion: provenance.modelVersion ?? null,
+        executorVersion: provenance.executorVersion ?? null,
+        rawOutput: input.rawOutput ?? null,
+      },
+    })
+    const versions = []
+    for (const { result, snapshot } of snapshots) {
+      versions.push(await appendPromptVersion({
+        projectId: input.projectId,
+        shotId: snapshot.shotId,
+        targetKey: 'video',
+        inputSnapshot: snapshot,
+        content: { parsedSections: result.analysis, integratedGenerationPrompt: result.analysis.coreEvent, rawOutput: result.rawOutput ?? null },
+        provenance,
+        runId: run.id,
+        tx,
+      }))
+    }
+    return { run, versions }
+  })
+}
+
+export async function invalidatePromptVersionsForShotRevision(input: { tx: Client; shotId: string; revisionId: string; reason: string }) {
+  const tracks = await input.tx.remakePromptTrack.findMany({
+    where: { shotId: input.shotId, adoptedVersionId: { not: null } },
+    select: { adoptedVersionId: true },
+  })
+  const data = tracks.flatMap((track: { adoptedVersionId: string | null }) => track.adoptedVersionId
+    ? [{ shotId: input.shotId, revisionId: input.revisionId, promptVersionId: track.adoptedVersionId, reason: input.reason, status: 'needs_review' }]
+    : [])
+  if (data.length) await input.tx.remakeInvalidation.createMany({ data })
 }
 
 export async function getPromptVersionHistory(input: { projectId: string; shotId: string; targetKey: PromptTargetKey }) {

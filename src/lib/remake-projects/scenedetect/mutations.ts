@@ -2,6 +2,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { parseSceneDetectInput, toSceneDetectProject, type SceneDetectProject, type SceneDetectShot } from './contracts'
+import { invalidatePromptVersionsForShotRevision } from '../prompt/service'
 
 type Row = Record<string, any>
 type Client = any
@@ -69,6 +70,7 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       await tx.remakeShot.update({ where: { id: row.id }, data: { sequence: incoming.shotNumber, currentRevision: nextRevision, version: { increment: 1 }, ...(hasOutputs || incoming.status !== 'pending' ? { needsReview: true, reviewStatus: 'needs_review' } : {}) } })
       nextVersions.set(String(row.id), Number(nextVersions.get(String(row.id)) ?? 0) + 1)
       if (hasOutputs) await tx.remakeInvalidation.createMany({ data: row.outputs.map((output: Row) => ({ shotId: row.id, revisionId: created.id, outputVersionId: output.id, reason: input.operationKey || 'native_mutation', status: 'needs_review' })) })
+      await invalidatePromptVersionsForShotRevision({ tx, shotId: row.id, revisionId: created.id, reason: input.operationKey || 'native_mutation' })
       revision = Math.max(revision, nextRevision)
     }
     for (const row of meta.shots ?? []) {
@@ -82,6 +84,7 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       await tx.remakeShot.update({ where: { id: row.id }, data: { currentRevision: nextRevision, version: { increment: 1 }, reviewStatus: 'needs_review', needsReview: true } })
       nextVersions.set(String(row.id), Number(nextVersions.get(String(row.id)) ?? 0) + 1)
       if (Array.isArray(row.outputs) && row.outputs.length) await tx.remakeInvalidation.createMany({ data: row.outputs.map((output: Row) => ({ shotId: row.id, revisionId: created.id, outputVersionId: output.id, reason: 'delete', status: 'needs_review' })) })
+      await invalidatePromptVersionsForShotRevision({ tx, shotId: row.id, revisionId: created.id, reason: 'delete' })
       revision = Math.max(revision, nextRevision)
     }
     if (!changed) return { changed: false, project, token: currentToken, idRemap: {}, revision: 0 }
