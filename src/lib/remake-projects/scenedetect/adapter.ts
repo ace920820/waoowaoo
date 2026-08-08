@@ -92,7 +92,7 @@ export async function commitSceneDetectImport(input: {
       const stableKey = createExternalShotKey(input.projectId, input.analysisId, shot.id)
       const row = await tx.remakeShot.upsert({
         where: { remakeProjectId_stableKey: { remakeProjectId: remakeProject.id, stableKey } },
-        create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: shot.id, sequence: shot.shotNumber },
+        create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: `${input.analysisId}:${shot.id}`, sequence: shot.shotNumber },
         update: { sequence: shot.shotNumber },
       })
       const latestRevision = tx.remakeShotRevision.findFirst
