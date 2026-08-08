@@ -18,6 +18,20 @@
 
 .scenedetect-stage-app > div { min-height: inherit; }
 
+.scenedetect-stage-loading {
+  display: grid;
+  min-height: inherit;
+  place-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  color: #c7cbd1;
+}
+
+.scenedetect-stage-loading span {
+  font-size: 13px;
+}
+
 .scenedetect-stage-disabled {
   display: grid;
   min-height: inherit;

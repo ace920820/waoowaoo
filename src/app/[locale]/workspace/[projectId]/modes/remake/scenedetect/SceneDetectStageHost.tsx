@@ -23,18 +23,40 @@ export function SceneDetectStageHost({
   enabled = false,
   availability = 'phase-6',
 }: SceneDetectStageHostProps) {
-  const [project, setProject] = useState(initialProject)
+  const [project, setProject] = useState<SceneDetectProject | null>(initialProject)
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ready'>('idle')
   const hostRef = useRef<HTMLElement>(null)
+
   useEffect(() => {
     if (!runtime || !enabled) return
     let active = true
-    void runtime.loadProject(projectId).then((loaded) => { if (active && loaded) setProject(loaded) }).catch(() => undefined)
-    return () => { active = false }
+    setLoadState('loading')
+    void runtime
+      .loadProject(projectId)
+      .then((loaded) => {
+        if (!active) return
+        setProject(loaded)
+        setLoadState('ready')
+      })
+      .catch(() => {
+        // 加载失败：保留 initialProject（可能为 null），仍允许 App 挂载以便排查
+        if (!active) return
+        setLoadState('ready')
+      })
+    return () => {
+      active = false
+    }
   }, [enabled, projectId, runtime])
+
   const canMount = enabled && Boolean(runtime)
+  // 等待服务端项目加载完成再挂载 canonical App：App 的 useState 只在首次渲染读取
+  // initialProject，若以 null 挂载，vendored createProject() 会用 crypto.randomUUID()
+  // 生成随机项目 ID，导致后续 analyze 请求打到不存在的 projectId（404）。
+  const mountReady = canMount && loadState === 'ready'
 
   return (
-    <section ref={hostRef}
+    <section
+      ref={hostRef}
       className="scenedetect-stage-root"
       data-project-id={projectId}
       data-stage-enabled={canMount ? 'true' : 'false'}
@@ -42,9 +64,20 @@ export function SceneDetectStageHost({
       aria-label="SceneDetect stage"
     >
       {canMount ? (
-        <div className="scenedetect-stage-app" data-testid="scenedetect-embedded-app">
-          <CanonicalSceneDetectEmbeddedApp embedded initialProject={project} runtime={runtime} />
-        </div>
+        mountReady ? (
+          <div className="scenedetect-stage-app" data-testid="scenedetect-embedded-app">
+            <CanonicalSceneDetectEmbeddedApp
+              key={projectId}
+              embedded
+              initialProject={project}
+              runtime={runtime}
+            />
+          </div>
+        ) : (
+          <div className="scenedetect-stage-loading" data-testid="scenedetect-stage-loading">
+            <span>正在加载项目…</span>
+          </div>
+        )
       ) : (
         <div className="scenedetect-stage-disabled" data-testid="scenedetect-stage-disabled">
           <strong>SceneDetect</strong>
