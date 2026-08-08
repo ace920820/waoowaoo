@@ -17,7 +17,7 @@ const prismaMock = vi.hoisted(() => ({
       remakeProject: {
         id: 'remake-meta-1',
         importStatus: 'not_imported',
-        source: null,
+        currentSource: null,
       },
     })),
   },
@@ -99,6 +99,13 @@ describe('remake project core', () => {
       shots: [],
       tasks: [],
     })
+    expect(prismaMock.project.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        remakeProject: expect.objectContaining({
+          include: expect.objectContaining({ currentSource: true }),
+        }),
+      }),
+    }))
   })
 
   it('records a new revision and marks affected outputs for review without auto-approval', async () => {
