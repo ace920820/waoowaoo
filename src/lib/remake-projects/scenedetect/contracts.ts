@@ -76,14 +76,22 @@ const projectShape = z.object({
 }).passthrough()
 
 function assertFrameBounds(project: SceneDetectProject): SceneDetectProject {
+  const seenIds = new Set<string>()
+  let previousShot: SceneDetectShot | undefined
   for (const shot of project.shots) {
+    if (seenIds.has(shot.id)) throw new Error('SCENEDETECT_SHOT_ORDER_INVALID')
+    seenIds.add(shot.id)
     if (shot.rawStartFrame > shot.rawEndFrame || shot.startFrame > shot.endFrame || shot.endFrame >= project.source.totalFrames) {
-      throw new Error(`Invalid frame range for shot ${shot.id}`)
+      throw new Error('SCENEDETECT_FRAME_RANGE_INVALID')
+    }
+    if (previousShot && (shot.shotNumber <= previousShot.shotNumber || shot.startFrame <= previousShot.endFrame)) {
+      throw new Error('SCENEDETECT_SHOT_ORDER_INVALID')
     }
     const keyframes = shot.keyframeFrames
     if (keyframes && (keyframes.first < shot.startFrame || keyframes.middle < shot.startFrame || keyframes.last > shot.endFrame)) {
-      throw new Error(`Invalid keyframe range for shot ${shot.id}`)
+      throw new Error('SCENEDETECT_KEYFRAME_RANGE_INVALID')
     }
+    previousShot = shot
   }
   return project
 }
