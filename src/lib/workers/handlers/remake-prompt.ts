@@ -22,6 +22,10 @@ function targetKeyForSlot(slot: RemakePromptImageTaskPayload['slot']): Exclude<P
   return `image:${slot}` as Exclude<PromptTargetKey, 'video'>
 }
 
+function frameRefKeyForSlot(slot: RemakePromptImageTaskPayload['slot']) {
+  return slot === 'start' ? 'first' : slot === 'end' ? 'last' : 'middle'
+}
+
 function parseRevision(row: Row): Row {
   let payload: Row = {}
   try { payload = row.payload ? JSON.parse(String(row.payload)) : {} } catch { /* stale data is rejected by the service */ }
@@ -60,7 +64,7 @@ export async function handleRemakeImagePromptTask(job: Job<TaskJobData>) {
   const snapshot = payload.inputSnapshot
   const shot = await findShot(job, snapshot)
   const revision = parseRevision(shot.revisions.find((row: Row) => Number(row.revision) === snapshot.shotRevision))
-  const key = mediaKey(String(revision.refs[payload.slot] || ''))
+  const key = mediaKey(String(revision.refs[frameRefKeyForSlot(payload.slot)] || ''))
   await assertTaskActive(job, 'before_prompt_cli')
   await reportTaskProgress(job, 20, { stage: 'source-read', displayMode: 'detail' })
   const bytes = await getObjectBuffer(key)

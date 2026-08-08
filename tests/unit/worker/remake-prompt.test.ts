@@ -51,6 +51,10 @@ describe('remake prompt Codex executor', () => {
     expect(() => parseCodexJsonl(`{"type":"final","result":${JSON.stringify(imageAnalysis)}}\n{"type":"final","result":${JSON.stringify(imageAnalysis)}}`, 'image:start')).toThrow('CODEX_FINAL_RESULT_MISSING')
   })
 
+  it('keeps the image result contract independent from frame-slot labels', () => {
+    expect(parseCodexJsonl(JSON.stringify({ type: 'final', result: imageAnalysis }), 'image:end').result).toEqual(imageAnalysis)
+  })
+
   it('redacts URLs, absolute paths, and secret-looking values before errors project outward', () => {
     const redacted = redactCodexOutput('https://bucket.example/file?X-Amz-Signature=abc /Users/name/private api_key=super-secret')
     expect(redacted).not.toContain('bucket.example')
