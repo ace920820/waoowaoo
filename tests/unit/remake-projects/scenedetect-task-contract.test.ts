@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSceneDetectExecutor } from '@/lib/remake-projects/scenedetect/executor'
-import { buildSceneDetectTaskDescriptor, taskStatusToSceneDetectCallback } from '@/lib/remake-projects/scenedetect/task-contract'
+import { buildSceneDetectTaskDescriptor, parseSceneDetectTaskPayload, taskStatusToSceneDetectCallback } from '@/lib/remake-projects/scenedetect/task-contract'
+import { normalizeTaskPayload } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
 
 describe('SceneDetect task contract', () => {
   it('dedupes the same project/source/shot revision and operation key', () => {
@@ -24,5 +26,26 @@ describe('SceneDetect task contract', () => {
     await executor.submitExtractKeyframes({ projectId: 'p1', sourceRevision: 1, shotRevision: 1, adapterVersion: 'v1', operationKey: 'op2' })
     expect(submit).toHaveBeenCalledTimes(2)
     expect(submit.mock.calls[0]?.[0]).toMatchObject({ targetType: 'remake_project' })
+  })
+
+  it('accepts run-runtime flow metadata but rejects unknown worker payload fields', () => {
+    const normalized = normalizeTaskPayload(TASK_TYPE.SCENEDETECT_ANALYZE, {
+      sourceRevision: 1,
+      shotRevision: null,
+      operationKey: 'analyze-source',
+      operation: 'analyze',
+      detector: 'content',
+      threshold: 27,
+    })
+
+    expect(parseSceneDetectTaskPayload(normalized)).toMatchObject({
+      sourceRevision: 1,
+      shotRevision: null,
+      operationKey: 'analyze-source',
+      operation: 'analyze',
+      detector: 'content',
+      threshold: 27,
+    })
+    expect(() => parseSceneDetectTaskPayload({ ...normalized, unexpected: true })).toThrow('SCENEDETECT_TASK_FIELD_NOT_ALLOWED:unexpected')
   })
 })

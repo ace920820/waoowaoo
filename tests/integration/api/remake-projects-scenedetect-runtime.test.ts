@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 
 const authMock = vi.hoisted(() => ({ requireProjectAuthLight: vi.fn(async () => ({ session: { user: { id: 'user-1' } }, project: { id: 'p1', userId: 'user-1', type: 'remake' } })), isErrorResponse: vi.fn((value: unknown) => value instanceof Response) }))
 const prismaMock = vi.hoisted(() => ({ project: { findUnique: vi.fn(async () => ({ type: 'remake', remakeProject: { currentSource: { sourceRevision: 3, status: 'uploaded_pending' } } })) }, remakeProject: { findUnique: vi.fn() } }))
-const executorMock = vi.hoisted(() => ({ submitAnalyze: vi.fn(async () => ({ task: { id: 'task-1' } })) }))
+const executorMock = vi.hoisted(() => ({ submitAnalyze: vi.fn(async () => ({ taskId: 'task-1' })) }))
 const serviceMock = vi.hoisted(() => ({ getRemakeProjectSnapshot: vi.fn(async () => ({ project: { id: 'p1', name: 'Demo' }, source: { status: 'not_imported', mediaId: null, sourceRevision: null, metadata: null }, shots: [], tasks: [] })) }))
 
 vi.mock('@/lib/api-auth', () => authMock)
@@ -19,6 +19,7 @@ describe('SceneDetect runtime APIs', () => {
     const request = new NextRequest('http://localhost/api/remake-projects/p1/scenedetect/analyze', { method: 'POST', body: JSON.stringify({ operationKey: 'double-click', threshold: 27 }), headers: { 'content-type': 'application/json' } })
     const response = await POST(request, { params: Promise.resolve({ projectId: 'p1' }) })
     expect(response.status).toBe(202)
+    expect(await response.json()).toEqual({ taskId: 'task-1', sourceRevision: 3, operationKey: 'double-click' })
     expect(executorMock.submitAnalyze).toHaveBeenCalledWith(expect.objectContaining({ sourceRevision: 3, operationKey: 'double-click', threshold: 27 }))
   })
 
