@@ -4,6 +4,18 @@ import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
 
 type Row = Record<string, unknown>
 
+function parseObject(value: unknown): Row {
+  if (!value) return {}
+  if (typeof value === 'object' && !Array.isArray(value)) return value as Row
+  try { return JSON.parse(String(value)) as Row } catch { return {} }
+}
+
+function mediaUrl(projectId: string, mediaId: unknown): string | null {
+  return typeof mediaId === 'string' && mediaId.trim()
+    ? `/api/remake-projects/${encodeURIComponent(projectId)}/scenedetect/media/${encodeURIComponent(mediaId)}`
+    : null
+}
+
 type RemakeClient = {
   project: {
     findFirst: (args: unknown) => Promise<Row | null>
@@ -64,7 +76,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   const client = remakeClient()
   const project = await client.project.findUnique({
     where: { id: input.projectId },
-    include: { remakeProject: { include: { currentSource: true, shots: { include: { revisions: true, provenance: true }, orderBy: [{ sequence: 'asc' }, { id: 'asc' }] } } } },
+    include: { remakeProject: { include: { currentSource: true, shots: { include: { revisions: true, provenance: true, promptTracks: { include: { versions: { orderBy: { versionNumber: 'desc' } } } } }, orderBy: [{ sequence: 'asc' }, { id: 'asc' }] } } } },
   })
   if (!project) return null
   const projectRow = project as Row
@@ -82,6 +94,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       return {
         status: current?.status ?? remake?.importStatus ?? 'not_imported',
         mediaId: current?.mediaId ?? null,
+        mediaUrl: mediaUrl(input.projectId, current?.mediaId),
         ...(current ? {
           sourceRevision: current.sourceRevision ?? null,
           metadata: current.probeMetadata ? (typeof current.probeMetadata === 'string' ? JSON.parse(current.probeMetadata) : current.probeMetadata) : null,
@@ -91,8 +104,8 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
     shots: ((remake?.shots as Row[] | undefined) ?? []).map((shot) => {
       const revisions = ((shot.revisions as Row[] | undefined) ?? [])
       const current = revisions.find((revision) => Number(revision.revision) === Number(shot.currentRevision)) ?? revisions.find((revision) => revision.lifecycleState === 'active')
-      const payload = (() => { try { return current?.payload ? JSON.parse(String(current.payload)) as Row : {} } catch { return {} } })()
-      const refs = (() => { try { return current?.keyframeMediaRefs ? JSON.parse(String(current.keyframeMediaRefs)) as Row : {} } catch { return {} } })()
+      const payload = parseObject(current?.payload)
+      const refs = parseObject(current?.keyframeMediaRefs)
       const review = evaluateSceneDetectReviewGate({
         status: payload.status === 'keep' || payload.status === 'discard' ? payload.status : 'pending', needsReview: Boolean(shot.needsReview),
         revisionState: typeof current?.lifecycleState === 'string' ? current.lifecycleState : null,
@@ -109,6 +122,26 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       currentRevision: shot.currentRevision ?? null,
       version: shot.version ?? 0,
       review,
+      timeRange: {
+        start: payload.startTimecode ?? payload.startTime ?? null,
+        end: payload.endTimecode ?? payload.endTime ?? null,
+      },
+      keyframes: Object.fromEntries(['start', 'middle', 'end'].map((slot) => {
+        const mediaId = refs[slot === 'start' ? 'first' : slot === 'end' ? 'last' : 'middle'] ?? null
+        return [slot, { mediaId, mediaUrl: mediaUrl(input.projectId, mediaId) }]
+      })),
+      promptTracks: ((shot.promptTracks as Row[] | undefined) ?? []).map((track) => {
+        const versions = (track.versions as Row[] | undefined) ?? []
+        const latest = versions[0]
+        const adopted = versions.find((version) => version.id === track.adoptedVersionId)
+        return {
+          id: track.id,
+          targetKey: track.targetKey,
+          latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt ? 'needs_review' : latest.status } : null,
+          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status } : null,
+          needsReview: versions.some((version) => Boolean(version.invalidatedAt)),
+        }
+      }),
       revisions: revisions.map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
       provenance: ((shot.provenance as Row[] | undefined) ?? []).map((record) => ({ id: record.id, schema: record.schema, executor: record.executor, capability: record.capability, payload: record.payload ?? null })),
     }}),

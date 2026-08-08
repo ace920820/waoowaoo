@@ -157,6 +157,7 @@ export async function approveAndAdoptPromptVersion(input: { projectId: string; s
     const track = version.track
     const project = await tx.remakeProject.findUnique({ where: { id: track.remakeProjectId }, include: { project: { select: { id: true, userId: true } } } })
     if (!project || project.projectId !== input.projectId || project.project.userId !== input.reviewerId || track.shotId !== input.shotId) throw new Error('REMAKE_PROMPT_ACCESS_DENIED')
+    if (version.invalidatedAt || version.status === 'invalidated') throw new Error('REMAKE_PROMPT_INPUT_STALE')
     await assertPromptInputCurrent(tx, promptInputSnapshotSchema.parse(version.inputSnapshot))
     await tx.remakePromptVersion.update({ where: { id: version.id }, data: { status: 'approved', reviewerId: input.reviewerId, reviewedAt: new Date() } })
     return tx.remakePromptTrack.update({ where: { id: track.id }, data: { adoptedVersionId: version.id } })
@@ -262,6 +263,118 @@ export async function getPromptVersionHistory(input: { projectId: string; shotId
   return (prisma as Client).remakePromptVersion.findMany({
     where: { track: { shotId: input.shotId, targetKey, remakeProject: { projectId: input.projectId } } },
     orderBy: { versionNumber: 'desc' },
+  })
+}
+
+type PromptVersionRow = {
+  id: string
+  versionNumber: number
+  status: string
+  runId: string | null
+  integratedGenerationPrompt: string
+  negativeConstraints: unknown
+  parsedSections: unknown
+  rawOutput: string | null
+  inputSnapshot: unknown
+  createdAt: Date
+  skillVersion: string | null
+  schemaVersion: string | null
+  modelVersion: string | null
+  executorVersion: string | null
+  taskId: string | null
+  invalidatedAt: Date | null
+}
+
+function sanitizeRawOutput(rawOutput: string | null): string | null {
+  if (!rawOutput) return null
+  return rawOutput
+    .split('\n')
+    .filter((line) => !/(?:storage[_-]?key|cli[_ -]?command|\bstderr\b|\benvironment\b|\benv\b)/i.test(line))
+    .join('\n')
+    .slice(0, MAX_RAW_OUTPUT_BYTES)
+}
+
+function promptVersionSummary(version: PromptVersionRow, adoptedVersionId: string | null) {
+  return {
+    id: version.id,
+    versionNumber: version.versionNumber,
+    source: version.runId ? 'automated' as const : 'human' as const,
+    reviewStatus: version.invalidatedAt ? 'needs_review' : version.status,
+    isAdopted: version.id === adoptedVersionId,
+    coreText: version.integratedGenerationPrompt,
+    negativeConstraints: Array.isArray(version.negativeConstraints) ? version.negativeConstraints.filter((item): item is string => typeof item === 'string') : [],
+    createdAt: version.createdAt.toISOString(),
+    provenance: {
+      taskId: version.taskId,
+      skillVersion: version.skillVersion,
+      schemaVersion: version.schemaVersion,
+      modelVersion: version.modelVersion,
+      executorVersion: version.executorVersion,
+    },
+  }
+}
+
+function promptVersionFull(version: PromptVersionRow, adoptedVersionId: string | null) {
+  return {
+    ...promptVersionSummary(version, adoptedVersionId),
+    parsedOutput: version.parsedSections,
+    rawOutput: sanitizeRawOutput(version.rawOutput),
+  }
+}
+
+export async function getPromptTrackDetail(input: { projectId: string; userId: string; trackId: string; versionIds?: string[] }) {
+  const versionIds = [...new Set(input.versionIds ?? [])]
+  if (versionIds.length > 2) throw new Error('REMAKE_PROMPT_VERSION_SELECTION_INVALID')
+  const track = await (prisma as Client).remakePromptTrack.findFirst({
+    where: { id: input.trackId, remakeProject: { projectId: input.projectId, project: { userId: input.userId } } },
+    include: { versions: { orderBy: { versionNumber: 'desc' } } },
+  }) as { id: string; shotId: string; targetKey: PromptTargetKey; adoptedVersionId: string | null; versions: PromptVersionRow[] } | null
+  if (!track) return null
+  const selectedById = new Map(track.versions.map((version) => [version.id, version]))
+  const selected = versionIds.map((id) => selectedById.get(id)).filter((version): version is PromptVersionRow => Boolean(version))
+  if (selected.length !== versionIds.length) return null
+  const latest = track.versions[0] ?? null
+  return {
+    track: {
+      id: track.id,
+      shotId: track.shotId,
+      targetKey: track.targetKey,
+      latestVersion: latest?.versionNumber ?? null,
+      adoptedVersion: track.versions.find((version) => version.id === track.adoptedVersionId)?.versionNumber ?? null,
+      needsReview: track.versions.some((version) => Boolean(version.invalidatedAt)),
+    },
+    history: track.versions.map((version) => promptVersionSummary(version, track.adoptedVersionId)),
+    selected: selected.map((version) => promptVersionFull(version, track.adoptedVersionId)),
+  }
+}
+
+export async function savePromptHumanEdit(input: {
+  projectId: string
+  userId: string
+  trackId: string
+  sourceVersionId?: string
+  coreText: string
+  negativeConstraints?: string[]
+}) {
+  const track = await (prisma as Client).remakePromptTrack.findFirst({
+    where: { id: input.trackId, remakeProject: { projectId: input.projectId, project: { userId: input.userId } } },
+    include: { versions: { orderBy: { versionNumber: 'desc' } } },
+  }) as { id: string; shotId: string; targetKey: PromptTargetKey; versions: PromptVersionRow[] } | null
+  if (!track) throw new Error('REMAKE_PROMPT_VERSION_NOT_FOUND')
+  const source = input.sourceVersionId
+    ? track.versions.find((version) => version.id === input.sourceVersionId)
+    : track.versions[0]
+  if (!source || source.invalidatedAt) throw new Error('REMAKE_PROMPT_INPUT_STALE')
+  const parsed = parsePromptAnalysis(track.targetKey, source.parsedSections)
+  const analysis = track.targetKey === 'video'
+    ? { ...videoPromptAnalysisSchema.parse(parsed), coreEvent: input.coreText }
+    : { ...imagePromptAnalysisSchema.parse(parsed), integratedGenerationPrompt: input.coreText, negativeConstraints: input.negativeConstraints ?? imagePromptAnalysisSchema.parse(parsed).negativeConstraints }
+  return appendPromptVersion({
+    projectId: input.projectId,
+    shotId: track.shotId,
+    targetKey: track.targetKey,
+    inputSnapshot: promptInputSnapshotSchema.parse(source.inputSnapshot),
+    content: { parsedSections: analysis, integratedGenerationPrompt: input.coreText, negativeConstraints: input.negativeConstraints, rawOutput: null },
   })
 }
 

@@ -95,7 +95,7 @@ describe('remake project core', () => {
 
     await expect(getRemakeProjectSnapshot({ projectId: 'remake-project-1', userId: 'user-1' })).resolves.toEqual({
       project: expect.objectContaining({ id: 'remake-project-1', type: 'remake' }),
-      source: { status: 'not_imported', mediaId: null },
+      source: { status: 'not_imported', mediaId: null, mediaUrl: null },
       shots: [],
       tasks: [],
     })
