@@ -5,6 +5,7 @@ export type SceneDetectTaskInput = {
   projectId: string
   sourceRevision: number
   shotRevision?: number | null
+  shotId?: string
   adapterVersion: string
   operationKey: string
   operation: SceneDetectOperation
@@ -32,9 +33,9 @@ export function buildSceneDetectTaskDescriptor(input: SceneDetectTaskInput) {
   }
 }
 
-export function parseSceneDetectTaskPayload(payload: unknown): Pick<SceneDetectTaskInput, 'detector' | 'threshold' | 'frameTuple' | 'sourceRevision' | 'shotRevision' | 'operationKey' | 'operation'> {
+export function parseSceneDetectTaskPayload(payload: unknown): Pick<SceneDetectTaskInput, 'detector' | 'threshold' | 'frameTuple' | 'sourceRevision' | 'shotRevision' | 'shotId' | 'operationKey' | 'operation'> {
   const value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {}
-  const allowed = new Set(['detector', 'threshold', 'frameTuple', 'sourceRevision', 'shotRevision', 'operationKey', 'operation'])
+  const allowed = new Set(['detector', 'threshold', 'frameTuple', 'sourceRevision', 'shotRevision', 'shotId', 'operationKey', 'operation'])
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`SCENEDETECT_TASK_FIELD_NOT_ALLOWED:${key}`)
   const operation = value.operation
   if (operation !== 'analyze' && operation !== 'extract_keyframes') throw new Error('SCENEDETECT_OPERATION_INVALID')
@@ -56,7 +57,8 @@ export function parseSceneDetectTaskPayload(payload: unknown): Pick<SceneDetectT
     if (!['first', 'middle', 'last'].every((k) => Number.isSafeInteger(t[k]) && (t[k] as number) >= 0)) throw new Error('SCENEDETECT_FRAME_TUPLE_INVALID')
     frameTuple = { first: t.first as number, middle: t.middle as number, last: t.last as number }
   }
-  return { operation: operation as SceneDetectOperation, sourceRevision: sourceRevision as number, shotRevision: shotRevision as number | null, operationKey: operationKey.trim(), ...(detector ? { detector: detector as 'content' } : {}), ...(threshold !== undefined ? { threshold: threshold as number } : {}), ...(frameTuple ? { frameTuple } : {}) }
+  const shotId = typeof value.shotId === 'string' && value.shotId.trim() ? value.shotId.trim() : undefined
+  return { operation: operation as SceneDetectOperation, sourceRevision: sourceRevision as number, shotRevision: shotRevision as number | null, operationKey: operationKey.trim(), ...(shotId ? { shotId } : {}), ...(detector ? { detector: detector as 'content' } : {}), ...(threshold !== undefined ? { threshold: threshold as number } : {}), ...(frameTuple ? { frameTuple } : {}) }
 }
 
 export type SceneDetectCallback =

@@ -19,6 +19,7 @@ export function createSceneDetectExecutor(options: { userId: string; locale: Loc
         adapterVersion: input.adapterVersion,
         sourceRevision: input.sourceRevision,
         shotRevision: input.shotRevision ?? null,
+        ...(input.shotId ? { shotId: input.shotId } : {}),
         operationKey: input.operationKey,
         operation: input.operation,
         ...(input.detector ? { detector: input.detector } : {}),

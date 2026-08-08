@@ -4,6 +4,7 @@ import { getObjectBuffer } from '@/lib/storage'
 import { commitSceneDetectImport } from '@/lib/remake-projects/scenedetect/adapter'
 import { createSceneDetectExecutorClient } from '@/lib/remake-projects/scenedetect/executor-client'
 import { parseSceneDetectTaskPayload } from '@/lib/remake-projects/scenedetect/task-contract'
+import { persistSceneDetectKeyframeResult } from '@/lib/remake-projects/scenedetect/keyframes'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 
@@ -33,9 +34,11 @@ export async function handleSceneDetectTask(job: Job<TaskJobData>) {
   const bytes = await getObjectBuffer(String(source.storageKey))
   await reportTaskProgress(job, 30, { stage: 'executor-call', displayMode: 'indeterminate' })
   const executor = createSceneDetectExecutorClient()
-  const response = await executor.execute({ operation: payload.operation, source: bytes, fileName: String(source.fileName || 'source.mp4'), threshold: payload.threshold, shots: payload.frameTuple ? [{ shotNumber: 1, startFrame: payload.frameTuple.first, endFrame: payload.frameTuple.last, keyframeFrames: payload.frameTuple }] : [] })
+  const response = await executor.execute({ operation: payload.operation, source: bytes, fileName: String(source.fileName || 'source.mp4'), threshold: payload.threshold, shots: payload.frameTuple ? [{ id: payload.shotId, shotNumber: 1, startFrame: payload.frameTuple.first, endFrame: payload.frameTuple.last, keyframeFrames: payload.frameTuple }] : [] })
   await reportTaskProgress(job, 70, { stage: 'import', displayMode: 'detail' })
   const envelope = { resultVersion: '1.0', adapterVersion: 'scenedetect-adapter@1.0', executorVersion: 'scenedetect-executor@1.0', analysisId: String(response.analysisId), sourceRevision: payload.sourceRevision, operationKey: payload.operationKey, payload: projectPayload({ projectId: job.data.projectId, source, response, threshold: payload.threshold || Number(response.threshold || 27) }), provenance: { mode: 'executor_result' as const } }
-  const imported = await commitSceneDetectImport({ projectId: job.data.projectId, userId: job.data.userId, analysisId: String(response.analysisId), operationKey: payload.operationKey, payload: envelope })
+  const imported = payload.operation === 'extract_keyframes'
+    ? await persistSceneDetectKeyframeResult({ projectId: job.data.projectId, userId: job.data.userId, sourceRevision: payload.sourceRevision, shotRevision: Number(payload.shotRevision), shotId: String(payload.shotId || ''), taskId: String(job.id), response })
+    : await commitSceneDetectImport({ projectId: job.data.projectId, userId: job.data.userId, analysisId: String(response.analysisId), operationKey: payload.operationKey, payload: envelope })
   return { operation: payload.operation, sourceRevision: payload.sourceRevision, analysisId: String(response.analysisId), imported }
 }

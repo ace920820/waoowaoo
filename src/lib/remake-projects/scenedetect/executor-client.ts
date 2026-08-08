@@ -19,6 +19,12 @@ function config() {
   return { baseUrl: parsed.toString().replace(/\/$/, '') }
 }
 
+/** Converts only executor-produced relative media paths into a controlled worker URL. */
+export function sceneDetectExecutorMediaUrl(path: string): string {
+  if (!path.startsWith('/media/')) throw new SceneDetectExecutorError('SCENEDETECT_EXECUTOR_MEDIA_PATH_INVALID')
+  return `${config().baseUrl}${path}`
+}
+
 async function fetchJson(url: string, init: RequestInit, timeoutMs: number, maxBytes = MAX_RESPONSE_BYTES) {
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
