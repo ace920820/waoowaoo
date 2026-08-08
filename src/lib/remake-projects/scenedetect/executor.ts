@@ -15,8 +15,6 @@ export function createSceneDetectExecutor(options: { userId: string; locale: Loc
       targetId: input.projectId,
       dedupeKey: descriptor.dedupeKey,
       payload: {
-        capability: descriptor.capability,
-        adapterVersion: input.adapterVersion,
         sourceRevision: input.sourceRevision,
         shotRevision: input.shotRevision ?? null,
         ...(input.shotId ? { shotId: input.shotId } : {}),

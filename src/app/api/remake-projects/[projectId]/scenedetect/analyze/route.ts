@@ -35,8 +35,8 @@ export const POST = apiHandler(async (request: NextRequest, context: { params: P
     detector: 'content',
     ...(body.data.threshold === undefined ? {} : { threshold: body.data.threshold }),
   })
-  const task = (submitted as { task?: { id?: string }; id?: string })
-  const taskId = task.task?.id || task.id
+  // submitTask 返回结构为 { taskId: string, ... }（无嵌套 task 对象）
+  const taskId = (submitted as { taskId?: string }).taskId
   if (!taskId) throw new ApiError('INTERNAL_ERROR')
   return NextResponse.json({ taskId, sourceRevision: source.sourceRevision, operationKey: body.data.operationKey }, { status: 202 })
 })
