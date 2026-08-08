@@ -46,6 +46,10 @@ describe('SceneDetect task contract', () => {
       detector: 'content',
       threshold: 27,
     })
+    expect(parseSceneDetectTaskPayload({ ...normalized, runId: 'run-1' })).toMatchObject({
+      operation: 'analyze',
+      sourceRevision: 1,
+    })
     expect(() => parseSceneDetectTaskPayload({ ...normalized, unexpected: true })).toThrow('SCENEDETECT_TASK_FIELD_NOT_ALLOWED:unexpected')
   })
 })
