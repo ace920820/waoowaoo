@@ -83,6 +83,8 @@ export const TASK_TYPE = {
   SCENEDETECT_ANALYZE: 'scenedetect_analyze',
   SCENEDETECT_EXTRACT_KEYFRAMES: 'scenedetect_extract_keyframes',
   REMAKE_PROJECT_INITIALIZE: 'remake_project_initialize',
+  REMAKE_IMAGE_PROMPT_ANALYZE: 'remake_image_prompt_analyze',
+  REMAKE_VIDEO_PROMPT_ANALYZE: 'remake_video_prompt_analyze',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

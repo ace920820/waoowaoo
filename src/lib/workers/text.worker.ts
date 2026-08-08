@@ -38,6 +38,7 @@ import { handleShotAITask } from './handlers/shot-ai-tasks'
 import { handleCharacterProfileTask } from './handlers/character-profile'
 import { handleRemakeProjectInitializeTask } from './handlers/remake-project-initialize'
 import { handleSceneDetectTask } from './handlers/scenedetect'
+import { handleRemakeVideoPromptTask } from './handlers/remake-prompt'
 
 function readAssetKind(value: Record<string, unknown>): string {
   return typeof value.assetKind === 'string' ? value.assetKind : 'location'
@@ -704,6 +705,8 @@ async function processTextTask(job: Job<TaskJobData>) {
     case TASK_TYPE.SCENEDETECT_ANALYZE:
     case TASK_TYPE.SCENEDETECT_EXTRACT_KEYFRAMES:
       return await handleSceneDetectTask(job)
+    case TASK_TYPE.REMAKE_VIDEO_PROMPT_ANALYZE:
+      return await handleRemakeVideoPromptTask(job)
     default:
       throw new Error(`Unsupported text task type: ${job.data.type}`)
   }

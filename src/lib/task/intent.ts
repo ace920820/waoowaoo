@@ -67,6 +67,8 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.SCENEDETECT_ANALYZE]: 'analyze',
   [TASK_TYPE.SCENEDETECT_EXTRACT_KEYFRAMES]: 'process',
   [TASK_TYPE.REMAKE_PROJECT_INITIALIZE]: 'build',
+  [TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE]: 'analyze',
+  [TASK_TYPE.REMAKE_VIDEO_PROMPT_ANALYZE]: 'analyze',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {
