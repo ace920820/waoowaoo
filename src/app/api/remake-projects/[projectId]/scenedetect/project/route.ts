@@ -28,9 +28,10 @@ function addOpaqueMediaUrls(projectId: string, project: SceneDetectProject): Sce
     source: { ...project.source, videoUrl: project.source.videoUrl ? mediaUrl(projectId, project.source.videoUrl) : undefined },
     shots: project.shots.map((shot) => ({
       ...shot,
-      firstFrameUrl: mediaUrl(projectId, shot.mediaIds?.first),
-      middleFrameUrl: mediaUrl(projectId, shot.mediaIds?.middle),
-      lastFrameUrl: mediaUrl(projectId, shot.mediaIds?.last),
+      // opaque mediaId 机制存在时优先；否则保留平台存储 URL（payload.firstFrameUrl 等）
+      firstFrameUrl: shot.mediaIds?.first ? mediaUrl(projectId, shot.mediaIds.first) : shot.firstFrameUrl,
+      middleFrameUrl: shot.mediaIds?.middle ? mediaUrl(projectId, shot.mediaIds.middle) : shot.middleFrameUrl,
+      lastFrameUrl: shot.mediaIds?.last ? mediaUrl(projectId, shot.mediaIds.last) : shot.lastFrameUrl,
     })),
   }
 }
