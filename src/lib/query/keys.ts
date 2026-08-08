@@ -103,6 +103,8 @@ export const queryKeys = {
         project: (projectId: string) => ['remake-project', projectId] as const,
         snapshot: (projectId: string) => ['remake-project', projectId, 'snapshot'] as const,
         tasks: (projectId: string) => ['remake-project', projectId, 'tasks'] as const,
+        track: (projectId: string, trackId: string, versionIds: string[] = []) =>
+            ['remake-project', projectId, 'prompt-track', trackId, [...versionIds].sort().join(',')] as const,
     },
 
     // ============ 顶层便捷函数 ============
