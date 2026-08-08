@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID, createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { parseSceneDetectInput, toSceneDetectProject, type SceneDetectProject, type SceneDetectShot } from './contracts'
@@ -8,10 +9,6 @@ type Client = any
 export function projectConcurrencyToken(input: { sourceRevision?: number | null; shots: Array<{ id: string; currentRevision?: number | null; version?: number | null }> }): string {
   const value = JSON.stringify({ sourceRevision: input.sourceRevision ?? null, shots: input.shots.map((shot) => [shot.id, shot.currentRevision ?? null, shot.version ?? 0]) })
   return `scenedetect.v1.${createHash('sha256').update(value).digest('base64url')}`
-}
-
-function sanitizedShot(shot: SceneDetectShot) {
-  return { ...shot, firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: undefined }
 }
 
 function payloadFor(shot: SceneDetectShot) {

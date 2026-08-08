@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { createSceneDetectExecutor } from './executor'
