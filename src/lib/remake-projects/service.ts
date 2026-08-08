@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { TASK_TYPE } from '@/lib/task/types'
+import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
 
 type Row = Record<string, unknown>
 
@@ -87,7 +88,19 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         } : {}),
       }
     })(),
-    shots: ((remake?.shots as Row[] | undefined) ?? []).map((shot) => ({
+    shots: ((remake?.shots as Row[] | undefined) ?? []).map((shot) => {
+      const revisions = ((shot.revisions as Row[] | undefined) ?? [])
+      const current = revisions.find((revision) => Number(revision.revision) === Number(shot.currentRevision)) ?? revisions.find((revision) => revision.lifecycleState === 'active')
+      const payload = (() => { try { return current?.payload ? JSON.parse(String(current.payload)) as Row : {} } catch { return {} } })()
+      const refs = (() => { try { return current?.keyframeMediaRefs ? JSON.parse(String(current.keyframeMediaRefs)) as Row : {} } catch { return {} } })()
+      const review = evaluateSceneDetectReviewGate({
+        status: payload.status === 'keep' || payload.status === 'discard' ? payload.status : 'pending', needsReview: Boolean(shot.needsReview),
+        revisionState: typeof current?.lifecycleState === 'string' ? current.lifecycleState : null,
+        sourceRevision: typeof current?.sourceRevision === 'number' ? current.sourceRevision : null,
+        currentSourceRevision: typeof (remake?.currentSource as Row | undefined)?.sourceRevision === 'number' ? (remake?.currentSource as Row).sourceRevision as number : null,
+        keyframeMediaRefs: refs,
+      })
+      return {
       id: shot.id,
       stableKey: shot.stableKey,
       sequence: shot.sequence,
@@ -95,9 +108,10 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       needsReview: shot.needsReview,
       currentRevision: shot.currentRevision ?? null,
       version: shot.version ?? 0,
-      revisions: ((shot.revisions as Row[] | undefined) ?? []).map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
+      review,
+      revisions: revisions.map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
       provenance: ((shot.provenance as Row[] | undefined) ?? []).map((record) => ({ id: record.id, schema: record.schema, executor: record.executor, capability: record.capability, payload: record.payload ?? null })),
-    })),
+    }}),
     tasks,
   }
 }
