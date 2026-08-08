@@ -38,5 +38,8 @@
   "agent_skills": {},
   "resolve_model_ids": "omit",
   "mode": "interactive",
-  "granularity": "standard"
+  "granularity": "standard",
+  "planning_constraints": {
+    "max_waves_per_phase": 4
+  }
 }
