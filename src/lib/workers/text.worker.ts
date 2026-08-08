@@ -37,6 +37,7 @@ import { handleReferenceToCharacterTask } from './handlers/reference-to-characte
 import { handleShotAITask } from './handlers/shot-ai-tasks'
 import { handleCharacterProfileTask } from './handlers/character-profile'
 import { handleRemakeProjectInitializeTask } from './handlers/remake-project-initialize'
+import { handleSceneDetectTask } from './handlers/scenedetect'
 
 function readAssetKind(value: Record<string, unknown>): string {
   return typeof value.assetKind === 'string' ? value.assetKind : 'location'
@@ -700,6 +701,9 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleInsertPanelTask(job)
     case TASK_TYPE.REMAKE_PROJECT_INITIALIZE:
       return await handleRemakeProjectInitializeTask(job)
+    case TASK_TYPE.SCENEDETECT_ANALYZE:
+    case TASK_TYPE.SCENEDETECT_EXTRACT_KEYFRAMES:
+      return await handleSceneDetectTask(job)
     default:
       throw new Error(`Unsupported text task type: ${job.data.type}`)
   }
