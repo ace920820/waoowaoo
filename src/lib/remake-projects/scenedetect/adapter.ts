@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { extractStorageKey } from '@/lib/storage'
 import { createExternalShotKey } from './id-map'
 import { parseSceneDetectInput, type SceneDetectProject } from './contracts'
 import { parseSceneDetectResultEnvelope, wrapLegacySceneDetectProject } from './result-envelope'
@@ -22,20 +23,22 @@ function operationPayload(operationKey: string, project: SceneDetectProject) {
 
 function sanitizeProject(project: SceneDetectProject): SceneDetectProject {
   const source = { ...project.source, videoUrl: undefined }
+  // 媒体 URL 由 assertNoUntrustedMediaUrls 保证为平台存储 URL（storageKey 或 /api/files/...），写库时原样保留
   return {
     ...project,
     source,
-    shots: project.shots.map((shot) => ({
-      ...shot,
-      firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '',
-    })),
   }
 }
 
 function assertNoUntrustedMediaUrls(project: SceneDetectProject) {
   const values = [project.source.videoUrl, ...project.shots.flatMap((shot) => [shot.firstFrameUrl, shot.middleFrameUrl, shot.lastFrameUrl])]
-  if (values.some((value) => typeof value === 'string' && value.trim())) {
-    throw new Error('SCENEDETECT_UNTRUSTED_MEDIA_URL')
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      // 只信任平台存储 URL/storageKey（extractStorageKey 能识别）；外部 http(s) URL 一律拒绝
+      if (!extractStorageKey(value)) {
+        throw new Error('SCENEDETECT_UNTRUSTED_MEDIA_URL')
+      }
+    }
   }
 }
 
