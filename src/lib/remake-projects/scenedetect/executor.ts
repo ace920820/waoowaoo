@@ -14,7 +14,17 @@ export function createSceneDetectExecutor(options: { userId: string; locale: Loc
       targetType: 'remake_project',
       targetId: input.projectId,
       dedupeKey: descriptor.dedupeKey,
-      payload: { capability: descriptor.capability, adapterVersion: input.adapterVersion, sourceRevision: input.sourceRevision, shotRevision: input.shotRevision ?? null, operationKey: input.operationKey },
+      payload: {
+        capability: descriptor.capability,
+        adapterVersion: input.adapterVersion,
+        sourceRevision: input.sourceRevision,
+        shotRevision: input.shotRevision ?? null,
+        operationKey: input.operationKey,
+        operation: input.operation,
+        ...(input.detector ? { detector: input.detector } : {}),
+        ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
+        ...(input.frameTuple ? { frameTuple: input.frameTuple } : {}),
+      },
     })
   }
   return {

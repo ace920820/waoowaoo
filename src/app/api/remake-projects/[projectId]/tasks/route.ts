@@ -16,6 +16,20 @@ function toObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
+function safeErrorMessage(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  return value.replace(/https?:\/\/\S+/gi, '[redacted]').replace(/(?:\/|[A-Za-z]:\\)[^\s]+/g, '[redacted]').slice(0, 240)
+}
+
+function resultIds(value: unknown): Record<string, string> {
+  const result = toObject(value)
+  const ids: Record<string, string> = {}
+  for (const key of ['analysisId', 'resultId', 'sourceRevisionId', 'shotRevisionId', 'mediaId']) {
+    if (typeof result[key] === 'string' && result[key].trim()) ids[key] = result[key]
+  }
+  return ids
+}
+
 export const GET = apiHandler(async (request: NextRequest, context: { params: Promise<{ projectId: string }> }) => {
   const auth = await requireUserAuth()
   if (isErrorResponse(auth)) return auth
@@ -31,8 +45,13 @@ export const GET = apiHandler(async (request: NextRequest, context: { params: Pr
     return {
       taskId: task.id,
       displayStatus: displayStatus(task.status),
+      status: task.status,
+      progress: typeof task.progress === 'number' ? Math.max(0, Math.min(100, task.progress)) : 0,
       capability: typeof payload.capability === 'string' ? payload.capability : task.type,
       attempt: task.attempt,
+      maxAttempts: task.maxAttempts ?? null,
+      resultIds: resultIds(task.result),
+      stage: typeof payload.stage === 'string' ? payload.stage : null,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       runId: typeof payload.runId === 'string' ? payload.runId : null,
@@ -41,7 +60,7 @@ export const GET = apiHandler(async (request: NextRequest, context: { params: Pr
         schema: typeof provenance.schema === 'string' ? provenance.schema : null,
         executor: typeof provenance.executor === 'string' ? provenance.executor : null,
       },
-      error: task.errorCode || task.errorMessage ? { code: task.errorCode, message: task.errorMessage || 'Task failed' } : null,
+      error: task.errorCode || task.errorMessage ? { code: typeof task.errorCode === 'string' ? task.errorCode : 'TASK_FAILED', message: safeErrorMessage(task.errorMessage) || 'Task failed' } : null,
       reviewStatus: 'independent',
     }
   }) })
