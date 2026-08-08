@@ -20,7 +20,18 @@ function projectPayload(input: { projectId: string; source: Record<string, unkno
     source: { fileName: input.source.fileName || metadata.name || 'source.mp4', size: Number(metadata.size || 0), duration: Number(metadata.duration || 0), fps: Number(metadata.fps || 0), width: Number(metadata.width || 1), height: Number(metadata.height || 1), totalFrames: Number(metadata.totalFrames || 1) },
     analysis: { detector: 'pySceneDetect', detectorType: 'content', threshold: input.threshold, analyzedAt: new Date().toISOString(), status: 'analyzed_review' },
     view: { currentFrame: 0, activeShotId: null },
-    shots: shots.map((shot, index) => ({ id: String((shot as Record<string, unknown>).id || `scene-${index + 1}`), ...shot, keyframeSource: 'AI', status: 'pending', modifiedSource: 'AI', tags: Array.isArray((shot as Record<string, unknown>).tags) ? (shot as Record<string, unknown>).tags : [], notes: String((shot as Record<string, unknown>).notes || '') })),
+    shots: shots.map((shot, index) => {
+      const s = shot as Record<string, unknown>
+      return {
+        ...s,
+        id: String(s.id || `scene-${index + 1}`),
+        // 媒体 URL 不随导入 payload 携带（平台自有存储；adapter 拒绝 untrusted media url）
+        firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '',
+        keyframeSource: 'AI', status: 'pending', modifiedSource: 'AI',
+        tags: Array.isArray(s.tags) ? s.tags : [],
+        notes: String(s.notes || ''),
+      }
+    }),
   }
 }
 
