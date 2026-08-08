@@ -133,14 +133,24 @@ export function parseSceneDetectInput(input: unknown, options: { legacyMode?: bo
 
 type Snapshot = {
   project: { id: string; name: string }
-  source: { metadata?: SceneDetectProject['source'] | null }
-  shots: Array<{ id: string; stableKey: string; sequence: number | null; revisions?: Array<{ revision?: number; lifecycleState?: string; payload?: string | null }>; provenance?: Array<{ payload?: string | null }> }>
+  source: { metadata?: SceneDetectProject['source'] | null; sourceRevision?: number | null }
+  shots: Array<{ id: string; stableKey: string; sequence: number | null; revisions?: Array<{ revision?: number; lifecycleState?: string; sourceRevision?: number | null; payload?: string | null }>; provenance?: Array<{ payload?: string | null }> }>
+}
+
+function activeRevisionForSource(shot: Snapshot['shots'][number], currentSourceRevision: number | null | undefined) {
+  return shot.revisions?.filter((revision) => {
+    const row = revision as Record<string, unknown>
+    const stateOk = row.lifecycleState === undefined || row.lifecycleState === 'active'
+    const sourceOk = currentSourceRevision == null || row.sourceRevision === currentSourceRevision
+    return stateOk && sourceOk
+  }).sort((a, b) => Number((b as Record<string, unknown>).revision ?? 0) - Number((a as Record<string, unknown>).revision ?? 0))[0]
 }
 
 export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
   const metadata = snapshot.source.metadata
   if (!metadata) throw new Error('Remake source metadata is required')
   const now = new Date().toISOString()
+  const currentSourceRevision = snapshot.source.sourceRevision ?? null
   return {
     schemaVersion: 2,
     type: 'scenedetect-project',
@@ -149,17 +159,10 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
     analysis: { detector: 'pySceneDetect', detectorType: 'content', threshold: 27, analyzedAt: now, status: 'analyzed_review' },
     view: { currentFrame: 0, activeShotId: null },
     shots: snapshot.shots.filter((shot) => {
-      if (!shot.revisions?.length) return true
-      const latest = shot.revisions?.filter((revision) => {
-        const row = revision as Record<string, unknown>
-        return row.lifecycleState === undefined || row.lifecycleState === 'active'
-      }).sort((a, b) => Number((b as Record<string, unknown>).revision ?? 0) - Number((a as Record<string, unknown>).revision ?? 0))[0]
-      return Boolean(latest)
+      // 只保留当前 sourceRevision 的镜头（无 revision 的孤立 shot 不显示）
+      return Boolean(activeRevisionForSource(shot, currentSourceRevision))
     }).map((shot) => {
-      const latest = shot.revisions?.filter((revision) => {
-        const row = revision as Record<string, unknown>
-        return row.lifecycleState === undefined || row.lifecycleState === 'active'
-      }).sort((a, b) => Number((b as Record<string, unknown>).revision ?? 0) - Number((a as Record<string, unknown>).revision ?? 0))[0]
+      const latest = activeRevisionForSource(shot, currentSourceRevision)
       const parsed = latest?.payload
       const payload = parsed ? JSON.parse(parsed) as Partial<SceneDetectShot> : {}
       const mediaIds = payload.mediaIds
