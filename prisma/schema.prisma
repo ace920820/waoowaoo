@@ -454,6 +454,8 @@ model RemakeProject {
   sourceHistory     RemakeSource[] @relation("RemakeProjectSources")
   currentSource     RemakeSource?  @relation("RemakeProjectCurrentSource", fields: [currentSourceId], references: [id], onDelete: SetNull)
   shots             RemakeShot[]
+  promptTracks      RemakePromptTrack[]
+  promptRuns        RemakePromptRun[]
 
   @@map("remake_projects")
 }
@@ -499,6 +501,7 @@ model RemakeShot {
   outputs         RemakeOutputVersion[]
   provenance      RemakeProvenanceRecord[]
   invalidations   RemakeInvalidation[]
+  promptTracks    RemakePromptTrack[]
 
   @@unique([remakeProjectId, stableKey])
   @@unique([remakeProjectId, externalIdentity])
@@ -521,6 +524,7 @@ model RemakeShotRevision {
   createdAt    DateTime            @default(now())
   shot         RemakeShot          @relation(fields: [shotId], references: [id], onDelete: Cascade)
   outputs      RemakeOutputVersion[]
+  promptVersions RemakePromptVersion[]
 
   @@unique([shotId, revision])
   @@index([shotId])
@@ -565,15 +569,93 @@ model RemakeInvalidation {
   shotId     String
   revisionId String?
   outputVersionId String?
+  promptVersionId String?
   reason     String
   status     String      @default("needs_review")
   createdAt  DateTime    @default(now())
   shot       RemakeShot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  promptVersion RemakePromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
 
   @@index([shotId])
   @@index([revisionId])
   @@index([outputVersionId])
+  @@index([promptVersionId])
   @@map("remake_invalidations")
+}
+
+model RemakePromptTrack {
+  id               String                @id @default(uuid())
+  remakeProjectId  String
+  shotId           String
+  targetKey        String
+  adoptedVersionId String?               @unique
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @default(now()) @updatedAt
+  remakeProject    RemakeProject         @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  shot             RemakeShot            @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  versions         RemakePromptVersion[] @relation("RemakePromptTrackVersions")
+  adoptedVersion   RemakePromptVersion?  @relation("RemakePromptTrackAdoptedVersion", fields: [adoptedVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([shotId, targetKey])
+  @@index([remakeProjectId])
+  @@index([adoptedVersionId])
+  @@map("remake_prompt_tracks")
+}
+
+model RemakePromptVersion {
+  id                        String                   @id @default(uuid())
+  trackId                   String
+  runId                     String?
+  shotRevisionId            String?
+  versionNumber             Int
+  status                    String                   @default("pending_review")
+  inputFingerprint          String
+  inputSnapshot             Json
+  parsedSections            Json?
+  integratedGenerationPrompt String                  @db.LongText
+  negativeConstraints       Json?
+  rawOutput                 String?                  @db.LongText
+  skillVersion              String?
+  schemaVersion             String?
+  modelVersion              String?
+  executorVersion           String?
+  taskId                    String?
+  reviewerId                String?
+  reviewedAt                DateTime?
+  invalidatedAt             DateTime?
+  createdAt                 DateTime                 @default(now())
+  track                     RemakePromptTrack        @relation("RemakePromptTrackVersions", fields: [trackId], references: [id], onDelete: Cascade)
+  run                       RemakePromptRun?         @relation(fields: [runId], references: [id], onDelete: SetNull)
+  shotRevision              RemakeShotRevision?      @relation(fields: [shotRevisionId], references: [id], onDelete: SetNull)
+  adoptedByTrack            RemakePromptTrack?       @relation("RemakePromptTrackAdoptedVersion")
+  invalidations             RemakeInvalidation[]
+
+  @@unique([trackId, versionNumber])
+  @@index([runId])
+  @@index([shotRevisionId])
+  @@index([taskId])
+  @@index([inputFingerprint])
+  @@map("remake_prompt_versions")
+}
+
+model RemakePromptRun {
+  id              String                @id @default(uuid())
+  remakeProjectId String
+  taskId          String?
+  targetKey       String
+  inputFingerprint String
+  schemaVersion   String?
+  modelVersion    String?
+  executorVersion String?
+  rawOutput       String?                @db.LongText
+  createdAt       DateTime              @default(now())
+  remakeProject   RemakeProject         @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  versions        RemakePromptVersion[]
+
+  @@index([remakeProjectId])
+  @@index([taskId])
+  @@index([inputFingerprint])
+  @@map("remake_prompt_runs")
 }
 
 model Session {
