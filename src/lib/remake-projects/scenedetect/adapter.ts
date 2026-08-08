@@ -81,7 +81,7 @@ export async function commitSceneDetectImport(input: {
     const currentSource = tx.remakeSource.findFirst ? await tx.remakeSource.findFirst({ where: { remakeProjectId: remakeProject.id }, orderBy: { sourceRevision: 'desc' } }) : null
     if (currentSource && Number(currentSource.sourceRevision ?? 0) > sourceRevision) throw new Error('SCENEDETECT_SOURCE_REVISION_STALE')
     await tx.remakeSource.upsert({
-      where: { remakeProjectId: remakeProject.id },
+      where: { remakeProjectId_sourceRevision: { remakeProjectId: remakeProject.id, sourceRevision } },
       create: { remakeProjectId: remakeProject.id, sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
       update: { sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
     })
