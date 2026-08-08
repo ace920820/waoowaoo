@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRemakeProject } from '@/lib/query/hooks/useRemakeProject'
 import { SceneDetectStageHost } from './scenedetect/SceneDetectStageHost'
+import { createSceneDetectRuntime } from '@/lib/remake-projects/scenedetect/runtime-client'
 import './scenedetect/scenedetect-stage.css'
 
 const STAGES = ['overview', 'scenedetect'] as const
@@ -23,6 +24,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
   const stage = requestedStage && STAGES.includes(requestedStage) ? requestedStage : 'overview'
   const query = useRemakeProject(projectId)
   const snapshot = query.data
+  const runtime = useMemo(() => createSceneDetectRuntime(projectId), [projectId])
   const latestTasks = useMemo(() => snapshot?.tasks.slice(0, 8) ?? [], [snapshot?.tasks])
   const updateStage = (nextStage: RemakeStage) => onStageChange?.(nextStage)
 
@@ -66,7 +68,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
         </main>
       ) : (
         <main className="remake-stage-main">
-          <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={null} enabled={false} availability="phase-6" />
+          <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
         </main>
       )}
 

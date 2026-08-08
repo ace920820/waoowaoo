@@ -28,7 +28,7 @@ export function buildSceneDetectTaskDescriptor(input: SceneDetectTaskInput) {
     ...input,
     taskType: capability.taskType,
     capability: capability.capability,
-    dedupeKey: `scenedetect:${input.projectId}:${input.operation}:${input.sourceRevision}:${input.shotRevision ?? 'project'}:${input.operationKey}`,
+    dedupeKey: `scenedetect:${input.projectId}:${input.operation}:${input.sourceRevision}:${input.shotRevision ?? 'project'}:${input.operationKey}${input.frameTuple ? `:${input.frameTuple.first}:${input.frameTuple.middle}:${input.frameTuple.last}` : ''}`,
   }
 }
 

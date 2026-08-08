@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import type { SceneDetectProject } from '@/vendor/scenedetect'
 import type { SceneDetectIntegrationRuntime } from '@/lib/remake-projects/scenedetect/integration-runtime'
 import { SceneDetectEmbeddedApp as CanonicalSceneDetectEmbeddedApp } from '@/vendor/scenedetect'
@@ -22,10 +23,18 @@ export function SceneDetectStageHost({
   enabled = false,
   availability = 'phase-6',
 }: SceneDetectStageHostProps) {
-  const canMount = enabled && Boolean(initialProject) && Boolean(runtime)
+  const [project, setProject] = useState(initialProject)
+  const hostRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!runtime || !enabled) return
+    let active = true
+    void runtime.loadProject(projectId).then((loaded) => { if (active && loaded) setProject(loaded) }).catch(() => undefined)
+    return () => { active = false }
+  }, [enabled, projectId, runtime])
+  const canMount = enabled && Boolean(runtime)
 
   return (
-    <section
+    <section ref={hostRef}
       className="scenedetect-stage-root"
       data-project-id={projectId}
       data-stage-enabled={canMount ? 'true' : 'false'}
@@ -34,7 +43,7 @@ export function SceneDetectStageHost({
     >
       {canMount ? (
         <div className="scenedetect-stage-app" data-testid="scenedetect-embedded-app">
-          <CanonicalSceneDetectEmbeddedApp />
+          <CanonicalSceneDetectEmbeddedApp embedded initialProject={project} runtime={runtime} />
         </div>
       ) : (
         <div className="scenedetect-stage-disabled" data-testid="scenedetect-stage-disabled">
