@@ -16,6 +16,9 @@ export const POST = apiHandler(async (request: NextRequest, context: { params: P
     return NextResponse.json(result, { status: result.committed ? 201 : 200 })
   } catch (error) {
     if (error instanceof ApiError) throw error
+    if (error instanceof Error && (error.message === 'SCENEDETECT_SOURCE_REVISION_STALE' || error.message === 'SCENEDETECT_SOURCE_REVISION_MISMATCH')) {
+      throw new ApiError('CONFLICT', { message: error.message })
+    }
     throw new ApiError('INVALID_PARAMS', { message: error instanceof Error ? error.message : 'SceneDetect import failed' })
   }
 })

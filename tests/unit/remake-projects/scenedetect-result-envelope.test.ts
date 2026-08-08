@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  parseLegacySceneDetectProject,
   parseSceneDetectResultEnvelope,
   wrapLegacySceneDetectProject,
   type SceneDetectResultEnvelope,
@@ -42,15 +43,28 @@ describe('SceneDetect result envelope', () => {
     expect(() => parseSceneDetectResultEnvelope(envelope(), { currentSourceRevision: 2 })).toThrow('SCENEDETECT_SOURCE_REVISION_STALE')
   })
 
+  it('rejects a result for a future source revision', () => {
+    expect(() => parseSceneDetectResultEnvelope(envelope({ sourceRevision: 2 }), { currentSourceRevision: 1 })).toThrow('SCENEDETECT_SOURCE_REVISION_MISMATCH')
+  })
+
+  it('rejects unsupported adapter and executor major versions', () => {
+    expect(() => parseSceneDetectResultEnvelope(envelope({ adapterVersion: 'scenedetect-adapter@2.0' }))).toThrow('SCENEDETECT_ADAPTER_VERSION_UNSUPPORTED')
+    expect(() => parseSceneDetectResultEnvelope(envelope({ executorVersion: 'scenedetect-executor@2.0' }))).toThrow('SCENEDETECT_EXECUTOR_VERSION_UNSUPPORTED')
+  })
+
   it('rejects duplicate shot ids, overlapping ordered shots, and out-of-range keyframes', () => {
     expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [project.shots[0], { ...project.shots[0], id: 'shot-2' }] } }))).toThrow('SCENEDETECT_SHOT_ORDER_INVALID')
-    expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [{ ...project.shots[0], endFrame: 40 }] } }))).toThrow('SCENEDETECT_FRAME_RANGE_INVALID')
+    expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [{ ...project.shots[0], endFrame: 60 }] } }))).toThrow('SCENEDETECT_FRAME_RANGE_INVALID')
     expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [{ ...project.shots[0], keyframeFrames: { first: 0, middle: 14, last: 40 } }] } }))).toThrow('SCENEDETECT_KEYFRAME_RANGE_INVALID')
+    expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [{ ...project.shots[0], rawEndFrame: 60 }] } }))).toThrow('SCENEDETECT_FRAME_RANGE_INVALID')
+    expect(() => parseSceneDetectResultEnvelope(envelope({ payload: { ...project, shots: [{ ...project.shots[0], keyframeFrames: { first: 14, middle: 10, last: 29 } }] } }))).toThrow('SCENEDETECT_KEYFRAME_RANGE_INVALID')
   })
 
   it('wraps a standalone schema v2 project as explicit legacy provenance', () => {
     const wrapped = wrapLegacySceneDetectProject(project, { sourceRevision: 1, operationKey: 'legacy-1' })
     expect(wrapped.provenance).toMatchObject({ mode: 'legacy_json_import', operationKey: 'legacy-1' })
     expect(() => parseSceneDetectResultEnvelope(project)).toThrow('SCENEDETECT_ENVELOPE_REQUIRED')
+    expect(() => parseSceneDetectResultEnvelope({ ...wrapped, provenance: { mode: 'legacy_json_import' } })).toThrow('SCENEDETECT_LEGACY_IMPORT_WRAPPER_REQUIRED')
+    expect(parseLegacySceneDetectProject(project, { sourceRevision: 1, operationKey: 'legacy-1' }).provenance.mode).toBe('legacy_json_import')
   })
 })

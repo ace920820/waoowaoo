@@ -24,6 +24,8 @@ export interface SceneDetectShot {
   tags: string[]
   notes: string
   confidence?: number
+  /** Server-owned opaque media references. URL fields are legacy/editor-only. */
+  mediaIds?: { first?: string; middle?: string; last?: string }
 }
 
 export interface SceneDetectProject {
@@ -81,27 +83,48 @@ function assertFrameBounds(project: SceneDetectProject): SceneDetectProject {
   for (const shot of project.shots) {
     if (seenIds.has(shot.id)) throw new Error('SCENEDETECT_SHOT_ORDER_INVALID')
     seenIds.add(shot.id)
-    if (shot.rawStartFrame > shot.rawEndFrame || shot.startFrame > shot.endFrame || shot.endFrame >= project.source.totalFrames) {
+    if (
+      shot.rawStartFrame > shot.rawEndFrame ||
+      shot.rawEndFrame >= project.source.totalFrames ||
+      shot.startFrame > shot.endFrame ||
+      shot.endFrame >= project.source.totalFrames
+    ) {
       throw new Error('SCENEDETECT_FRAME_RANGE_INVALID')
     }
     if (previousShot && (shot.shotNumber <= previousShot.shotNumber || shot.startFrame <= previousShot.endFrame)) {
       throw new Error('SCENEDETECT_SHOT_ORDER_INVALID')
     }
     const keyframes = shot.keyframeFrames
-    if (keyframes && (keyframes.first < shot.startFrame || keyframes.middle < shot.startFrame || keyframes.last > shot.endFrame)) {
+    if (keyframes && (
+      keyframes.first < shot.startFrame ||
+      keyframes.middle < shot.startFrame ||
+      keyframes.last < shot.startFrame ||
+      keyframes.first > shot.endFrame ||
+      keyframes.middle > shot.endFrame ||
+      keyframes.last > shot.endFrame ||
+      keyframes.first > keyframes.middle ||
+      keyframes.middle > keyframes.last
+    )) {
       throw new Error('SCENEDETECT_KEYFRAME_RANGE_INVALID')
     }
     previousShot = shot
   }
+  if (project.view.currentFrame >= project.source.totalFrames) throw new Error('SCENEDETECT_FRAME_RANGE_INVALID')
+  if (project.view.activeShotId && !seenIds.has(project.view.activeShotId)) throw new Error('SCENEDETECT_ACTIVE_SHOT_INVALID')
   return project
 }
 
-export function parseSceneDetectInput(input: unknown): SceneDetectProject {
+export function parseSceneDetectInput(input: unknown, options: { legacyMode?: boolean } = {}): SceneDetectProject {
   const record = typeof input === 'object' && input !== null ? input as Record<string, unknown> : null
-  const candidate = record && !('schemaVersion' in record) && record.project
+  const candidate = options.legacyMode && record && !('schemaVersion' in record) && record.project
     ? record.project
     : input
-  const parsed = projectShape.parse(candidate) as unknown as SceneDetectProject
+  const result = projectShape.safeParse(candidate)
+  if (!result.success) {
+    const hasMetadataIssue = result.error.issues.some((issue) => issue.path[0] === 'source' || issue.path[0] === 'analysis')
+    throw new Error(hasMetadataIssue ? 'SCENEDETECT_METADATA_INVALID' : 'SCENEDETECT_PAYLOAD_SCHEMA_INVALID')
+  }
+  const parsed = result.data as unknown as SceneDetectProject
   return assertFrameBounds({
     ...parsed,
     shots: parsed.shots.map((shot) => ({ ...shot, confidence: shot.confidence ?? undefined })),
@@ -111,7 +134,7 @@ export function parseSceneDetectInput(input: unknown): SceneDetectProject {
 type Snapshot = {
   project: { id: string; name: string }
   source: { metadata?: SceneDetectProject['source'] | null }
-  shots: Array<{ id: string; stableKey: string; sequence: number | null; revisions?: Array<{ payload?: string | null }>; provenance?: Array<{ payload?: string | null }> }>
+  shots: Array<{ id: string; stableKey: string; sequence: number | null; revisions?: Array<{ revision?: number; lifecycleState?: string; payload?: string | null }>; provenance?: Array<{ payload?: string | null }> }>
 }
 
 export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
@@ -125,9 +148,21 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
     source: { ...metadata, videoUrl: undefined },
     analysis: { detector: 'pySceneDetect', detectorType: 'content', threshold: 27, analyzedAt: now, status: 'analyzed_review' },
     view: { currentFrame: 0, activeShotId: null },
-    shots: snapshot.shots.map((shot) => {
-      const parsed = shot.revisions?.[shot.revisions.length - 1]?.payload
+    shots: snapshot.shots.filter((shot) => {
+      if (!shot.revisions?.length) return true
+      const latest = shot.revisions?.filter((revision) => {
+        const row = revision as Record<string, unknown>
+        return row.lifecycleState === undefined || row.lifecycleState === 'active'
+      }).sort((a, b) => Number((b as Record<string, unknown>).revision ?? 0) - Number((a as Record<string, unknown>).revision ?? 0))[0]
+      return Boolean(latest)
+    }).map((shot) => {
+      const latest = shot.revisions?.filter((revision) => {
+        const row = revision as Record<string, unknown>
+        return row.lifecycleState === undefined || row.lifecycleState === 'active'
+      }).sort((a, b) => Number((b as Record<string, unknown>).revision ?? 0) - Number((a as Record<string, unknown>).revision ?? 0))[0]
+      const parsed = latest?.payload
       const payload = parsed ? JSON.parse(parsed) as Partial<SceneDetectShot> : {}
+      const mediaIds = payload.mediaIds
       return {
         id: shot.id,
         shotNumber: shot.sequence ?? 0,
@@ -139,9 +174,10 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
         endTimecode: payload.endTimecode ?? '',
         duration: payload.duration ?? 0,
         durationFrames: payload.durationFrames ?? 1,
-        firstFrameUrl: payload.firstFrameUrl ?? '',
-        middleFrameUrl: payload.middleFrameUrl ?? '',
-        lastFrameUrl: payload.lastFrameUrl ?? '',
+        firstFrameUrl: '',
+        middleFrameUrl: '',
+        lastFrameUrl: '',
+        mediaIds,
         keyframeFrames: payload.keyframeFrames,
         keyframeSource: payload.keyframeSource,
         status: payload.status ?? 'pending',
@@ -164,7 +200,7 @@ export function commitSceneDetectMutation(input: { project: SceneDetectProject; 
       externalIdentity: shot.id,
       sequence: shot.shotNumber,
       changeReason: 'native_mutation',
-      payload: JSON.stringify(shot),
+      payload: JSON.stringify({ ...shot, firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '' }),
       provenance: { schema: 'scenedetect.v2', executor: 'scenedetect', capability: 'native-editor' },
     })),
   }

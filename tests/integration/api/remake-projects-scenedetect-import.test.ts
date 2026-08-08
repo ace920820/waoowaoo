@@ -68,4 +68,14 @@ describe('SceneDetect import boundary', () => {
     await expect(validateExternalMediaUrl('https://user:pass@media.example/frame.jpg', { allowlistedHosts: new Set(['media.example']) })).rejects.toThrow(/credential/i)
     expect(() => normalizeMediaInput({ kind: 'executor_bytes', bytes: new Uint8Array(11), contentType: 'image/jpeg', fileName: 'frame.jpg' }, 10)).toThrow(/byte/i)
   })
+
+  it('rejects client/runtime media URLs before any database write', async () => {
+    const { POST } = await import('@/app/api/remake-projects/[projectId]/scenedetect/import/route')
+    const response = await POST(buildMockRequest({
+      path: '/api/remake-projects/project-1/scenedetect/import', method: 'POST',
+      body: { mode: 'commit', analysisId: 'analysis-1', operationKey: 'op-runtime', payload: { ...payload, source: { ...payload.source, videoUrl: 'blob:runtime-source' } } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    expect(response.status).toBe(400)
+    expect(prismaMock.remakeSource.upsert).not.toHaveBeenCalled()
+  })
 })

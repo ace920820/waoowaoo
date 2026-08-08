@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { createExternalShotKey } from './id-map'
 import { parseSceneDetectInput, type SceneDetectProject } from './contracts'
+import { parseSceneDetectResultEnvelope, wrapLegacySceneDetectProject } from './result-envelope'
 
 type Row = Record<string, unknown>
 
 export function previewSceneDetectImport(input: { projectId: string; analysisId: string; payload: unknown }) {
-  const project = parseSceneDetectInput(input.payload)
+  const project = parseImportPayload(input).project
   return {
     projectId: input.projectId,
     analysisId: input.analysisId,
@@ -19,6 +20,37 @@ function operationPayload(operationKey: string, project: SceneDetectProject) {
   return JSON.stringify({ operationKey, analysisId: project.project.id, source: project.source, analysis: project.analysis })
 }
 
+function sanitizeProject(project: SceneDetectProject): SceneDetectProject {
+  const source = { ...project.source, videoUrl: undefined }
+  return {
+    ...project,
+    source,
+    shots: project.shots.map((shot) => ({
+      ...shot,
+      firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '',
+    })),
+  }
+}
+
+function assertNoUntrustedMediaUrls(project: SceneDetectProject) {
+  const values = [project.source.videoUrl, ...project.shots.flatMap((shot) => [shot.firstFrameUrl, shot.middleFrameUrl, shot.lastFrameUrl])]
+  if (values.some((value) => typeof value === 'string' && value.trim())) {
+    throw new Error('SCENEDETECT_UNTRUSTED_MEDIA_URL')
+  }
+}
+
+function parseImportPayload(input: { analysisId: string; operationKey?: string; payload: unknown }) {
+  const record = typeof input.payload === 'object' && input.payload !== null ? input.payload as Record<string, unknown> : null
+  const envelope = record && 'resultVersion' in record && 'payload' in record
+    ? parseSceneDetectResultEnvelope(input.payload)
+    : input.operationKey
+      ? parseSceneDetectResultEnvelope(wrapLegacySceneDetectProject(parseSceneDetectInput(input.payload), { sourceRevision: 1, operationKey: input.operationKey }), { allowLegacyImport: true })
+      : { project: parseSceneDetectInput(input.payload), provenance: null }
+  if (envelope.provenance && envelope.provenance.analysisId !== input.analysisId) throw new Error('SCENEDETECT_ANALYSIS_ID_MISMATCH')
+  assertNoUntrustedMediaUrls(envelope.project)
+  return { ...envelope, project: sanitizeProject(envelope.project) }
+}
+
 export async function commitSceneDetectImport(input: {
   projectId: string
   userId: string
@@ -26,13 +58,15 @@ export async function commitSceneDetectImport(input: {
   operationKey: string
   payload: unknown
 }) {
-  const project = parseSceneDetectInput(input.payload)
+  const parsed = parseImportPayload(input)
+  const project = parsed.project
+  const sourceRevision = parsed.provenance?.sourceRevision ?? 1
   const client = prisma as unknown as {
     project: { findUnique: (args: unknown) => Promise<Row | null> }
     remakeProject: { findUnique: (args: unknown) => Promise<Row | null>; update: (args: unknown) => Promise<Row> }
-    remakeSource: { upsert: (args: unknown) => Promise<Row> }
+    remakeSource: { upsert: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
     remakeShot: { upsert: (args: unknown) => Promise<Row> }
-    remakeShotRevision: { create: (args: unknown) => Promise<Row> }
+    remakeShotRevision: { create: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
     remakeProvenanceRecord: { findFirst: (args: unknown) => Promise<Row | null>; create: (args: unknown) => Promise<Row> }
     $transaction: <T>(callback: (tx: typeof client) => Promise<T>) => Promise<T>
   }
@@ -44,10 +78,12 @@ export async function commitSceneDetectImport(input: {
   return client.$transaction(async (tx) => {
     const remakeProject = await tx.remakeProject.findUnique({ where: { projectId: input.projectId } })
     if (!remakeProject) throw new Error('Remake project metadata not found')
+    const currentSource = tx.remakeSource.findFirst ? await tx.remakeSource.findFirst({ where: { remakeProjectId: remakeProject.id }, orderBy: { sourceRevision: 'desc' } }) : null
+    if (currentSource && Number(currentSource.sourceRevision ?? 0) > sourceRevision) throw new Error('SCENEDETECT_SOURCE_REVISION_STALE')
     await tx.remakeSource.upsert({
       where: { remakeProjectId: remakeProject.id },
-      create: { remakeProjectId: remakeProject.id, status: 'analyzed' },
-      update: { status: 'analyzed' },
+      create: { remakeProjectId: remakeProject.id, sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
+      update: { sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
     })
     for (const shot of project.shots) {
       const stableKey = createExternalShotKey(input.projectId, input.analysisId, shot.id)
@@ -56,11 +92,14 @@ export async function commitSceneDetectImport(input: {
         create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: shot.id, sequence: shot.shotNumber },
         update: { sequence: shot.shotNumber },
       })
+      const latestRevision = tx.remakeShotRevision.findFirst
+        ? await tx.remakeShotRevision.findFirst({ where: { shotId: row.id }, orderBy: { revision: 'desc' } })
+        : null
       await tx.remakeShotRevision.create({
-        data: { shotId: row.id, revision: 1, changeReason: 'scenedetect_import', payload: JSON.stringify(shot) },
+        data: { shotId: row.id, revision: Number(latestRevision?.revision ?? 0) + 1, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot) },
       })
       await tx.remakeProvenanceRecord.create({
-        data: { shotId: row.id, schema: 'scenedetect.v2', executor: 'scenedetect', capability: 'analysis', payload: operationPayload(input.operationKey, project) },
+        data: { shotId: row.id, schema: 'scenedetect.v2', executor: parsed.provenance?.executorVersion ?? 'legacy_json_import', capability: parsed.provenance?.mode ?? 'analysis', payload: operationPayload(input.operationKey, project) },
       })
     }
     await tx.remakeProject.update({ where: { id: remakeProject.id }, data: { importStatus: 'analyzed' } })
