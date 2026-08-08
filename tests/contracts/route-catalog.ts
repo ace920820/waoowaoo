@@ -165,6 +165,7 @@ const ROUTE_FILES = [
   'src/app/api/remake-projects/[projectId]/scenedetect/import/route.ts',
   'src/app/api/remake-projects/[projectId]/scenedetect/analyze/route.ts',
   'src/app/api/remake-projects/[projectId]/prompts/analyze/route.ts',
+  'src/app/api/remake-projects/[projectId]/prompts/tracks/[trackId]/route.ts',
   'src/app/api/remake-projects/[projectId]/scenedetect/media/[mediaId]/route.ts',
   'src/app/api/remake-projects/[projectId]/scenedetect/project/route.ts',
   'src/app/api/remake-projects/[projectId]/source/route.ts',
