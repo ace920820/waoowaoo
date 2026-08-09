@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { parseCodexJsonl, promptResultSchema, redactCodexOutput, runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
+import { parseCodexJsonl, promptResultSchema, redactCodexOutput, runCodexPromptAnalysis, runCodexVideoWorkspaceAnalysis } from '@/lib/remake-projects/prompt/executor'
 
 const resolveStorageKeyMock = vi.hoisted(() => vi.fn())
 const getMediaObjectByIdMock = vi.hoisted(() => vi.fn())
@@ -114,6 +114,20 @@ describe('remake prompt Codex executor', () => {
     expect(imagePaths).toHaveLength(2)
     expect(imagePaths).toEqual(expect.arrayContaining([expect.stringMatching(/\.png$/), expect.stringMatching(/\.webp$/)]))
     expect(imagePaths.some((path) => path.endsWith('.mp4'))).toBe(false)
+  })
+
+  it('runs one whole-video Codex process inside its workspace without attaching keyframes', async () => {
+    const child = fakeChild([JSON.stringify({ type: 'final', result: { shots: [{ stableShotId: 'shot-01', analysis: videoAnalysis }] } })])
+    const spawn = vi.fn(() => child)
+
+    await runCodexVideoWorkspaceAnalysis({ targetKey: 'video', prompt: 'Read manifest.csv and source.mp4.', workspaceDirectory: '/tmp/controlled-video-workspace' }, { spawn: spawn as never })
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const [command, args, options] = spawn.mock.calls[0] as unknown as [string, string[], Record<string, unknown>]
+    expect(command).toBe('codex')
+    expect(args).toEqual(expect.arrayContaining(['exec', '--sandbox', 'workspace-write', '--skip-git-repo-check', '--output-schema']))
+    expect(args).not.toContain('--image')
+    expect(options).toMatchObject({ shell: false, cwd: '/tmp/controlled-video-workspace' })
   })
 
   it('keeps actionable but redacted Codex stderr when the CLI exits nonzero', async () => {
