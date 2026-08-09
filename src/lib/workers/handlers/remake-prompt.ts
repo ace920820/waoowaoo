@@ -2,6 +2,7 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { extractStorageKey, getObjectBuffer } from '@/lib/storage'
+import { getMediaObjectById, resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { parsePromptAnalysis, type PromptInputSnapshot, type PromptTargetKey } from '@/lib/remake-projects/prompt/contracts'
 import { persistImagePromptVersion, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
 import { parseRemakePromptTaskPayload, type RemakePromptImageTaskPayload } from '@/lib/remake-projects/prompt/task-contract'
@@ -12,8 +13,10 @@ import { assertTaskActive } from '../utils'
 
 type Row = Record<string, any>
 
-function mediaKey(value: string | undefined): string {
-  const key = extractStorageKey(value || '') || value || ''
+export async function resolvePromptMediaKey(value: string | undefined): Promise<string> {
+  const raw = value || ''
+  const media = raw ? await getMediaObjectById(raw) : null
+  const key = media?.storageKey || await resolveStorageKeyFromMediaValue(raw) || extractStorageKey(raw) || raw
   if (!key || key.length > 1024) throw new Error('REMAKE_PROMPT_MEDIA_MISSING')
   return key
 }
@@ -64,7 +67,7 @@ export async function handleRemakeImagePromptTask(job: Job<TaskJobData>) {
   const snapshot = payload.inputSnapshot
   const shot = await findShot(job, snapshot)
   const revision = parseRevision(shot.revisions.find((row: Row) => Number(row.revision) === snapshot.shotRevision))
-  const key = mediaKey(String(revision.refs[frameRefKeyForSlot(payload.slot)] || ''))
+  const key = await resolvePromptMediaKey(String(revision.refs[frameRefKeyForSlot(payload.slot)] || ''))
   await assertTaskActive(job, 'before_prompt_cli')
   await reportTaskProgress(job, 20, { stage: 'source-read', displayMode: 'detail' })
   const bytes = await getObjectBuffer(key)
@@ -92,11 +95,11 @@ export async function handleRemakeVideoPromptTask(job: Job<TaskJobData>) {
   }
   await assertTaskActive(job, 'before_prompt_cli')
   await reportTaskProgress(job, 20, { stage: 'source-read', displayMode: 'detail' })
-  const media: Array<{ name: string; bytes: Buffer }> = [{ name: 'source-video.bin', bytes: await getObjectBuffer(mediaKey(String(project.remakeProject.currentSource.storageKey))) }]
+  const media: Array<{ name: string; bytes: Buffer }> = [{ name: 'source-video.bin', bytes: await getObjectBuffer(await resolvePromptMediaKey(String(project.remakeProject.currentSource.storageKey))) }]
   for (const snapshot of snapshots) {
     const shot = shotsById.get(snapshot.shotId) as Row
     const revision = parseRevision(shot.revisions.find((row: Row) => Number(row.revision) === snapshot.shotRevision))
-    for (const slot of ['first', 'middle', 'last']) media.push({ name: `${snapshot.stableKey}-${slot}.bin`, bytes: await getObjectBuffer(mediaKey(String(revision.refs[slot] || ''))) })
+    for (const slot of ['first', 'middle', 'last']) media.push({ name: `${snapshot.stableKey}-${slot}.bin`, bytes: await getObjectBuffer(await resolvePromptMediaKey(String(revision.refs[slot] || ''))) })
   }
   await reportTaskProgress(job, 40, { stage: 'executor-call', displayMode: 'indeterminate' })
   const analysis = await runCodexPromptAnalysis({ targetKey: 'video', prompt: videoPrompt(String(project.remakeProject.currentSource.fileName || 'source.mp4'), snapshots), media })

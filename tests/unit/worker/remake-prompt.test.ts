@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseCodexJsonl, redactCodexOutput, runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
 
 const resolveStorageKeyMock = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/media/service', () => ({ resolveStorageKeyFromMediaValue: resolveStorageKeyMock }))
+const getMediaObjectByIdMock = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/media/service', () => ({ getMediaObjectById: getMediaObjectByIdMock, resolveStorageKeyFromMediaValue: resolveStorageKeyMock }))
 
 const imageAnalysis = {
   analysisBasis: { visibleFacts: ['one subject'], photographicInferences: ['eye level'], generationRecommendations: ['keep framing'] },
@@ -44,11 +45,11 @@ function fakeChild(lines: string[]) {
 
 describe('remake prompt Codex executor', () => {
   it('resolves persisted MediaObject IDs to storage keys before reading prompt media', async () => {
-    resolveStorageKeyMock.mockResolvedValueOnce('images/scenedetect/frame-1.jpg')
+    getMediaObjectByIdMock.mockResolvedValueOnce({ storageKey: 'images/scenedetect/frame-1.jpg' })
     const { resolvePromptMediaKey } = await import('@/lib/workers/handlers/remake-prompt')
 
     await expect(resolvePromptMediaKey('media-object-1')).resolves.toBe('images/scenedetect/frame-1.jpg')
-    expect(resolveStorageKeyMock).toHaveBeenCalledWith('media-object-1')
+    expect(getMediaObjectByIdMock).toHaveBeenCalledWith('media-object-1')
   })
 
   it('starts one fresh shell-free codex exec process and parses one final JSONL result', async () => {
