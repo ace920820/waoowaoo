@@ -47,6 +47,25 @@ describe('remake whole-video Prompt atomic persistence', () => {
       .toEqual([{ stableShotId, analysis: videoAnalysis }])
   })
 
+  it('persists the current manifest even when the project retains historical Shots', async () => {
+    const fixture = await createPromptReadyProject()
+    const historicalShot = await prisma.remakeShot.create({
+      data: { remakeProjectId: (await prisma.remakeProject.findUniqueOrThrow({ where: { projectId: fixture.projectId } })).id, stableKey: 'historical:scene-01', sequence: 99, currentRevision: 1, reviewStatus: 'keep' },
+    })
+    await prisma.remakeShotRevision.create({
+      data: { shotId: historicalShot.id, revision: 1, changeReason: 'old-source', sourceRevision: 0, payload: JSON.stringify({ status: 'keep' }), keyframeMediaRefs: JSON.stringify({}) },
+    })
+
+    const result = await persistVideoPromptRunAtomically({
+      projectId: fixture.projectId,
+      expectedStableShotIds: fixture.shots.map((shot) => shot.stableKey),
+      results: fixture.shots.map((shot) => ({ stableShotId: shot.stableKey, analysis: videoAnalysis })),
+    })
+
+    expect(result.versions).toHaveLength(2)
+    await expect(prisma.remakePromptVersion.count()).resolves.toBe(2)
+  })
+
   it.each([
     ['partial', (keys: string[]) => [{ stableShotId: keys[0], analysis: videoAnalysis }]],
     ['duplicate', (keys: string[]) => [{ stableShotId: keys[0], analysis: videoAnalysis }, { stableShotId: keys[0], analysis: videoAnalysis }]],
