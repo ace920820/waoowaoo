@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { getPromptTaskState } from '@/app/[locale]/workspace/[projectId]/modes/remake/prompt/prompt-review-state'
+import { findImagePromptTask } from '@/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptImageTab'
 
 const stagePath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptStage.tsx'
 const imagePath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptImageTab.tsx'
@@ -64,5 +65,10 @@ describe('remake prompt stage contract', () => {
     expect(getPromptTaskState(undefined, pendingTrack)).toBe('pending')
     expect(getPromptTaskState(undefined, { ...pendingTrack, needsReview: true })).toBe('needsReview')
     expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: { ...pendingTrack.latestVersion, reviewStatus: 'APPROVED' } })).toBe('approved')
+  })
+
+  it('finds the persisted lowercase image Prompt task before its track exists', () => {
+    const task = findImagePromptTask([{ id: 'task-1', type: 'remake_image_prompt_analyze', targetType: 'remake_shot', targetId: 'shot-1', status: 'queued', createdAt: '', updatedAt: '' }], null, 'shot-1')
+    expect(task?.status).toBe('queued')
   })
 })

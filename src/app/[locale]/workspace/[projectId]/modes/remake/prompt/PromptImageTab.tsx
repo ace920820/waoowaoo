@@ -16,15 +16,15 @@ function trackFor(tracks: PromptTrackSummary[] | undefined, slot: Slot) {
   return tracks?.find((track) => track.targetKey === `image:${slot}`) ?? null
 }
 
-function taskFor(tasks: Props['tasks'], track: PromptTrackSummary | null, shotId: string) {
-  return tasks.find((task) => task.targetId === track?.id) ?? tasks.find((task) => task.targetId === shotId && task.type.includes('IMAGE_PROMPT')) ?? null
+export function findImagePromptTask(tasks: Props['tasks'], track: PromptTrackSummary | null, shotId: string) {
+  return tasks.find((task) => task.targetId === track?.id) ?? tasks.find((task) => task.targetId === shotId && task.type === 'remake_image_prompt_analyze') ?? null
 }
 
 export function PromptImageTab({ projectId, shot, tasks }: Props) {
-  return <>{slots.map((slot) => <ImagePromptPanel key={`${shot.id}-${slot}`} projectId={projectId} shot={shot} slot={slot} task={taskFor(tasks, trackFor(shot.promptTracks, slot), shot.id)} />)}</>
+  return <>{slots.map((slot) => <ImagePromptPanel key={`${shot.id}-${slot}`} projectId={projectId} shot={shot} slot={slot} task={findImagePromptTask(tasks, trackFor(shot.promptTracks, slot), shot.id)} />)}</>
 }
 
-function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; shot: Props['shot']; slot: Slot; task: ReturnType<typeof taskFor> }) {
+function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; shot: Props['shot']; slot: Slot; task: ReturnType<typeof findImagePromptTask> }) {
   const t = useTranslations('remakeWorkbench')
   const track = trackFor(shot.promptTracks, slot)
   const [viewedVersionId, setViewedVersionId] = useState<string | null>(null)

@@ -71,7 +71,7 @@ export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefin
     keyframeSlots.some((slot) => !shot.keyframes?.[slot]?.mediaUrl),
   )
   const hasActivePromptTask = snapshot.tasks.some((task) =>
-    task.type.includes('PROMPT') && ['queued', 'processing', 'running'].includes(task.status),
+    task.type.includes('prompt') && ['queued', 'processing', 'running'].includes(task.status),
   )
   return hasPendingKeyframes || hasActivePromptTask ? 1000 : false
 }
