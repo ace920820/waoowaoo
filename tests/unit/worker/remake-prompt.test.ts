@@ -11,6 +11,20 @@ const imageAnalysis = {
   pendingQuestions: ['exact lens is unknown'],
 }
 
+const videoAnalysis = {
+  coreEvent: 'A runner crosses the street and looks back.',
+  actions: ['run', 'look back'],
+  interactions: ['avoids traffic'],
+  directions: ['left to right'],
+  blocking: 'runner remains foreground',
+  shotScale: 'medium-wide',
+  camera: 'eye level',
+  movement: 'tracking left',
+  rhythm: 'urgent',
+  environmentChange: 'rain begins',
+  temporalProgression: 'cross, glance back, exit frame',
+}
+
 function fakeChild(lines: string[]) {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
@@ -18,7 +32,7 @@ function fakeChild(lines: string[]) {
     stderr: new PassThrough(),
     kill: vi.fn(() => true),
   })
-  queueMicrotask(() => {
+  child.stdin.once('finish', () => {
     child.stdout.end(lines.join('\n'))
     child.emit('close', 0, null)
   })
@@ -53,6 +67,22 @@ describe('remake prompt Codex executor', () => {
 
   it('keeps the image result contract independent from frame-slot labels', () => {
     expect(parseCodexJsonl(JSON.stringify({ type: 'final', result: imageAnalysis }), 'image:end').result).toEqual(imageAnalysis)
+  })
+
+  it('preserves one whole-video result envelope for the worker to map by stable Shot id', () => {
+    const result = parseCodexJsonl(JSON.stringify({
+      type: 'final',
+      result: { shots: [{ stableShotId: 'shot-01', analysis: videoAnalysis }, { stableShotId: 'shot-02', analysis: videoAnalysis }] },
+    }), 'video')
+
+    expect(result.result).toEqual({ shots: [{ stableShotId: 'shot-01', analysis: videoAnalysis }, { stableShotId: 'shot-02', analysis: videoAnalysis }] })
+  })
+
+  it('fails closed when a whole-video result includes a malformed Shot analysis', () => {
+    expect(() => parseCodexJsonl(JSON.stringify({
+      type: 'final',
+      result: { shots: [{ stableShotId: 'shot-01', analysis: { ...videoAnalysis, coreEvent: '' } }] },
+    }), 'video')).toThrow('CODEX_VIDEO_RESULT_INVALID')
   })
 
   it('redacts URLs, absolute paths, and secret-looking values before errors project outward', () => {

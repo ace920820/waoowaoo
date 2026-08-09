@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   IMAGE_PROMPT_TARGET_KEYS,
   imagePromptAnalysisSchema,
+  parsePromptAnalysis,
   promptTargetKeySchema,
   videoPromptAnalysisSchema,
 } from '@/lib/remake-projects/prompt/contracts'
@@ -63,5 +64,16 @@ describe('remake prompt contracts', () => {
 
     expect(parsed.coreEvent).toContain('runner')
     expect(parsed.temporalProgression).toContain('exit frame')
+  })
+
+  it('rejects partial image results instead of inventing section 3 or 4 display data', () => {
+    const partial = {
+      analysisBasis: { visibleFacts: ['person'], photographicInferences: ['soft light'], generationRecommendations: ['keep framing'] },
+      structuredPrompt: { cameraAndComposition: {}, depthAndImaging: {}, subjects: [], sceneAndSpace: {}, lighting: {}, colorAndStyle: {} },
+      integratedGenerationPrompt: 'A person stands still.',
+      negativeConstraints: [],
+    }
+
+    expect(() => parsePromptAnalysis('image:start', partial)).toThrow()
   })
 })
