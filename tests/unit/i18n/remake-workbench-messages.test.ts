@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 const requiredPromptKeys = [
   'prompt', 'imagePrompt', 'videoPrompt', 'analyzeVideo', 'reanalyzeVideo',
   'queued', 'running', 'failed', 'pendingReview', 'approved', 'needsReview',
+  'all',
   'versionHistory', 'edit', 'saveAsNewVersion', 'approveAndAdopt', 'fullAnalysis',
 ] as const
 
