@@ -46,6 +46,7 @@
   "analyzableShots": "Analyzable shots",
   "selectShot": "Select shot",
   "searchShots": "Search shots",
+  "all": "All",
   "imageProgress": "Images adopted {count}/3",
   "shot": "Shot",
   "readyForAnalysis": "Ready to analyze",

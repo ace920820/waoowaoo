@@ -40,3 +40,9 @@ npm run typecheck
 `npx vitest run --coverage tests/unit/remake-projects/remake-prompt-stage-contract.test.ts` runs but reports 0% global coverage because the repository-wide threshold includes unrelated, unimported billing modules. It is not a useful coverage measurement for this source-contract UI test and is intentionally not claimed as passing coverage evidence.
 
 Visual browser verification remains blocked by the local app's unauthenticated page; no authenticated session was bypassed.
+
+## Translation Regression Fix
+
+RED: `tests/unit/i18n/remake-workbench-messages.test.ts` failed after requiring the `all` key used by the Prompt shot filter. The failure reproduced `MISSING_MESSAGE: remakeWorkbench.all`.
+
+GREEN: added `all` in both `messages/zh/remake-workbench.json` and `messages/en/remake-workbench.json`. The focused message, Prompt stage, Prompt API, and worker suites passed 17 tests; `npm run typecheck` passed. This guarantees the filter can render and an image Prompt request still returns `202` before worker execution.
