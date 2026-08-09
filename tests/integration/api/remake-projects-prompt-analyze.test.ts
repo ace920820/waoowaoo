@@ -26,6 +26,22 @@ describe('POST /api/remake-projects/[projectId]/prompts/analyze', () => {
     expect(submitTaskMock).toHaveBeenCalledWith(expect.objectContaining({ targetType: 'remake_shot', targetId: shot.id, maxAttempts: 1 }))
   })
 
+  it('submits a Prompt task for an untouched automatic Shot with complete keyframes', async () => {
+    prismaMock.project.findUnique.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      type: 'remake',
+      remakeProject: {
+        id: '22222222-2222-4222-8222-222222222222',
+        currentSource: { id: 'source-1', sourceRevision: 1, status: 'analyzed' },
+        shots: [{ ...shot, revisions: [{ ...shot.revisions[0], payload: JSON.stringify({ status: 'pending' }) }] }],
+      },
+    })
+    const { POST } = await import('@/app/api/remake-projects/[projectId]/prompts/analyze/route')
+    const response = await POST(new NextRequest('http://localhost/api/remake-projects/11111111-1111-4111-8111-111111111111/prompts/analyze', { method: 'POST', body: JSON.stringify({ kind: 'image', shotId: shot.id, slot: 'middle', operationKey: 'automatic-shot' }) }), { params: Promise.resolve({ projectId: '11111111-1111-4111-8111-111111111111' }) })
+    expect(response.status).toBe(202)
+    expect(submitTaskMock).toHaveBeenCalledWith(expect.objectContaining({ targetId: shot.id }))
+  })
+
   it('rejects extra body fields and incomplete whole-video input before task creation', async () => {
     const { POST } = await import('@/app/api/remake-projects/[projectId]/prompts/analyze/route')
     const invalid = await POST(new NextRequest('http://localhost/api/remake-projects/project/prompts/analyze', { method: 'POST', body: JSON.stringify({ kind: 'image', shotId: shot.id, slot: 'start', operationKey: 'click-1', fingerprint: 'client' }) }), { params: Promise.resolve({ projectId: '11111111-1111-4111-8111-111111111111' }) })

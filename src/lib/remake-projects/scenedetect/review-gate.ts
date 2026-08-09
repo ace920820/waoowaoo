@@ -27,5 +27,11 @@ export function evaluateSceneDetectReviewGate(input: SceneDetectReviewGateInput)
   if (!refs?.first || !refs.middle || !refs.last) reasons.push('KEYFRAMES_MISSING')
   if (input.keyframeTaskStatus && ['queued', 'running', 'processing', 'waiting_retry'].includes(input.keyframeTaskStatus)) reasons.push('KEYFRAME_TASK_PENDING')
   if (input.keyframeTaskStatus === 'failed') reasons.push('KEYFRAME_TASK_FAILED')
-  return { confirmed: reasons.length === 0, promptEligible: reasons.length === 0, reasons }
+  // Automatic boundary detection is pending human review by default, but its complete
+  // keyframes are still valid inputs for the independent Prompt-analysis stage.
+  return {
+    confirmed: reasons.length === 0,
+    promptEligible: reasons.every((reason) => reason === 'STATUS_NOT_KEEP'),
+    reasons,
+  }
 }

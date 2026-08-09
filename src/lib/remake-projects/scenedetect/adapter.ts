@@ -68,8 +68,8 @@ export async function commitSceneDetectImport(input: {
     project: { findUnique: (args: unknown) => Promise<Row | null> }
     remakeProject: { findUnique: (args: unknown) => Promise<Row | null>; update: (args: unknown) => Promise<Row> }
     remakeSource: { upsert: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
-    remakeShot: { upsert: (args: unknown) => Promise<Row> }
-    remakeShotRevision: { create: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
+    remakeShot: { upsert: (args: unknown) => Promise<Row>; update: (args: unknown) => Promise<Row> }
+    remakeShotRevision: { create: (args: unknown) => Promise<Row>; updateMany: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
     remakeProvenanceRecord: { findFirst: (args: unknown) => Promise<Row | null>; create: (args: unknown) => Promise<Row> }
     $transaction: <T>(callback: (tx: typeof client) => Promise<T>) => Promise<T>
   }
@@ -88,18 +88,29 @@ export async function commitSceneDetectImport(input: {
       create: { remakeProjectId: remakeProject.id, sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
       update: { sourceRevision, operationKey: input.operationKey, status: 'analyzed', fileName: project.source.fileName, probeMetadata: JSON.stringify(project.source) },
     })
+    // A rerun replaces the active boundary set for this source revision. Keeping the
+    // old revisions active made one 48-shot result appear as 96 shots after rerun.
+    await tx.remakeShotRevision.updateMany({
+      where: { sourceRevision, lifecycleState: 'active', shot: { remakeProjectId: remakeProject.id } },
+      data: { lifecycleState: 'retired' },
+    })
     for (const shot of project.shots) {
       const stableKey = createExternalShotKey(input.projectId, input.analysisId, shot.id)
       const row = await tx.remakeShot.upsert({
         where: { remakeProjectId_stableKey: { remakeProjectId: remakeProject.id, stableKey } },
-        create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: `${input.analysisId}:${shot.id}`, sequence: shot.shotNumber },
-        update: { sequence: shot.shotNumber },
+        create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: shot.id, sequence: shot.shotNumber },
+        update: { externalIdentity: shot.id, sequence: shot.shotNumber },
       })
       const latestRevision = tx.remakeShotRevision.findFirst
         ? await tx.remakeShotRevision.findFirst({ where: { shotId: row.id }, orderBy: { revision: 'desc' } })
         : null
+      const nextRevision = Number(latestRevision?.revision ?? 0) + 1
       await tx.remakeShotRevision.create({
-        data: { shotId: row.id, revision: Number(latestRevision?.revision ?? 0) + 1, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}) },
+        data: { shotId: row.id, revision: nextRevision, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}) },
+      })
+      await tx.remakeShot.update({
+        where: { id: row.id },
+        data: { sequence: shot.shotNumber, externalIdentity: shot.id, currentRevision: nextRevision, version: { increment: 1 }, reviewStatus: 'pending', needsReview: false },
       })
       await tx.remakeProvenanceRecord.create({
         data: { shotId: row.id, schema: 'scenedetect.v2', executor: parsed.provenance?.executorVersion ?? 'legacy_json_import', capability: parsed.provenance?.mode ?? 'analysis', payload: operationPayload(input.operationKey, project) },
