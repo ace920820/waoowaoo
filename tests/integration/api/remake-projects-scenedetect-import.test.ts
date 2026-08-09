@@ -9,6 +9,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   remakeSource: { upsert: vi.fn(async () => ({ id: 'source-1' })) },
   remakeShot: {
+    findFirst: vi.fn(async () => null),
     upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({ id: 'shot-1', ...create })),
     update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'shot-1', ...data })),
   },
@@ -72,6 +73,18 @@ describe('SceneDetect import boundary', () => {
     }), { params: Promise.resolve({ projectId: 'project-1' }) })
     expect(second.status).toBe(200)
     expect(prismaMock.remakeShotRevision.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses a legacy analysis-prefixed external identity instead of violating the unique constraint', async () => {
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce({ id: 'legacy-shot-1', stableKey: 'project-1:analysis-old:external-shot-1', externalIdentity: 'analysis-old:external-shot-1', currentRevision: 4 })
+    const { POST } = await import('@/app/api/remake-projects/[projectId]/scenedetect/import/route')
+    const response = await POST(buildMockRequest({
+      path: '/api/remake-projects/project-1/scenedetect/import', method: 'POST', body: { mode: 'commit', analysisId: 'analysis-next', operationKey: 'op-legacy', payload: { ...payload, project: { ...payload.project, id: 'analysis-next' } } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    expect(response.status).toBe(201)
+    expect(prismaMock.remakeShot.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.remakeShotRevision.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ shotId: 'legacy-shot-1' }) }))
+    expect(prismaMock.remakeShot.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'legacy-shot-1' } }))
   })
 
   it('rejects private DNS results, URL credentials, and oversized media before ingestion', async () => {
