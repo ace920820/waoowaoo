@@ -42,6 +42,9 @@ describe('remake prompt stage contract', () => {
     expect(video).toContain('onAnalyzeVideo')
     expect(video).toContain("task?.status === 'queued'")
     expect(stage).toContain("kind: 'video'")
+    expect(stage).toContain('onClick={analyzeVideo}')
+    expect(stage).not.toContain('const analyzeShot')
+    expect(stage).toContain("{t('analyzeVideo')}")
   })
 
   it('keeps the reference version-history, saving, and approval controls on real Prompt tracks', () => {
@@ -62,7 +65,8 @@ describe('remake prompt stage contract', () => {
     expect(getPromptTaskState('queued', pendingTrack)).toBe('queued')
     expect(getPromptTaskState('processing', pendingTrack)).toBe('running')
     expect(getPromptTaskState('failed', pendingTrack)).toBe('failed')
-    expect(getPromptTaskState(undefined, pendingTrack)).toBe('pending')
+    expect(getPromptTaskState(undefined, pendingTrack)).toBe('approved')
+    expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: null })).toBe('approved')
     expect(getPromptTaskState(undefined, { ...pendingTrack, needsReview: true })).toBe('needsReview')
     expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: { ...pendingTrack.latestVersion, reviewStatus: 'APPROVED' } })).toBe('approved')
   })
