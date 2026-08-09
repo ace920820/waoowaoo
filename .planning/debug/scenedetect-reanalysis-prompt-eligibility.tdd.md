@@ -17,12 +17,19 @@ Result: 3 intended failures. The stable key changed with `analysisId`; import ne
 
 Result: 4 files, 14 tests passed.
 
+## Legacy Identity Migration
+
+`BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/integration/api/remake-projects-scenedetect-import.test.ts`
+
+Result: the legacy `analysisId:shotId` identity reproducer failed before the migration lookup because import attempted a fresh stable-key upsert. After the fix, the focused suite passes and the importer reuses the historical Shot before appending a new revision.
+
 | Guarantee | Evidence |
 | --- | --- |
 | Reanalysis uses a stable external Shot identity rather than a run-specific analysis id. | `scenedetect-adapter.test.ts` |
 | Import retires the previous active set and writes the new `currentRevision`. | `remake-projects-scenedetect-import.test.ts` |
 | Automatic pending Shots stay unconfirmed but become Prompt-eligible when current and keyframe-complete. | `scenedetect-review-gate.test.ts` |
 | The Prompt API accepts an eligible automatic Shot and queues the image analysis task. | `remake-projects-prompt-analyze.test.ts` |
+| A legacy analysis-prefixed external identity is reused without a unique-constraint conflict. | `remake-projects-scenedetect-import.test.ts` |
 
 ## Additional Verification
 
