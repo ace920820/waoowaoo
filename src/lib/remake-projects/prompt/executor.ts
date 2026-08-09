@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { imagePromptAnalysisSchema, type PromptTargetKey } from './contracts'
+import { imagePromptAnalysisSchema, videoPromptAnalysisSchema, type PromptTargetKey } from './contracts'
 
 const MAX_STDOUT_BYTES = 512 * 1024
 const MAX_STDERR_BYTES = 64 * 1024
@@ -83,6 +83,16 @@ export function parseCodexJsonl(raw: string, targetKey: PromptTargetKey): { sess
     const value = result as Record<string, unknown>
     const rows = Array.isArray(value) ? value : (Array.isArray(value.shots) ? value.shots : null)
     if (!rows) throw new Error('CODEX_VIDEO_RESULT_INVALID')
+    for (const row of rows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('CODEX_VIDEO_RESULT_INVALID')
+      const item = row as Record<string, unknown>
+      if (typeof item.stableShotId !== 'string' || !item.stableShotId.trim()) throw new Error('CODEX_VIDEO_RESULT_INVALID')
+      try {
+        videoPromptAnalysisSchema.parse(item.analysis ?? item.result)
+      } catch {
+        throw new Error('CODEX_VIDEO_RESULT_INVALID')
+      }
+    }
   } else {
     const value = (result as Record<string, unknown>)?.analysis ?? result
     imagePromptAnalysisSchema.parse(value)
