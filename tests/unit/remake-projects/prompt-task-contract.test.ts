@@ -21,10 +21,16 @@ describe('remake prompt task contract', () => {
     const base = { kind: 'image' as const, projectId: imageSnapshot.projectId, inputSnapshot: imageSnapshot, operationKey: 'r'.repeat(200) }
     const start = buildRemakePromptTaskDescriptor({ ...base, slot: 'start' })
     const middle = buildRemakePromptTaskDescriptor({ ...base, slot: 'middle' })
+    const otherShot = buildRemakePromptTaskDescriptor({
+      ...base,
+      slot: 'start',
+      inputSnapshot: { ...imageSnapshot, shotId: '55555555-5555-4555-8555-555555555555' },
+    })
 
     expect(start.dedupeKey).toMatch(/^remake-prompt:image:[a-f0-9]{64}$/)
     expect(start.dedupeKey.length).toBeLessThanOrEqual(191)
     expect(start.dedupeKey).not.toBe(middle.dedupeKey)
+    expect(start.dedupeKey).not.toBe(otherShot.dedupeKey)
   })
 
   it('rejects a client-supplied executor field and validates the canonical fingerprint', () => {
