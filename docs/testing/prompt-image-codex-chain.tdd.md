@@ -41,3 +41,15 @@ BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/unit/remake-projects/remake-prompt
 ```
 
 Result: 2 test files, 9 tests passed. The action now calls only `analyzeVideo` and uses the existing `analyzeVideo` translation. Card and filter state treat an adopted version as approved unless the track requires review.
+
+## Follow-up: Image Prompt Status Colors
+
+RED: the image Prompt status badge had only the shared neutral background, so idle, pending-review, and approved states were visually indistinguishable.
+
+GREEN command:
+
+```sh
+BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/unit/remake-projects/remake-prompt-stage-contract.test.ts tests/unit/remake-projects/prompt-image-generation-state.test.tsx
+```
+
+Result: 2 test files, 10 tests passed. Image Prompt badges now use gray for unanalysed, yellow for pending review, and green for approved.

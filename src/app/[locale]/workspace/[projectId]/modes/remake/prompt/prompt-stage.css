@@ -5,6 +5,9 @@
 .prompt-header p { margin: 0; color: #667085; font-size: 13px; }
 .prompt-header-actions, .prompt-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .prompt-queue, .prompt-state { font-size: 12px; padding: 7px 9px; border-radius: 999px; background: #f2f4f7; display: inline-flex; gap: 5px; align-items: center; font-style: normal; }
+.prompt-state.idle { color: #667085; background: #f2f4f7; }
+.prompt-state.pending { color: #b54708; background: #fffaeb; }
+.prompt-state.approved { color: #087443; background: #ecfdf3; }
 .prompt-primary, .prompt-secondary { border: 0; border-radius: 6px; padding: 9px 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-weight: 650; }
 .prompt-primary { background: #5038f2; color: #fff; }
 .prompt-secondary { background: #ede9fe; color: #4338ca; }
