@@ -17,6 +17,16 @@ describe('remake prompt task contract', () => {
     expect(first.dedupeKey).not.toBe(rerun.dedupeKey)
   })
 
+  it('keeps image task dedupe keys within the Task column limit for maximum operation keys', () => {
+    const base = { kind: 'image' as const, projectId: imageSnapshot.projectId, inputSnapshot: imageSnapshot, operationKey: 'r'.repeat(200) }
+    const start = buildRemakePromptTaskDescriptor({ ...base, slot: 'start' })
+    const middle = buildRemakePromptTaskDescriptor({ ...base, slot: 'middle' })
+
+    expect(start.dedupeKey).toMatch(/^remake-prompt:image:[a-f0-9]{64}$/)
+    expect(start.dedupeKey.length).toBeLessThanOrEqual(191)
+    expect(start.dedupeKey).not.toBe(middle.dedupeKey)
+  })
+
   it('rejects a client-supplied executor field and validates the canonical fingerprint', () => {
     const descriptor = buildRemakePromptTaskDescriptor({ kind: 'image', projectId: imageSnapshot.projectId, slot: 'middle', inputSnapshot: imageSnapshot, operationKey: 'click-1' })
     expect(() => parseRemakePromptTaskPayload({ ...descriptor.payload, executor: 'client-controlled' })).toThrow('REMAKE_PROMPT_TASK_FIELD_NOT_ALLOWED')
