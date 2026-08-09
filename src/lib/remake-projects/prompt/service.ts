@@ -191,10 +191,19 @@ type VideoPromptResult = {
   rawOutput?: string | null
 }
 
+export function normalizeVideoPromptStableShotIds<T extends { stableShotId: string }>(expectedStableShotIds: string[], results: T[]): T[] {
+  return results.map((result) => {
+    const stableShotId = result.stableShotId.trim()
+    if (expectedStableShotIds.includes(stableShotId)) return { ...result, stableShotId }
+    const matches = expectedStableShotIds.filter((expected) => expected.endsWith(`:${stableShotId}`))
+    return matches.length === 1 ? { ...result, stableShotId: matches[0] } : { ...result, stableShotId }
+  })
+}
+
 function assertExactStableShotSet(expectedStableShotIds: string[], results: VideoPromptResult[]) {
   if (!expectedStableShotIds.length || expectedStableShotIds.length !== new Set(expectedStableShotIds).size) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
   const actualStableShotIds = results.map((result) => result.stableShotId)
-  if (actualStableShotIds.length !== expectedStableShotIds.length || new Set(actualStableShotIds).size !== actualStableShotIds.length || actualStableShotIds.some((id) => !expectedStableShotIds.includes(id))) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
+  if (actualStableShotIds.length !== expectedStableShotIds.length || new Set(actualStableShotIds).size !== actualStableShotIds.length || actualStableShotIds.some((id) => !expectedStableShotIds.includes(id))) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID: result IDs did not exactly cover the manifest')
 }
 
 export async function persistVideoPromptRunAtomically(input: {

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { downloadObjectToFile, extractStorageKey, getObjectBuffer } from '@/lib/storage'
 import { getMediaObjectById, resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { parsePromptAnalysis, type PromptInputSnapshot, type PromptTargetKey } from '@/lib/remake-projects/prompt/contracts'
-import { persistImagePromptVersion, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
+import { normalizeVideoPromptStableShotIds, persistImagePromptVersion, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
 import { parseRemakePromptTaskPayload, type RemakePromptImageTaskPayload } from '@/lib/remake-projects/prompt/task-contract'
 import { runCodexPromptAnalysis, runCodexVideoWorkspaceAnalysis } from '@/lib/remake-projects/prompt/executor'
 import { createVideoPromptWorkspace, removeVideoPromptWorkspace } from '@/lib/remake-projects/prompt/video-workspace'
@@ -124,7 +124,7 @@ export async function handleRemakeVideoPromptTask(job: Job<TaskJobData>) {
     await assertTaskActive(job, 'after_prompt_cli')
     const raw = analysis.result as Row | Row[]
     const rows: Row[] = Array.isArray(raw) ? raw : (Array.isArray((raw as Row).shots) ? (raw as Row).shots as Row[] : [])
-    const results = rows.map((row: Row) => ({ stableShotId: String(row.stableShotId || row.shotId || ''), analysis: parsePromptAnalysis('video', row.analysis || row.result), rawOutput: typeof row.rawOutput === 'string' ? row.rawOutput : null }))
+    const results = normalizeVideoPromptStableShotIds(snapshots.map((snapshot) => snapshot.stableKey), rows.map((row: Row) => ({ stableShotId: String(row.stableShotId || row.shotId || ''), analysis: parsePromptAnalysis('video', row.analysis || row.result), rawOutput: typeof row.rawOutput === 'string' ? row.rawOutput : null })))
     if (results.some((row) => !row.stableShotId || !row.analysis)) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
     const persisted = await persistVideoPromptRunAtomically({ projectId: job.data.projectId, expectedStableShotIds: snapshots.map((snapshot) => snapshot.stableKey), results, rawOutput: analysis.rawOutput, provenance: { taskId: job.data.taskId, schemaVersion: 'prompt.v1', modelVersion: 'codex', executorVersion: 'codex-cli.workspace.v1' } })
     return { kind: 'video', runId: persisted.run.id, versionIds: persisted.versions.map((version: Row) => version.id), sessionId: analysis.sessionId, inputFingerprint: payload.inputFingerprint }

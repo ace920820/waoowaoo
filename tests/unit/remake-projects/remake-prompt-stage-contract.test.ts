@@ -63,7 +63,7 @@ describe('remake prompt stage contract', () => {
   it('shows a failed whole-video task reason instead of silently returning to the idle action', () => {
     const video = readFileSync(videoPath, 'utf8')
     expect(video).toContain("task?.status === 'failed'")
-    expect(video).toContain('task?.errorMessage')
+    expect(video).toContain('task.errorMessage ||')
     expect(video).toContain('version?.coreText')
   })
 
