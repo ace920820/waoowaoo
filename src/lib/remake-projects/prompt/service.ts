@@ -223,7 +223,10 @@ export async function persistVideoPromptRunAtomically(input: {
       include: { shots: { select: { id: true, stableKey: true } } },
     })
     if (!remakeProject) throw new Error('REMAKE_PROJECT_NOT_FOUND')
-    const shotsByStableKey = new Map<string, any>(remakeProject.shots.map((shot: any) => [shot.stableKey, shot]))
+    const expectedStableShotIds = new Set(input.expectedStableShotIds)
+    const shotsByStableKey = new Map<string, any>(remakeProject.shots
+      .filter((shot: any) => expectedStableShotIds.has(shot.stableKey))
+      .map((shot: any) => [shot.stableKey, shot]))
     if (shotsByStableKey.size !== input.expectedStableShotIds.length || input.expectedStableShotIds.some((stableKey) => !shotsByStableKey.has(stableKey))) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
     const snapshots = await Promise.all(parsedResults.map(async (result) => ({ result, snapshot: await currentInput(tx, { projectId: input.projectId, shotId: shotsByStableKey.get(result.stableShotId).id }) })))
     const runFingerprint = createHash('sha256').update(stableJson(snapshots.map(({ snapshot }) => promptInputFingerprint(snapshot)))).digest('hex')
