@@ -5,10 +5,11 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRemakeProject } from '@/lib/query/hooks/useRemakeProject'
 import { SceneDetectStageHost } from './scenedetect/SceneDetectStageHost'
+import { PromptStage } from './prompt/PromptStage'
 import { createSceneDetectRuntime } from '@/lib/remake-projects/scenedetect/runtime-client'
 import './scenedetect/scenedetect-stage.css'
 
-const STAGES = ['overview', 'scenedetect'] as const
+const STAGES = ['overview', 'scenedetect', 'prompt'] as const
 type RemakeStage = typeof STAGES[number]
 
 export type RemakeWorkbenchProps = {
@@ -68,6 +69,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
       <main className="remake-stage-main" data-stage-active={stage === 'scenedetect' ? 'true' : 'false'}>
         <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
       </main>
+      {stage === 'prompt' ? <PromptStage projectId={projectId} snapshot={snapshot} /> : null}
 
       {taskDrawerOpen ? <div className="remake-task-overlay" role="presentation" onMouseDown={() => setTaskDrawerOpen(false)}>
         <aside className="remake-task-drawer" role="dialog" aria-modal="true" aria-label={t('tasks')} onMouseDown={(event) => event.stopPropagation()}>
