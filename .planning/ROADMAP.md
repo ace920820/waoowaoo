@@ -113,13 +113,19 @@
   3. 用户可以根据原始 Shot、时间信息和已确认关键帧生成 Video Prompt，并审阅其中的动作、调度、机位、镜头运动、节奏和环境变化。
   4. 用户可以播放原始 Shot、编辑与比较 Video Prompt 版本并明确批准或人工修订；未批准 Prompt 不会成为默认批量生成输入，整段分析失败可重试且显示可理解错误。
 
-**Plans**: 4 plans
+**Plans**: 3/4 plans executed
 
 Plans:
+
+- [x] 07-01-PLAN.md
+- [x] 07-02-PLAN.md
+- [x] 07-03-PLAN.md
+- [ ] 07-04-PLAN.md
 - [x] `07-01-PLAN.md` — 建立 append-only Prompt schema、版本/审核/采用/失效合同与整段 Video 原子持久化
 - [x] `07-02-PLAN.md` — 接入统一 Task、Codex CLI Worker、认证触发路由与 Redis 图片三并发门禁
-- [ ] `07-03-PLAN.md` — 扩展 snapshot/API/query，并将外部 Prompt 前端合入现有 RemakeWorkbench
+- [x] `07-03-PLAN.md` — 扩展 snapshot/API/query，并将外部 Prompt 前端合入现有 RemakeWorkbench
 - [ ] `07-04-PLAN.md` — 完成 unit/API/Worker/Playwright/真实 Codex 验证与阻塞式真实用户流验收
+
 **UI hint**: yes
 
 ## v1.1 集成边界
