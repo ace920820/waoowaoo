@@ -39,5 +39,5 @@
   "noSource": "请先回到视频分析阶段导入原视频。",
   "noPromptEligibleShot": "请先完成镜头确认和关键帧提取。",
   "partialRawOutput": "部分内容未能整理，可查看原始输出。",
-  "stages": { "overview": "项目概览", "scenedetect": "视频分析 / 镜头审核", "prompt": "Prompt 分析" }
+  "stages": { "overview": "项目概览", "scenedetect": "镜头分析", "prompt": "Prompt 分析" }
 }

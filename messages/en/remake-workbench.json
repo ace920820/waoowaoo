@@ -39,5 +39,5 @@
   "noSource": "Import the source video in the video analysis stage first.",
   "noPromptEligibleShot": "Confirm shots and extract keyframes first.",
   "partialRawOutput": "Some content could not be structured; view the raw output.",
-  "stages": { "overview": "Project overview", "scenedetect": "Video analysis / shot review", "prompt": "Prompt analysis" }
+  "stages": { "overview": "Project overview", "scenedetect": "Shot analysis", "prompt": "Prompt analysis" }
 }

@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ArrowRight, Clapperboard, Film, Layers, MonitorCog, Sparkles } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRemakeProject } from '@/lib/query/hooks/useRemakeProject'
@@ -28,6 +29,10 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
   const runtime = useMemo(() => createSceneDetectRuntime(projectId), [projectId])
   const latestTasks = useMemo(() => snapshot?.tasks.slice(0, 8) ?? [], [snapshot?.tasks])
   const updateStage = (nextStage: RemakeStage) => onStageChange?.(nextStage)
+  const sourceMetadata = snapshot?.source.metadata as Record<string, unknown> | null | undefined
+  const sourceName = typeof sourceMetadata?.fileName === 'string' ? sourceMetadata.fileName : t('sourceStatus.not_imported')
+  const resolution = sourceMetadata?.width && sourceMetadata?.height ? `${sourceMetadata.width}x${sourceMetadata.height}` : '-'
+  const fps = typeof sourceMetadata?.fps === 'number' ? `${sourceMetadata.fps}fps` : ''
 
   if (query.isLoading) return <div className="remake-workbench-loading">{t('loading')}</div>
   if (query.isError || !snapshot) return <div className="remake-workbench-error">{query.error?.message || t('loadFailed')}</div>
@@ -54,18 +59,12 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
       </nav>
 
       <main className={stage === 'overview' ? 'remake-overview' : 'remake-overview is-context-hidden'} data-testid="remake-overview" aria-hidden={stage !== 'overview'}>
-          <section className="remake-summary-grid" aria-label={t('summary')}>
-            <div className="remake-summary-item"><span>{t('source')}</span><strong>{t(`sourceStatus.${snapshot.source.status}` as 'sourceStatus.not_imported')}</strong></div>
-            <div className="remake-summary-item"><span>{t('shots')}</span><strong>{snapshot.shots.length}</strong></div>
-            <div className="remake-summary-item"><span>{t('review')}</span><strong>{snapshot.shots.filter((shot) => shot.needsReview).length}</strong></div>
-          </section>
-          <section className="remake-shot-panel">
-            <div className="remake-section-heading"><h2>{t('shotList')}</h2><span>{snapshot.shots.length}</span></div>
-            {snapshot.shots.length === 0 ? <p className="remake-empty">{t('noShots')}</p> : (
-              <ul>{snapshot.shots.map((shot) => <li key={shot.id}><span>#{shot.sequence ?? '-'}</span><code>{shot.stableKey}</code><em>{shot.needsReview ? t('needsReview') : shot.reviewStatus}</em></li>)}</ul>
-            )}
-          </section>
-        </main>
+        <section className="remake-overview-hero"><div><p className="remake-overview-pill"><Film size={14}/> 项目概览与翻拍设置</p><h2>{snapshot.project.name}</h2><p>查看原视频基础信息、转码参数与翻拍总体进度。</p></div><div className="remake-overview-actions"><button type="button" onClick={() => updateStage('scenedetect')}>{t('stages.scenedetect')}</button><button type="button" onClick={() => updateStage('prompt')}>进入 Prompt 阶段 <ArrowRight size={16}/></button></div></section>
+        <section className="remake-overview-cards" aria-label={t('summary')}>
+          <OverviewMetric icon={<Film/>} label="原视频文件" value={sourceName}/><OverviewMetric icon={<MonitorCog/>} label="分辨率与帧率" value={`${resolution} ${fps}`}/><OverviewMetric icon={<Clapperboard/>} label="目标动漫风格" value="待在 Prompt 阶段定义"/><OverviewMetric icon={<Layers/>} label="总镜头数" value={`${snapshot.shots.length} 镜头`}/>
+        </section>
+        <section className="remake-workflow"><h2><Sparkles size={18}/> 翻拍工作流进度</h2><div><WorkflowStep title="1. 项目初始化" text={snapshot.source.mediaId ? '原视频已导入，元数据可恢复。' : '等待原视频导入。'} state={snapshot.source.mediaId ? '已就绪' : '待导入'}/><WorkflowStep title="2. 镜头分析与关键帧切分" text={`已识别 ${snapshot.shots.length} 个当前镜头。`} state={snapshot.shots.length ? '已完成' : '待分析'} onClick={() => updateStage('scenedetect')}/><WorkflowStep title="3. Prompt 结构化分析" text="关键帧和整段视频 Prompt 由后台任务分析与审核。" state="当前阶段" active onClick={() => updateStage('prompt')}/></div></section>
+      </main>
       <main className="remake-stage-main" data-stage-active={stage === 'scenedetect' ? 'true' : 'false'}>
         <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
       </main>
@@ -80,3 +79,6 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
     </div>
   )
 }
+
+function OverviewMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) { return <div className="remake-overview-metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div> }
+function WorkflowStep({ title, text, state, active, onClick }: { title: string; text: string; state: string; active?: boolean; onClick?: () => void }) { return <button type="button" className={active ? 'is-active' : ''} onClick={onClick}><header><strong>{title}</strong><em>{state}</em></header><span>{text}</span></button> }
