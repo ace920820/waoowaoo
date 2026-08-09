@@ -7,6 +7,7 @@ import type { PromptTrackSummary, RemakeSnapshot } from '@/lib/query/hooks/useRe
 import { useAnalyzeRemakePrompt } from '@/lib/query/mutations/remake-prompt-mutations'
 import { PromptImageTab } from './PromptImageTab'
 import { PromptVideoTab } from './PromptVideoTab'
+import './prompt-stage.css'
 
 type Props = { projectId: string; snapshot: RemakeSnapshot }
 type Filter = 'all' | 'pending_review' | 'approved'

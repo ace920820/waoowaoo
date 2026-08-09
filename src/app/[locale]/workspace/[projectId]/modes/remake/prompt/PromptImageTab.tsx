@@ -40,6 +40,7 @@ function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; 
   const [draftCore, setDraftCore] = useState('')
   const [draftNegative, setDraftNegative] = useState('')
   const state = getPromptTaskState(task?.status, track)
+  const isWorking = state === 'queued' || state === 'running'
   const frame = shot.keyframes?.[slot]
   const status = state === 'idle' ? t('notAnalyzed') : state === 'pending' ? t('pendingReview') : t(state)
   const beginEdit = () => {
@@ -55,7 +56,7 @@ function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; 
     <header><b>{slot.toUpperCase()}</b><span>{t(`frame.${slot}`)}</span><em className={`prompt-state ${state}`}>{status}</em></header>
     {frame?.mediaUrl ? <a href={frame.mediaUrl} target="_blank" rel="noreferrer"><img src={frame.mediaUrl} alt={t('frameImage', { frame: t(`frame.${slot}`) })} /></a> : <div className="prompt-media-empty">{t('noKeyframe')}</div>}
     {state === 'failed' ? <p className="prompt-error">{task?.errorMessage ?? t('analysisFailedHint')}</p> : null}
-    {!track?.latestVersion ? <button type="button" className="prompt-primary" disabled={!shot.review?.promptEligible || analyze.isPending || !frame?.mediaUrl} onClick={() => analyze.mutate({ kind: 'image', shotId: shot.id, slot, operationKey: crypto.randomUUID() })}><AppIcon name={state === 'failed' ? 'refresh' : 'play'} size={14} />{state === 'failed' ? t('retry') : t('analyzeImage')}</button> : <>
+    {isWorking ? <div className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 text-xs font-medium text-indigo-700"><AppIcon name="loader" size={16} className="animate-spin" />{t('running')}</div> : !track?.latestVersion ? <button type="button" className="prompt-primary" disabled={!shot.review?.promptEligible || analyze.isPending || !frame?.mediaUrl} onClick={() => analyze.mutate({ kind: 'image', shotId: shot.id, slot, operationKey: crypto.randomUUID() })}><AppIcon name={state === 'failed' ? 'refresh' : 'play'} size={14} />{state === 'failed' ? t('retry') : t('analyzeImage')}</button> : <>
       <div className="prompt-version-markers"><span>{t('latest')} v{track.latestVersion.versionNumber}</span>{track.adoptedVersion ? <small><AppIcon name="check" size={13} />{t('adopted')} v{track.adoptedVersion.versionNumber}</small> : null}</div>
       {track.needsReview ? <p className="prompt-review-warning"><AppIcon name="alert" size={14} />{t('needsReviewHint')}</p> : null}
       {version ? <div className="prompt-result"><h4>{t('integratedPrompt')}</h4>{editing ? <textarea value={draftCore} onChange={(event) => setDraftCore(event.target.value)} aria-label={t('integratedPrompt')} /> : <p>{version.coreText}</p>}<h4>{t('negativeConstraints')}</h4>{editing ? <textarea value={draftNegative} onChange={(event) => setDraftNegative(event.target.value)} aria-label={t('negativeConstraints')} /> : <p>{version.negativeConstraints.join(' · ') || t('none')}</p>}</div> : <p className="prompt-detail-note">{t('loadingVersion')}</p>}

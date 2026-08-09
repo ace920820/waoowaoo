@@ -33,9 +33,11 @@ describe('remake prompt stage contract', () => {
     const video = readFileSync(videoPath, 'utf8')
 
     expect(image).toContain("kind: 'image'")
+    expect(image).toContain("state === 'queued'")
     expect(image).not.toMatch(/all frames|batch.?analy[sz]e/i)
     expect(video).toContain('project-level video analysis')
     expect(video).toContain('onAnalyzeVideo')
+    expect(video).toContain("task?.status === 'queued'")
     expect(stage).toContain("kind: 'video'")
   })
 

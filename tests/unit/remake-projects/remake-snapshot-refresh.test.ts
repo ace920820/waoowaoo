@@ -36,4 +36,9 @@ describe('remake snapshot refresh interval', () => {
   it('stops fetching once all current-scene keyframes are available', () => {
     expect(remakeSnapshotRefreshInterval(snapshot())).toBe(false)
   })
+
+  it('keeps fetching while an image or video Prompt task is queued or processing', () => {
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-1', type: 'REMAKE_IMAGE_PROMPT_ANALYZE', targetType: 'remake_shot', targetId: 'shot-1', status: 'queued', createdAt: '', updatedAt: '' }] }))).toBe(1000)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-2', type: 'REMAKE_VIDEO_PROMPT_ANALYZE', targetType: 'remake_project', targetId: 'project-1', status: 'processing', createdAt: '', updatedAt: '' }] }))).toBe(1000)
+  })
 })

@@ -70,7 +70,10 @@ export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefin
   const hasPendingKeyframes = snapshot.shots.some((shot) =>
     keyframeSlots.some((slot) => !shot.keyframes?.[slot]?.mediaUrl),
   )
-  return hasPendingKeyframes ? 1000 : false
+  const hasActivePromptTask = snapshot.tasks.some((task) =>
+    task.type.includes('PROMPT') && ['queued', 'processing', 'running'].includes(task.status),
+  )
+  return hasPendingKeyframes || hasActivePromptTask ? 1000 : false
 }
 
 export function useRemakeProject(projectId: string | null) {
