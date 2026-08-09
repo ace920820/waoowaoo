@@ -61,11 +61,24 @@ export type PromptTrackDetail = {
   selected: Array<PromptVersionSummary & { parsedOutput: unknown; rawOutput: string | null }>
 }
 
+const keyframeSlots = ['start', 'middle', 'end'] as const
+
+// SceneDetect stores the shot list before its asynchronous frame transfer completes.
+// Keep this snapshot current until every displayed frame can be rendered by Prompt.
+export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefined): number | false {
+  if (snapshot?.source.status !== 'analyzed') return false
+  const hasPendingKeyframes = snapshot.shots.some((shot) =>
+    keyframeSlots.some((slot) => !shot.keyframes?.[slot]?.mediaUrl),
+  )
+  return hasPendingKeyframes ? 1000 : false
+}
+
 export function useRemakeProject(projectId: string | null) {
   return useQuery({
     queryKey: queryKeys.remake.snapshot(projectId || ''),
     enabled: Boolean(projectId),
     staleTime: 5000,
+    refetchInterval: (query) => remakeSnapshotRefreshInterval(query.state.data),
     queryFn: async (): Promise<RemakeSnapshot> => {
       if (!projectId) throw new Error('Project ID is required')
       const response = await apiFetch(`/api/projects/${projectId}/data`)

@@ -8,6 +8,7 @@ function snapshot(overrides: Partial<RemakeSnapshot> = {}): RemakeSnapshot {
     shots: [{
       id: 'shot-1', stableKey: 'scene-1', sequence: 1, reviewStatus: 'pending', needsReview: false,
       revisions: [],
+      provenance: [],
       keyframes: {
         start: { mediaId: 'frame-1', mediaUrl: '/frame-1' },
         middle: { mediaId: 'frame-2', mediaUrl: '/frame-2' },
