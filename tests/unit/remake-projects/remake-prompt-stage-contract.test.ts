@@ -34,6 +34,8 @@ describe('remake prompt stage contract', () => {
 
     expect(image).toContain("kind: 'image'")
     expect(image).toContain("state === 'queued'")
+    expect(image).toContain('backdrop-blur-sm')
+    expect(image).toContain('AI Prompt')
     expect(image).not.toMatch(/all frames|batch.?analy[sz]e/i)
     expect(video).toContain('project-level video analysis')
     expect(video).toContain('onAnalyzeVideo')
