@@ -5,6 +5,7 @@ const requiredPromptKeys = [
   'prompt', 'imagePrompt', 'videoPrompt', 'analyzeVideo', 'reanalyzeVideo',
   'queued', 'running', 'failed', 'pendingReview', 'approved', 'needsReview',
   'all',
+  'copy',
   'versionHistory', 'edit', 'saveAsNewVersion', 'approveAndAdopt', 'fullAnalysis',
 ] as const
 
