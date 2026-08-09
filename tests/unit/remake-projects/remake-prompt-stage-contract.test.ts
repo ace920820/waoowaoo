@@ -17,6 +17,10 @@ describe('remake prompt stage contract', () => {
     expect(stage).toContain('prompt-keyframe-section')
     expect(stage).toContain('prompt-video-section')
     expect(stage).not.toContain('prompt-tabs')
+    expect(stage).toContain('grid grid-cols-1 lg:grid-cols-12 gap-6')
+    expect(stage).toContain('lg:col-span-4')
+    expect(stage).toContain('lg:col-span-8')
+    expect(stage).toContain('grid grid-cols-1 md:grid-cols-3 gap-4')
     expect(image).toContain('useRemakePromptTrack')
     expect(image).toContain('useSaveRemakePromptVersion')
     expect(image).toContain('useApproveAndAdoptRemakePrompt')
@@ -31,8 +35,9 @@ describe('remake prompt stage contract', () => {
 
     expect(image).toContain("kind: 'image'")
     expect(image).not.toMatch(/all frames|batch.?analy[sz]e/i)
-    expect(video).not.toContain("kind: 'video'")
     expect(video).toContain('project-level video analysis')
+    expect(video).toContain('onAnalyzeVideo')
+    expect(stage).toContain("kind: 'video'")
   })
 
   it('renders version history and comparison without treating viewed content as adopted', () => {
