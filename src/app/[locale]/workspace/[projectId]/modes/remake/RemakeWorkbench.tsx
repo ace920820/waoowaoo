@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowRight, Clapperboard, Film, Layers, MonitorCog, Sparkles } from 'lucide-react'
+import { AppIcon } from '@/components/ui/icons'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useRemakeProject } from '@/lib/query/hooks/useRemakeProject'
@@ -59,11 +59,11 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
       </nav>
 
       <main className={stage === 'overview' ? 'remake-overview' : 'remake-overview is-context-hidden'} data-testid="remake-overview" aria-hidden={stage !== 'overview'}>
-        <section className="remake-overview-hero"><div><p className="remake-overview-pill"><Film size={14}/> 项目概览与翻拍设置</p><h2>{snapshot.project.name}</h2><p>查看原视频基础信息、转码参数与翻拍总体进度。</p></div><div className="remake-overview-actions"><button type="button" onClick={() => updateStage('scenedetect')}>{t('stages.scenedetect')}</button><button type="button" onClick={() => updateStage('prompt')}>进入 Prompt 阶段 <ArrowRight size={16}/></button></div></section>
+        <section className="remake-overview-hero"><div><p className="remake-overview-pill"><AppIcon name="film" size={14} /> 项目概览与翻拍设置</p><h2>{snapshot.project.name}</h2><p>查看原视频基础信息、转码参数与翻拍总体进度。</p></div><div className="remake-overview-actions"><button type="button" onClick={() => updateStage('scenedetect')}>{t('stages.scenedetect')}</button><button type="button" onClick={() => updateStage('prompt')}>进入 Prompt 阶段 <AppIcon name="arrowRight" size={16} /></button></div></section>
         <section className="remake-overview-cards" aria-label={t('summary')}>
-          <OverviewMetric icon={<Film/>} label="原视频文件" value={sourceName}/><OverviewMetric icon={<MonitorCog/>} label="分辨率与帧率" value={`${resolution} ${fps}`}/><OverviewMetric icon={<Clapperboard/>} label="目标动漫风格" value="待在 Prompt 阶段定义"/><OverviewMetric icon={<Layers/>} label="总镜头数" value={`${snapshot.shots.length} 镜头`}/>
+          <OverviewMetric icon={<AppIcon name="film" />} label="原视频文件" value={sourceName}/><OverviewMetric icon={<AppIcon name="monitorCog" />} label="分辨率与帧率" value={`${resolution} ${fps}`}/><OverviewMetric icon={<AppIcon name="clapperboard" />} label="目标动漫风格" value="待在 Prompt 阶段定义"/><OverviewMetric icon={<AppIcon name="layers" />} label="总镜头数" value={`${snapshot.shots.length} 镜头`}/>
         </section>
-        <section className="remake-workflow"><h2><Sparkles size={18}/> 翻拍工作流进度</h2><div><WorkflowStep title="1. 项目初始化" text={snapshot.source.mediaId ? '原视频已导入，元数据可恢复。' : '等待原视频导入。'} state={snapshot.source.mediaId ? '已就绪' : '待导入'}/><WorkflowStep title="2. 镜头分析与关键帧切分" text={`已识别 ${snapshot.shots.length} 个当前镜头。`} state={snapshot.shots.length ? '已完成' : '待分析'} onClick={() => updateStage('scenedetect')}/><WorkflowStep title="3. Prompt 结构化分析" text="关键帧和整段视频 Prompt 由后台任务分析与审核。" state="当前阶段" active onClick={() => updateStage('prompt')}/></div></section>
+        <section className="remake-workflow"><h2><AppIcon name="sparkles" size={18} /> 翻拍工作流进度</h2><div><WorkflowStep title="1. 项目初始化" text={snapshot.source.mediaId ? '原视频已导入，元数据可恢复。' : '等待原视频导入。'} state={snapshot.source.mediaId ? '已就绪' : '待导入'}/><WorkflowStep title="2. 镜头分析与关键帧切分" text={`已识别 ${snapshot.shots.length} 个当前镜头。`} state={snapshot.shots.length ? '已完成' : '待分析'} onClick={() => updateStage('scenedetect')}/><WorkflowStep title="3. Prompt 结构化分析" text="关键帧和整段视频 Prompt 由后台任务分析与审核。" state="当前阶段" active onClick={() => updateStage('prompt')}/></div></section>
       </main>
       <main className="remake-stage-main" data-stage-active={stage === 'scenedetect' ? 'true' : 'false'}>
         <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
