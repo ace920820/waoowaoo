@@ -23,6 +23,14 @@ Result: 4 files, 14 tests passed.
 
 Result: the legacy `analysisId:shotId` identity reproducer failed before the migration lookup because import attempted a fresh stable-key upsert. After the fix, the focused suite passes and the importer reuses the historical Shot before appending a new revision.
 
+## Historical Duplicate Identity Conflict
+
+`BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/integration/api/remake-projects-scenedetect-import.test.ts`
+
+Result before the fix: the new reproducer failed because a broad legacy suffix lookup selected a duplicate `analysisId:scene-N` row, then `remakeShot.update()` tried to assign an `externalIdentity` already owned by the canonical `scene-N` row.
+
+Result after the fix: the importer looks up the exact external identity first, then the current stable key, and only then a legacy suffix. The focused suite, related Prompt/SceneDetect suites, and `npm run typecheck` pass.
+
 | Guarantee | Evidence |
 | --- | --- |
 | Reanalysis uses a stable external Shot identity rather than a run-specific analysis id. | `scenedetect-adapter.test.ts` |
@@ -30,6 +38,7 @@ Result: the legacy `analysisId:shotId` identity reproducer failed before the mig
 | Automatic pending Shots stay unconfirmed but become Prompt-eligible when current and keyframe-complete. | `scenedetect-review-gate.test.ts` |
 | The Prompt API accepts an eligible automatic Shot and queues the image analysis task. | `remake-projects-prompt-analyze.test.ts` |
 | A legacy analysis-prefixed external identity is reused without a unique-constraint conflict. | `remake-projects-scenedetect-import.test.ts` |
+| A canonical `scene-N` identity wins over duplicate legacy suffix matches. | `remake-projects-scenedetect-import.test.ts` |
 
 ## Additional Verification
 

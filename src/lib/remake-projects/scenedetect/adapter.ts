@@ -96,18 +96,17 @@ export async function commitSceneDetectImport(input: {
     })
     for (const shot of project.shots) {
       const stableKey = createExternalShotKey(input.projectId, input.analysisId, shot.id)
-      // Before stable keys stopped including analysisId, externalIdentity used the
-      // `analysisId:shotId` shape. Reuse either identity during this migration.
+      // Historical imports can have several analysis-prefixed rows for one SceneDetect
+      // shot. The canonical identity must win before considering their broad suffix.
       const existing = await tx.remakeShot.findFirst({
-        where: {
-          remakeProjectId: remakeProject.id,
-          OR: [
-            { stableKey },
-            { externalIdentity: shot.id },
-            { externalIdentity: { endsWith: `:${shot.id}` } },
-          ],
-        },
+        where: { remakeProjectId: remakeProject.id, externalIdentity: shot.id },
       })
+        ?? await tx.remakeShot.findFirst({
+          where: { remakeProjectId: remakeProject.id, stableKey },
+        })
+        ?? await tx.remakeShot.findFirst({
+          where: { remakeProjectId: remakeProject.id, externalIdentity: { endsWith: `:${shot.id}` } },
+        })
       const row = existing ?? await tx.remakeShot.upsert({
         where: { remakeProjectId_stableKey: { remakeProjectId: remakeProject.id, stableKey } },
         create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: shot.id, sequence: shot.shotNumber },
