@@ -212,7 +212,7 @@ export const ShotCard: React.FC<ShotCardProps> = ({
           className="group relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 hover:border-cyan-500/50 transition-all cursor-pointer"
         >
           <img
-            src={shot.firstFrameUrl}
+            src={shot.firstFrameUrl || undefined}
             alt="首帧"
             className="w-full aspect-video object-cover group-hover:scale-105 transition-transform"
           />
@@ -231,7 +231,7 @@ export const ShotCard: React.FC<ShotCardProps> = ({
           className="group relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer"
         >
           <img
-            src={shot.middleFrameUrl}
+            src={shot.middleFrameUrl || undefined}
             alt="中间帧"
             className="w-full aspect-video object-cover group-hover:scale-105 transition-transform"
           />
@@ -250,7 +250,7 @@ export const ShotCard: React.FC<ShotCardProps> = ({
           className="group relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 hover:border-rose-500/50 transition-all cursor-pointer"
         >
           <img
-            src={shot.lastFrameUrl}
+            src={shot.lastFrameUrl || undefined}
             alt="尾帧"
             className="w-full aspect-video object-cover group-hover:scale-105 transition-transform"
           />

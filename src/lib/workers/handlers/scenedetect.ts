@@ -14,7 +14,7 @@ type ProjectRow = SourceRow & { remakeProject?: SourceRow & { currentSource?: So
 
 /** Download executor frames into Waoo storage and retain opaque media IDs for later review. */
 async function uploadKeyframe(relPath: string | undefined, analysisId: string): Promise<string> {
-  if (typeof relPath !== 'string' || !relPath.startsWith('/media/')) return ''
+  if (typeof relPath !== 'string' || !relPath.startsWith('/media/')) throw new Error('SCENEDETECT_KEYFRAME_STORAGE_FAILED')
   try {
     const key = await downloadAndUploadImage(
       sceneDetectExecutorMediaUrl(relPath),
@@ -22,14 +22,14 @@ async function uploadKeyframe(relPath: string | undefined, analysisId: string): 
     )
     return (await ensureMediaObjectFromStorageKey(key, { mimeType: 'image/jpeg' })).id
   } catch {
-    return ''
+    throw new Error('SCENEDETECT_KEYFRAME_STORAGE_FAILED')
   }
 }
 
 async function projectPayloadWithKeyframes(input: { projectId: string; analysisId: string; source: Record<string, unknown>; response: Record<string, unknown>; threshold: number }) {
   const metadata = input.response.metadata as Record<string, unknown>
   const rawShots = Array.isArray(input.response.shots) ? input.response.shots : []
-  const shots = await Promise.all(rawShots.map(async (shot, index) => {
+  const persistShot = async (shot: unknown, index: number) => {
     const s = shot as Record<string, unknown>
     const [first, middle, last] = await Promise.all([
       uploadKeyframe(s.firstFrameUrl as string | undefined, input.analysisId),
@@ -45,7 +45,13 @@ async function projectPayloadWithKeyframes(input: { projectId: string; analysisI
       tags: Array.isArray(s.tags) ? s.tags : [],
       notes: String(s.notes || ''),
     }
-  }))
+  }
+  const shots: Record<string, unknown>[] = []
+  // A long video can yield dozens of Shots. Limit frame transfers to avoid exhausting
+  // the executor or image-processing pool and silently losing every media reference.
+  for (let index = 0; index < rawShots.length; index += 4) {
+    shots.push(...await Promise.all(rawShots.slice(index, index + 4).map(persistShot)))
+  }
   return {
     schemaVersion: 2, type: 'scenedetect-project',
     project: { id: input.projectId, name: input.projectId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },

@@ -44,4 +44,12 @@ Result after the fix: the importer looks up the exact external identity first, t
 
 `npm run typecheck` passed.
 
+## Keyframe Persistence Regression
+
+`BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/unit/worker/scenedetect-keyframe-persistence.test.ts tests/integration/api/remake-projects-scenedetect-runtime.test.ts tests/integration/api/remake-projects-scenedetect-import.test.ts tests/unit/remake-projects/scenedetect-adapter.test.ts`
+
+RED: the worker completed an analysis and committed it even when all frame uploads failed, leaving empty `mediaIds`.
+
+GREEN: 4 files, 12 tests passed. The worker now fails the task with `SCENEDETECT_KEYFRAME_STORAGE_FAILED`, limits frame-transfer concurrency to four shots at a time, and the ShotCard omits empty image sources.
+
 The repository coverage configuration only includes billing files and applies an 80% billing threshold. Running the focused SceneDetect/Prompt tests with `--coverage` therefore reports 0% for unrelated billing files and exits nonzero; it is not evidence of missing coverage in this fix. The focused behavior tests above are the relevant coverage evidence.
