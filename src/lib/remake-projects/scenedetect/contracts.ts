@@ -65,6 +65,7 @@ const shotShape = z.object({
   tags: z.array(z.string()),
   notes: z.string(),
   confidence: z.number().min(0).max(1).nullable().optional(),
+  mediaIds: z.object({ first: z.string().min(1).optional(), middle: z.string().min(1).optional(), last: z.string().min(1).optional() }).optional(),
 })
 
 const projectShape = z.object({
