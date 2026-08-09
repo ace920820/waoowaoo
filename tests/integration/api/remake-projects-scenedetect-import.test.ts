@@ -8,8 +8,14 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(async () => ({ id: 'remake-meta-1' })),
   },
   remakeSource: { upsert: vi.fn(async () => ({ id: 'source-1' })) },
-  remakeShot: { upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({ id: 'shot-1', ...create })) },
-  remakeShotRevision: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'revision-1', ...data })) },
+  remakeShot: {
+    upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({ id: 'shot-1', ...create })),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'shot-1', ...data })),
+  },
+  remakeShotRevision: {
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'revision-1', ...data })),
+    updateMany: vi.fn(async () => ({ count: 0 })),
+  },
   remakeProvenanceRecord: {
     findFirst: vi.fn(async () => null),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'provenance-1', ...data })),
@@ -54,6 +60,12 @@ describe('SceneDetect import boundary', () => {
     const first = await POST(request, { params: Promise.resolve({ projectId: 'project-1' }) })
     expect(first.status).toBe(201)
     expect(prismaMock.remakeShotRevision.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.remakeShotRevision.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { lifecycleState: 'retired' },
+    }))
+    expect(prismaMock.remakeShot.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ currentRevision: 1, needsReview: false }),
+    }))
     prismaMock.remakeProvenanceRecord.findFirst.mockResolvedValueOnce({ id: 'provenance-1' } as never)
     const second = await POST(buildMockRequest({
       path: '/api/remake-projects/project-1/scenedetect/import', method: 'POST', body: { mode: 'commit', analysisId: 'analysis-1', operationKey: 'op-1', payload },

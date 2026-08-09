@@ -45,12 +45,13 @@ describe('SceneDetect adapter contracts', () => {
     expect(() => parseSceneDetectInput({ ...project, shots: [{ ...shot, endFrame: 5 }] })).toThrow(/frame/i)
   })
 
-  it('keeps Waoo IDs stable when external shot numbering changes', () => {
+  it('keeps Waoo IDs stable across repeated analysis runs of the same source', () => {
     const key = createExternalShotKey('project-1', 'analysis-1', shot.id)
     const first = resolveWaooShotId(key, new Map())
     const replay = resolveWaooShotId(key, new Map([[key, first]]))
     expect(replay).toBe(first)
-    expect(resolveWaooShotId(createExternalShotKey('project-1', 'analysis-1', 'external-shot-2'), new Map())).not.toBe(first)
+    expect(createExternalShotKey('project-1', 'analysis-2', shot.id)).toBe(key)
+    expect(createExternalShotKey('project-1', 'analysis-2', 'external-shot-2')).not.toBe(key)
   })
 
   it('round-trips native project fields and emits a revision command for native mutation', () => {
