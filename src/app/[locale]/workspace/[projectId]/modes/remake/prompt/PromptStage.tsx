@@ -1,141 +1,88 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { AppIcon } from '@/components/ui/icons'
+import { CheckCircle2, Film, Info, Layers, Search, Sparkles, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { PromptTrackSummary, RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 import { useAnalyzeRemakePrompt } from '@/lib/query/mutations/remake-prompt-mutations'
 import { PromptImageTab } from './PromptImageTab'
 import { PromptVideoTab } from './PromptVideoTab'
-import './prompt-stage.css'
 
 type Props = { projectId: string; snapshot: RemakeSnapshot }
-type Slot = 'start' | 'middle' | 'end'
-const slots: Slot[] = ['start', 'middle', 'end']
+type Filter = 'all' | 'pending_review' | 'approved'
+const slots = ['start', 'middle', 'end'] as const
 
 function trackFor(tracks: PromptTrackSummary[] | undefined, targetKey: PromptTrackSummary['targetKey']) {
   return tracks?.find((track) => track.targetKey === targetKey) ?? null
 }
 
-function trackTask(snapshot: RemakeSnapshot, shotId: string, track: PromptTrackSummary | null) {
-  return snapshot.tasks.find((task) => task.targetId === track?.id)
-    ?? snapshot.tasks.find((task) => task.targetId === shotId && task.type.includes('PROMPT'))
-    ?? null
-}
-
-function labelForTask(status: string | undefined, track: PromptTrackSummary | null, t: ReturnType<typeof useTranslations>) {
-  if (status === 'queued') return t('queued')
-  if (status === 'processing' || status === 'running') return t('running')
-  if (status === 'failed') return t('failed')
-  if (track?.needsReview) return t('needsReview')
-  if (track?.latestVersion?.reviewStatus === 'APPROVED') return t('approved')
-  if (track?.latestVersion) return t('pendingReview')
-  return t('notAnalyzed')
+function stateFor(track: PromptTrackSummary | null) {
+  if (!track?.latestVersion) return 'idle'
+  if (track.needsReview || track.latestVersion.reviewStatus !== 'APPROVED') return 'pending_review'
+  return 'approved'
 }
 
 export function PromptStage({ projectId, snapshot }: Props) {
   const t = useTranslations('remakeWorkbench')
   const [selectedShotId, setSelectedShotId] = useState(snapshot.shots[0]?.id ?? '')
+  const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('all')
   const analyze = useAnalyzeRemakePrompt(projectId)
   const selectedShot = snapshot.shots.find((shot) => shot.id === selectedShotId) ?? snapshot.shots[0]
-  const tracks = snapshot.shots.flatMap((shot) => shot.promptTracks ?? [])
-  const visibleShots = useMemo(() => snapshot.shots.filter((shot) => {
-    if (!`${shot.sequence ?? ''} ${shot.stableKey}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) return false
-    const shotTracks = shot.promptTracks ?? []
-    if (filter === 'pending') return shotTracks.some((track) => track.needsReview || (track.latestVersion && track.latestVersion.reviewStatus !== 'APPROVED'))
-    if (filter === 'approved') return shotTracks.length > 0 && shotTracks.every((track) => Boolean(track.adoptedVersion))
+  const allTracks = snapshot.shots.flatMap((shot) => shot.promptTracks ?? [])
+  const totalKeyframes = snapshot.shots.length * 3
+  const analyzedKeyframes = snapshot.shots.flatMap((shot) => slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))).filter((track) => Boolean(track?.latestVersion)).length
+  const approvedPrompts = allTracks.filter((track) => Boolean(track.adoptedVersion)).length
+  const pendingReview = allTracks.filter((track) => stateFor(track) === 'pending_review').length
+  const running = snapshot.tasks.filter((task) => ['queued', 'processing', 'running'].includes(task.status) && task.type.includes('PROMPT')).length
+  const filteredShots = useMemo(() => snapshot.shots.filter((shot) => {
+    const matches = `${shot.sequence ?? ''} ${shot.stableKey}`.toLowerCase().includes(query.toLowerCase())
+    if (!matches) return false
+    const states = slots.map((slot) => stateFor(trackFor(shot.promptTracks, `image:${slot}`)))
+    if (filter === 'pending_review') return states.includes('pending_review')
+    if (filter === 'approved') return states.every((state) => state === 'approved')
     return true
   }), [filter, query, snapshot.shots])
-  const eligible = snapshot.shots.filter((shot) => shot.review?.promptEligible).length
-  const pending = tracks.filter((track) => track.latestVersion && track.latestVersion.reviewStatus !== 'APPROVED').length
-  const approved = tracks.filter((track) => Boolean(track.adoptedVersion)).length
-  const failed = snapshot.tasks.filter((task) => task.status === 'failed' && task.type.includes('PROMPT')).length
-  const videoTask = snapshot.tasks.find((task) => task.type === 'REMAKE_VIDEO_PROMPT_ANALYZE' && ['queued', 'processing', 'running', 'failed'].includes(task.status))
-  const hasVideo = snapshot.shots.some((shot) => trackFor(shot.promptTracks, 'video')?.latestVersion)
 
-  if (!snapshot.source.mediaId && snapshot.shots.length === 0) {
-    return <section className="prompt-empty"><h2>{t('prompt')}</h2><p>{t('noSource')}</p></section>
-  }
-  if (!selectedShot) {
-    return <section className="prompt-empty"><h2>{t('prompt')}</h2><p>{t('noPromptEligibleShot')}</p></section>
+  const analyzeVideo = () => analyze.mutate({ kind: 'video', operationKey: crypto.randomUUID() })
+  const analyzeShot = () => {
+    if (!selectedShot) return
+    slots.forEach((slot) => analyze.mutate({ kind: 'image', shotId: selectedShot.id, slot, operationKey: crypto.randomUUID() }))
+    analyzeVideo()
   }
 
-  return <section className="prompt-stage" data-testid="remake-prompt-stage">
-    <header className="prompt-header">
-      <div>
-        <p className="remake-eyebrow">{t('prompt')}</p>
-        <h2>{t('promptTitle')}</h2>
-        <p>{t('promptSubtitle')}</p>
-      </div>
-      <div className="prompt-header-actions">
-        <span className="prompt-queue"><AppIcon name="clock" size={15} />{videoTask ? labelForTask(videoTask.status, null, t) : t('videoTaskIdle')}</span>
-        <button
-          type="button"
-          className="prompt-primary"
-          disabled={analyze.isPending || eligible === 0}
-          onClick={() => analyze.mutate({ kind: 'video', operationKey: crypto.randomUUID() })}
-        >
-          <AppIcon name={hasVideo ? 'refresh' : 'play'} size={15} />
-          {hasVideo ? t('reanalyzeVideo') : t('analyzeVideo')}
-        </button>
-      </div>
-    </header>
+  if (!snapshot.source.mediaId && snapshot.shots.length === 0) return <section className="py-20 text-center text-slate-400">{t('noSource')}</section>
+  if (!selectedShot) return <section className="py-20 text-center text-slate-400">{t('noPromptEligibleShot')}</section>
 
-      <div className="prompt-metrics" aria-label={t('promptStatusCounts')}>
-        <div><span>{t('analyzableShots')}</span><strong>{eligible}<small>{t('shot')}</small></strong></div>
-        <div><span>{t('imagePrompt')} {t('pendingReview')}</span><strong>{pending}<small>{t('pendingReview')}</small></strong></div>
-        <div><span>{t('imagePrompt')} {t('approved')}</span><strong>{approved}<small>{t('approved')}</small></strong></div>
-        <div className={failed ? 'has-failure' : ''}><span>{t('failed')}</span><strong>{failed}<small>{t('failed')}</small></strong></div>
+  return <section className="space-y-6 pb-12" data-testid="remake-prompt-stage">
+    <div className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
+      <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+        <div className="space-y-1.5"><div className="flex items-center gap-2"><span className="rounded-lg bg-indigo-600 p-1.5 text-white"><Sparkles className="h-5 w-5" /></span><h2 className="text-xl font-bold text-slate-900">{t('promptTitle')}</h2></div><p className="max-w-2xl text-xs leading-relaxed text-slate-500">{t('promptSubtitle')}</p></div>
+        <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3 py-1.5 text-xs text-slate-700"><span className={`h-2 w-2 rounded-full ${running ? 'bg-blue-500' : 'bg-slate-400'}`} />{t('tasks')}: {running} {t('running')}</div></div>
+      </div>
+      <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+        <Metric label={t('shots')} value={`${snapshot.shots.length}`} detail={t('shot')} />
+        <Metric label={`${t('imagePrompt')} ${t('running')}`} value={`${analyzedKeyframes} / ${totalKeyframes}`} detail={`(${Math.round(analyzedKeyframes / Math.max(totalKeyframes, 1) * 100)}%)`} />
+        <Metric label={`${t('prompt')} ${t('approved')}`} value={`${approvedPrompts} / ${allTracks.length}`} detail={`(${Math.round(approvedPrompts / Math.max(allTracks.length, 1) * 100)}%)`} />
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3"><div className="flex items-center gap-1 text-[11px] font-medium text-indigo-700"><Zap className="h-3 w-3" />{t('pendingReview')}: {pendingReview}</div><div className="mt-1 text-xs text-indigo-900/80">{t('videoProjectActionHint')}</div></div>
+      </div>
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5 text-xs text-amber-900"><Info className="h-4 w-4 shrink-0 text-amber-600" />{t('videoProjectActionHint')}</div>
     </div>
 
-    <div className="prompt-mobile-shot-picker">
-      <label htmlFor="prompt-shot-selector">{t('selectShot')}</label>
-      <select id="prompt-shot-selector" value={selectedShot.id} onChange={(event) => setSelectedShotId(event.target.value)}>
-        {snapshot.shots.map((shot) => <option key={shot.id} value={shot.id}>#{shot.sequence ?? '-'} {shot.stableKey}</option>)}
-      </select>
-    </div>
-
-    <div className="prompt-workarea">
-      <aside className="prompt-shot-list" aria-label={t('shotList')}>
-        <h3><AppIcon name="video" size={15} />{t('shotList')} <span>{visibleShots.length}</span></h3>
-        <label className="prompt-search"><AppIcon name="search" size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('searchShots')} /></label>
-        <div className="prompt-filters" role="group" aria-label={t('promptStatusCounts')}>
-          <button type="button" className={filter === 'all' ? 'is-active' : ''} onClick={() => setFilter('all')}>{t('all')}</button>
-          <button type="button" className={filter === 'pending' ? 'is-active is-pending' : ''} onClick={() => setFilter('pending')}>{t('pendingReview')}</button>
-          <button type="button" className={filter === 'approved' ? 'is-active is-approved' : ''} onClick={() => setFilter('approved')}>{t('approved')}</button>
-        </div>
-        <div className="prompt-shot-scroll">
-          {visibleShots.map((shot) => {
-            const imageTracks = slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))
-            const videoTrack = trackFor(shot.promptTracks, 'video')
-            const generated = imageTracks.filter((track) => Boolean(track?.latestVersion)).length
-            const needsReview = imageTracks.filter((track) => track?.needsReview || (track?.latestVersion && track.latestVersion.reviewStatus !== 'APPROVED')).length
-            const adopted = imageTracks.filter((track) => Boolean(track?.adoptedVersion)).length
-            return <button key={shot.id} type="button" className={shot.id === selectedShot.id ? 'is-selected' : ''} onClick={() => setSelectedShotId(shot.id)}>
-              <div><b>#{shot.sequence ?? '-'}</b><span>{shot.stableKey}</span></div>
-              <small>{String(shot.timeRange?.start ?? '-')} - {String(shot.timeRange?.end ?? '-')}</small>
-              <div className="prompt-thumb-row">{slots.map((slot) => shot.keyframes?.[slot]?.mediaUrl ? <img key={slot} src={shot.keyframes[slot].mediaUrl ?? ''} alt="" /> : <i key={slot}>{slot[0].toUpperCase()}</i>)}</div>
-              <small className="prompt-shot-progress">{t('imageProgress', { count: generated })} · {needsReview ? `${t('pendingReview')} ${needsReview}` : `${t('approved')} ${adopted}`} · {labelForTask(trackTask(snapshot, shot.id, videoTrack)?.status, videoTrack, t)}</small>
-            </button>
-          })}
-        </div>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <aside className="lg:col-span-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
+        <div className="space-y-3 border-b border-slate-100 pb-3"><div className="flex items-center gap-1.5 text-xs font-bold text-slate-800"><Film className="h-4 w-4 text-indigo-600" />{t('shotList')} ({filteredShots.length})</div><label className="relative block"><Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('searchShots')} className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-800 outline-none focus:border-indigo-500" /></label><div className="flex flex-wrap gap-1 text-[11px]">{([['all', t('all')], ['pending_review', t('pendingReview')], ['approved', t('approved')]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={filter === value ? 'rounded-md bg-slate-900 px-2 py-1 font-medium text-white' : 'rounded-md bg-slate-100 px-2 py-1 text-slate-600'}>{label}</button>)}</div></div>
+        <div className="mt-3 max-h-[650px] space-y-2.5 overflow-y-auto pr-1">{filteredShots.map((shot) => <ShotListItem key={shot.id} shot={shot} selected={shot.id === selectedShot.id} onClick={() => setSelectedShotId(shot.id)} />)}</div>
       </aside>
 
-      <div className="prompt-detail">
-        <header className="prompt-shot-heading">
-          <div><p>{t('shot')} #{selectedShot.sequence ?? '-'}</p><h3>{selectedShot.stableKey}</h3><span>{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</span></div>
-          <em className={selectedShot.review?.promptEligible ? '' : 'is-muted'}>{selectedShot.review?.promptEligible ? t('readyForAnalysis') : selectedShot.review?.reason ?? t('missingPrerequisites')}</em>
-        </header>
-        <section className="prompt-keyframe-section" aria-label={t('imagePrompt')}>
-          <header><h4><AppIcon name="layers" size={16} />{t('imagePrompt')} (Start / Middle / End)</h4><span>{t('imageProgress', { count: 3 })}</span></header>
-          <PromptImageTab projectId={projectId} shot={selectedShot} tasks={snapshot.tasks} />
-        </section>
-        <section className="prompt-video-section" aria-label={t('videoPrompt')}>
-          <PromptVideoTab projectId={projectId} shot={selectedShot} sourceMediaUrl={snapshot.source.mediaUrl} task={trackTask(snapshot, selectedShot.id, trackFor(selectedShot.promptTracks, 'video'))} />
-        </section>
+      <div className="lg:col-span-8 space-y-6">
+        <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-r from-white via-indigo-50/20 to-white p-4 shadow-sm"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">Shot #{selectedShot.sequence ?? '-'}</span><h3 className="text-base font-bold text-slate-900">{selectedShot.stableKey}</h3></div><p className="mt-1 text-xs text-slate-500">{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</p></div><button type="button" disabled={analyze.isPending || !selectedShot.review?.promptEligible} onClick={analyzeShot} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><Zap className="h-4 w-4 text-amber-300" />{t('fullAnalysis')}</button></div></div>
+        <div><div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><Layers className="h-4 w-4 text-indigo-600" />{t('imagePrompt')} (Start / Middle / End)</h4><span className="text-xs text-slate-400">{t('imageProgress', { count: analyzedKeyframes })}</span></div><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><PromptImageTab projectId={projectId} shot={selectedShot} tasks={snapshot.tasks} /></div></div>
+        <PromptVideoTab projectId={projectId} shot={selectedShot} task={snapshot.tasks.find((task) => task.type === 'REMAKE_VIDEO_PROMPT_ANALYZE' && ['queued', 'processing', 'running', 'failed'].includes(task.status)) ?? null} onAnalyzeVideo={analyzeVideo} isAnalyzing={analyze.isPending} />
       </div>
     </div>
   </section>
 }
+
+function Metric({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-xl border border-slate-200/60 bg-slate-50/70 p-3"><div className="text-[11px] font-medium text-slate-500">{label}</div><div className="mt-0.5 text-lg font-bold text-slate-900">{value} <span className="text-xs font-normal text-indigo-600">{detail}</span></div></div> }
+function ShotListItem({ shot, selected, onClick }: { shot: RemakeSnapshot['shots'][number]; selected: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`w-full rounded-xl border p-3 text-left transition-all ${selected ? 'border-indigo-400 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-400/30' : 'border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/50'}`}><div className="mb-1.5 flex justify-between gap-2"><span className="line-clamp-2 text-xs font-bold text-slate-900">#{shot.sequence ?? '-'} - {shot.stableKey}</span><span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">{String(shot.timeRange?.start ?? '-')}</span></div><div className="my-2 grid grid-cols-3 gap-1.5">{slots.map((slot) => shot.keyframes?.[slot]?.mediaUrl ? <img key={slot} src={shot.keyframes[slot].mediaUrl} alt="" className="aspect-video w-full rounded-md border border-slate-200 object-cover" /> : <div key={slot} className="aspect-video rounded-md border border-slate-200 bg-slate-50" />)}</div><div className="flex items-center gap-1 text-[10px] text-slate-500"><CheckCircle2 className="h-3 w-3 text-emerald-500" />Prompt {shot.promptTracks?.filter((track) => Boolean(track.adoptedVersion)).length ?? 0}/4</div></button> }

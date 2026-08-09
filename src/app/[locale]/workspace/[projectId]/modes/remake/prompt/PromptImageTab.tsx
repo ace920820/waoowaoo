@@ -21,7 +21,7 @@ function taskFor(tasks: Props['tasks'], track: PromptTrackSummary | null, shotId
 }
 
 export function PromptImageTab({ projectId, shot, tasks }: Props) {
-  return <div className="prompt-frames">{slots.map((slot) => <ImagePromptPanel key={`${shot.id}-${slot}`} projectId={projectId} shot={shot} slot={slot} task={taskFor(tasks, trackFor(shot.promptTracks, slot), shot.id)} />)}</div>
+  return <>{slots.map((slot) => <ImagePromptPanel key={`${shot.id}-${slot}`} projectId={projectId} shot={shot} slot={slot} task={taskFor(tasks, trackFor(shot.promptTracks, slot), shot.id)} />)}</>
 }
 
 function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; shot: Props['shot']; slot: Slot; task: ReturnType<typeof taskFor> }) {
@@ -51,7 +51,7 @@ function ImagePromptPanel({ projectId, shot, slot, task }: { projectId: string; 
     setComparisonIds((current) => current.includes(versionId) ? current.filter((id) => id !== versionId) : [...current, versionId].slice(-2))
   }
 
-  return <article className="prompt-frame">
+  return <article className="prompt-frame flex min-w-0 flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
     <header><b>{slot.toUpperCase()}</b><span>{t(`frame.${slot}`)}</span><em className={`prompt-state ${state}`}>{status}</em></header>
     {frame?.mediaUrl ? <a href={frame.mediaUrl} target="_blank" rel="noreferrer"><img src={frame.mediaUrl} alt={t('frameImage', { frame: t(`frame.${slot}`) })} /></a> : <div className="prompt-media-empty">{t('noKeyframe')}</div>}
     {state === 'failed' ? <p className="prompt-error">{task?.errorMessage ?? t('analysisFailedHint')}</p> : null}

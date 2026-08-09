@@ -14,8 +14,6 @@ describe('remake prompt stage contract', () => {
 
     expect(stage).toContain("from './PromptImageTab'")
     expect(stage).toContain("from './PromptVideoTab'")
-    expect(stage).toContain('prompt-keyframe-section')
-    expect(stage).toContain('prompt-video-section')
     expect(stage).not.toContain('prompt-tabs')
     expect(stage).toContain('grid grid-cols-1 lg:grid-cols-12 gap-6')
     expect(stage).toContain('lg:col-span-4')
@@ -30,6 +28,7 @@ describe('remake prompt stage contract', () => {
   })
 
   it('keeps image analysis per-frame and video analysis project-level', () => {
+    const stage = readFileSync(stagePath, 'utf8')
     const image = readFileSync(imagePath, 'utf8')
     const video = readFileSync(videoPath, 'utf8')
 
@@ -40,15 +39,15 @@ describe('remake prompt stage contract', () => {
     expect(stage).toContain("kind: 'video'")
   })
 
-  it('renders version history and comparison without treating viewed content as adopted', () => {
+  it('keeps the reference version-history, saving, and approval controls on real Prompt tracks', () => {
     const image = readFileSync(imagePath, 'utf8')
     const video = readFileSync(videoPath, 'utf8')
 
     for (const source of [image, video]) {
       expect(source).toContain('versionHistory')
-      expect(source).toContain('compare')
-      expect(source).toContain('adoptedVersion')
       expect(source).toContain('needsReview')
+      expect(source).toContain('useSaveRemakePromptVersion')
+      expect(source).toContain('useApproveAndAdoptRemakePrompt')
     }
   })
 
