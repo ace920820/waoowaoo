@@ -93,8 +93,9 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       const current = remake?.currentSource as Row | null | undefined
       return {
         status: current?.status ?? remake?.importStatus ?? 'not_imported',
-        mediaId: current?.mediaId ?? null,
-        mediaUrl: mediaUrl(input.projectId, current?.mediaId),
+        // Older sources predate mediaId. Their database id remains a safe opaque fallback.
+        mediaId: current?.mediaId ?? current?.id ?? null,
+        mediaUrl: mediaUrl(input.projectId, current?.mediaId ?? current?.id),
         ...(current ? {
           sourceRevision: current.sourceRevision ?? null,
           metadata: current.probeMetadata ? (typeof current.probeMetadata === 'string' ? JSON.parse(current.probeMetadata) : current.probeMetadata) : null,
@@ -144,7 +145,13 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       }),
       revisions: revisions.map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
       provenance: ((shot.provenance as Row[] | undefined) ?? []).map((record) => ({ id: record.id, schema: record.schema, executor: record.executor, capability: record.capability, payload: record.payload ?? null })),
-    }}),
+    }}).filter((shot) => {
+      const sourceRevision = (remake?.currentSource as Row | null | undefined)?.sourceRevision
+      if (sourceRevision == null) return true
+      const active = (shot.revisions as Array<{ sourceRevision?: number | null; lifecycleState?: string }> | undefined)
+        ?.find((revision) => revision.lifecycleState === 'active' && Number(revision.sourceRevision) === Number(sourceRevision))
+      return Boolean(active)
+    }),
     tasks,
   }
 }

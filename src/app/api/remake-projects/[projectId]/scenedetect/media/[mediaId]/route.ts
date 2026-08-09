@@ -34,7 +34,7 @@ async function locate(projectId: string, mediaId: string): Promise<MediaRef | nu
   }) as unknown as { currentSource?: Record<string, unknown> | null; shots?: Array<{ revisions?: Array<Record<string, unknown>> }> } | null
   if (!remake) return null
   const source = remake.currentSource
-  if (source && source.status !== 'retired' && source.mediaId === mediaId && typeof source.storageKey === 'string') {
+  if (source && source.status !== 'retired' && (source.mediaId === mediaId || source.id === mediaId) && typeof source.storageKey === 'string') {
     return { key: source.storageKey, contentType: typeof source.contentType === 'string' ? source.contentType : 'video/mp4' }
   }
   for (const shot of remake.shots || []) {

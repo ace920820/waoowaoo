@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { deleteObject, generateUniqueKey, uploadObject } from '@/lib/storage'
 import { prisma } from '@/lib/prisma'
 import { probeVideo, type VideoProbeMetadata } from './video-probe'
@@ -93,6 +94,8 @@ export async function ingestRemakeSource(input: { projectId: string; file: File;
           remakeProjectId: remakeProject.id,
           sourceRevision,
           operationKey: input.operationKey,
+          // This is an opaque media handle for the authenticated media route, not a storage key.
+          mediaId: `source:${randomUUID()}`,
           storageKey,
           fileName: input.file.name,
           contentType: validation.contentType,
