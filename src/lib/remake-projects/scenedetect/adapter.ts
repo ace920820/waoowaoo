@@ -68,7 +68,7 @@ export async function commitSceneDetectImport(input: {
     project: { findUnique: (args: unknown) => Promise<Row | null> }
     remakeProject: { findUnique: (args: unknown) => Promise<Row | null>; update: (args: unknown) => Promise<Row> }
     remakeSource: { upsert: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
-    remakeShot: { upsert: (args: unknown) => Promise<Row>; update: (args: unknown) => Promise<Row> }
+    remakeShot: { findFirst: (args: unknown) => Promise<Row | null>; upsert: (args: unknown) => Promise<Row>; update: (args: unknown) => Promise<Row> }
     remakeShotRevision: { create: (args: unknown) => Promise<Row>; updateMany: (args: unknown) => Promise<Row>; findFirst?: (args: unknown) => Promise<Row | null> }
     remakeProvenanceRecord: { findFirst: (args: unknown) => Promise<Row | null>; create: (args: unknown) => Promise<Row> }
     $transaction: <T>(callback: (tx: typeof client) => Promise<T>) => Promise<T>
@@ -96,7 +96,19 @@ export async function commitSceneDetectImport(input: {
     })
     for (const shot of project.shots) {
       const stableKey = createExternalShotKey(input.projectId, input.analysisId, shot.id)
-      const row = await tx.remakeShot.upsert({
+      // Before stable keys stopped including analysisId, externalIdentity used the
+      // `analysisId:shotId` shape. Reuse either identity during this migration.
+      const existing = await tx.remakeShot.findFirst({
+        where: {
+          remakeProjectId: remakeProject.id,
+          OR: [
+            { stableKey },
+            { externalIdentity: shot.id },
+            { externalIdentity: { endsWith: `:${shot.id}` } },
+          ],
+        },
+      })
+      const row = existing ?? await tx.remakeShot.upsert({
         where: { remakeProjectId_stableKey: { remakeProjectId: remakeProject.id, stableKey } },
         create: { remakeProjectId: remakeProject.id, stableKey, externalIdentity: shot.id, sequence: shot.shotNumber },
         update: { externalIdentity: shot.id, sequence: shot.shotNumber },

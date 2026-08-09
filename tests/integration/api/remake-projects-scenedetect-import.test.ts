@@ -9,7 +9,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   remakeSource: { upsert: vi.fn(async () => ({ id: 'source-1' })) },
   remakeShot: {
-    findFirst: vi.fn(async () => null),
+    findFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => null),
     upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({ id: 'shot-1', ...create })),
     update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'shot-1', ...data })),
   },
