@@ -1,4 +1,5 @@
 import type { DeleteObjectsResult, SignedUrlParams, StorageProvider, UploadObjectParams, UploadObjectResult } from '@/lib/storage/types'
+import { open } from 'node:fs/promises'
 import { requireEnv, streamToBuffer, toFetchableUrl } from '@/lib/storage/utils'
 
 const DEFAULT_MINIO_REGION = 'us-east-1'
@@ -133,6 +134,21 @@ export class MinioStorageProvider implements StorageProvider {
       Key: key,
     })) as { Body?: unknown }
     return await streamToBuffer(result.Body)
+  }
+
+  async downloadObjectToFile(key: string, destination: string): Promise<void> {
+    const sdk = await this.loadSdk()
+    const client = await this.getClient()
+    const result = await client.send(new sdk.GetObjectCommand({ Bucket: this.bucket, Key: key })) as { Body?: AsyncIterable<unknown> }
+    if (!result.Body) throw new Error('Empty response body from storage provider')
+    const file = await open(destination, 'w', 0o600)
+    try {
+      for await (const chunk of result.Body) {
+        await file.write(Buffer.isBuffer(chunk) ? chunk : chunk instanceof Uint8Array ? Buffer.from(chunk) : Buffer.from(String(chunk)))
+      }
+    } finally {
+      await file.close()
+    }
   }
 
   extractStorageKey(input: string | null | undefined): string | null {

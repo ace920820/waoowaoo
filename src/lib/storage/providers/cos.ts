@@ -28,6 +28,10 @@ export class CosStorageProvider implements StorageProvider {
     throw new StorageProviderNotImplementedError('cos')
   }
 
+  async downloadObjectToFile(_key: string, _destination: string): Promise<void> {
+    throw new StorageProviderNotImplementedError('cos')
+  }
+
   extractStorageKey(_input: string | null | undefined): string | null {
     throw new StorageProviderNotImplementedError('cos')
   }

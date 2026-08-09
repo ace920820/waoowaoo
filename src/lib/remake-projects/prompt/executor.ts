@@ -8,6 +8,7 @@ import { imagePromptAnalysisSchema, videoPromptAnalysisSchema, type PromptTarget
 const MAX_STDOUT_BYTES = 512 * 1024
 const MAX_STDERR_BYTES = 64 * 1024
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
+const VIDEO_TIMEOUT_MS = 30 * 60 * 1000
 const GRACEFUL_KILL_MS = 2_000
 
 export type CodexPromptAnalysisInput = {
@@ -152,8 +153,8 @@ function mediaExtension(media: NonNullable<CodexPromptAnalysisInput['media']>[nu
   return 'bin'
 }
 
-function fixedArgv(schemaPath: string, imagePaths: string[]): string[] {
-  return ['exec', '--json', '--sandbox', 'read-only', '--skip-git-repo-check', '--output-schema', schemaPath, ...imagePaths.flatMap((path) => ['--image', path]), '-']
+function fixedArgv(schemaPath: string, imagePaths: string[], sandbox: 'read-only' | 'workspace-write' = 'read-only'): string[] {
+  return ['exec', '--json', '--sandbox', sandbox, '--skip-git-repo-check', '--output-schema', schemaPath, ...imagePaths.flatMap((path) => ['--image', path]), '-']
 }
 
 function killProcess(child: ChildProcessWithoutNullStreams) {
@@ -221,5 +222,57 @@ export async function runCodexPromptAnalysis(input: CodexPromptAnalysisInput, de
   }
 }
 
-export const CODEX_EXECUTOR_LIMITS = { maxStdoutBytes: MAX_STDOUT_BYTES, maxStderrBytes: MAX_STDERR_BYTES, timeoutMs: DEFAULT_TIMEOUT_MS }
+export async function runCodexVideoWorkspaceAnalysis(input: {
+  targetKey: 'video'
+  prompt: string
+  workspaceDirectory: string
+  timeoutMs?: number
+  signal?: AbortSignal
+}, deps?: { spawn?: Spawn }): Promise<CodexPromptAnalysisOutput> {
+  if (!input.prompt.trim()) throw new Error('CODEX_PROMPT_EMPTY')
+  const spawn = deps?.spawn || nodeSpawn
+  const timeoutMs = Math.max(1_000, Math.min(input.timeoutMs ?? VIDEO_TIMEOUT_MS, VIDEO_TIMEOUT_MS))
+  const schemaPath = join(input.workspaceDirectory, 'result-schema.json')
+  let child: ChildProcessWithoutNullStreams | null = null
+  let stdout = ''
+  let stderr = ''
+  let timedOut = false
+  let aborted = false
+  try {
+    await writeFile(schemaPath, JSON.stringify(promptResultSchema('video')), { mode: 0o600 })
+    child = spawn('codex', fixedArgv(schemaPath, [], 'workspace-write'), { shell: false, cwd: input.workspaceDirectory, stdio: ['pipe', 'pipe', 'pipe'] })
+    const childRef = child
+    const abort = () => { aborted = true; killProcess(childRef) }
+    if (input.signal?.aborted) abort()
+    else input.signal?.addEventListener('abort', abort, { once: true })
+    const outputPromise = new Promise<void>((resolve, reject) => {
+      childRef.stdout.on('data', (chunk: Buffer) => { stdout = boundedAppend(stdout, chunk, MAX_STDOUT_BYTES); if (Buffer.byteLength(stdout, 'utf8') >= MAX_STDOUT_BYTES) killProcess(childRef) })
+      childRef.stderr.on('data', (chunk: Buffer) => { stderr = boundedAppend(stderr, chunk, MAX_STDERR_BYTES) })
+      childRef.once('error', reject)
+      childRef.once('close', (code, signal) => {
+        if (code === 0) resolve()
+        else {
+          const diagnostic = codexFailureDiagnostic(stderr, stdout)
+          reject(new Error(`CODEX_PROCESS_FAILED:${code ?? signal ?? 'unknown'}${diagnostic ? `: ${diagnostic.trim()}` : ''}`))
+        }
+      })
+      childRef.stdin.end(input.prompt.trim())
+    })
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => { timedOut = true; killProcess(childRef); reject(new Error('CODEX_PROCESS_TIMEOUT')) }, timeoutMs)
+      timer.unref?.()
+      outputPromise.then(() => { clearTimeout(timer); resolve() }, (error) => { clearTimeout(timer); reject(error) })
+    })
+    if (aborted) throw new Error('CODEX_PROCESS_CANCELED')
+    const parsed = parseCodexJsonl(stdout, 'video')
+    return { ...parsed, rawOutput: stdout, stderr: redactCodexOutput(stderr) }
+  } catch (error) {
+    if (timedOut) throw new Error('CODEX_PROCESS_TIMEOUT')
+    if (aborted) throw new Error('CODEX_PROCESS_CANCELED')
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(redactCodexOutput(message || 'CODEX_PROCESS_FAILED'))
+  }
+}
+
+export const CODEX_EXECUTOR_LIMITS = { maxStdoutBytes: MAX_STDOUT_BYTES, maxStderrBytes: MAX_STDERR_BYTES, timeoutMs: DEFAULT_TIMEOUT_MS, videoTimeoutMs: VIDEO_TIMEOUT_MS }
 export const createPromptRunId = () => randomUUID()

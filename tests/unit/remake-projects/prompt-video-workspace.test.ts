@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -37,9 +37,13 @@ describe('video Prompt Codex workspace', () => {
   })
 
   it('rejects non-MP4 source media before creating a Codex workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'waoowaoo-prompt-workspace-test-'))
+    directories.push(root)
     await expect(createVideoPromptWorkspace({
+      parentDirectory: root,
       source: { bytes: Buffer.from('not-an-mp4'), contentType: 'video/webm' },
       shots: [],
     })).rejects.toThrow('REMAKE_PROMPT_VIDEO_SOURCE_NOT_MP4')
+    expect(await readdir(root)).toEqual([])
   })
 })

@@ -27,6 +27,7 @@ export interface StorageProvider {
   deleteObjects(keys: string[]): Promise<DeleteObjectsResult>
   getSignedObjectUrl(params: SignedUrlParams): Promise<string>
   getObjectBuffer(key: string): Promise<Buffer>
+  downloadObjectToFile(key: string, destination: string): Promise<void>
   extractStorageKey(input: string | null | undefined): string | null
   toFetchableUrl(inputUrl: string): string
   generateUniqueKey(params: { prefix: string; ext: string }): string

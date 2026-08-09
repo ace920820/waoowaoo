@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { extractStorageKey, getObjectBuffer } from '@/lib/storage'
+import { downloadObjectToFile, extractStorageKey, getObjectBuffer } from '@/lib/storage'
 import { getMediaObjectById, resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { parsePromptAnalysis, type PromptInputSnapshot, type PromptTargetKey } from '@/lib/remake-projects/prompt/contracts'
 import { persistImagePromptVersion, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
 import { parseRemakePromptTaskPayload, type RemakePromptImageTaskPayload } from '@/lib/remake-projects/prompt/task-contract'
-import { runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
+import { runCodexPromptAnalysis, runCodexVideoWorkspaceAnalysis } from '@/lib/remake-projects/prompt/executor'
+import { createVideoPromptWorkspace, removeVideoPromptWorkspace } from '@/lib/remake-projects/prompt/video-workspace'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import { assertTaskActive } from '../utils'
@@ -41,9 +42,12 @@ function imagePrompt(snapshot: PromptInputSnapshot, slot: string) {
   return `$image-to-structured-prompt\nAnalyze exactly one reference image for Shot ${snapshot.stableKey}, slot ${slot}. Return one JSONL final event with the complete contracted sections, including integratedGenerationPrompt and negativeConstraints. Keep facts, inferences, and recommendations separate.`
 }
 
-function videoPrompt(sourceName: string, snapshots: PromptInputSnapshot[]) {
-  const shots = snapshots.map((snapshot) => ({ stableShotId: snapshot.stableKey, shotRevision: snapshot.shotRevision, keyframeMediaRefs: snapshot.keyframeMediaRefs }))
-  return `Analyze this whole source video (${sourceName}) once. Confirmed Shot boundaries and Start/Middle/End frame references are included below. Return one final JSONL event containing exactly one result per stableShotId and the contracted Video Prompt fields. Do not omit or duplicate a Shot.\n${JSON.stringify(shots)}`
+function videoPrompt() {
+  return `Analyze the complete video project once from this controlled local workspace. The current working directory is the only approved workspace.
+
+Read manifest.csv first. It is the authoritative inventory of stableShotId values, Start/End time boundaries, and the Start/Middle/End keyframe paths. Read source.mp4 and the files under frames/ as needed. Treat each three-frame set as the primary visual evidence. When those frames cannot establish action continuity, camera movement, or temporal progression, use ffprobe or ffmpeg to inspect source.mp4 at the manifest time boundaries. You may create supplemental inspection artifacts only under evidence/.
+
+Return exactly one strict JSON object matching the supplied output schema. Its shots array must contain exactly one entry for every manifest stableShotId, with no omission, duplicate, or unknown ID. Each analysis must cover core event, actions, interactions, direction, blocking, shot scale, camera, movement, rhythm, environment change, and temporal progression. Do not return Markdown, explanation, or files outside the workspace.`
 }
 
 function assertSnapshotMatches(current: Row, expected: PromptInputSnapshot) {
@@ -95,21 +99,38 @@ export async function handleRemakeVideoPromptTask(job: Job<TaskJobData>) {
   }
   await assertTaskActive(job, 'before_prompt_cli')
   await reportTaskProgress(job, 20, { stage: 'source-read', displayMode: 'detail' })
-  const media: Array<{ name: string; bytes: Buffer }> = [{ name: 'source-video.bin', bytes: await getObjectBuffer(await resolvePromptMediaKey(String(project.remakeProject.currentSource.storageKey))) }]
-  for (const snapshot of snapshots) {
+  const sourceKey = await resolvePromptMediaKey(String(project.remakeProject.currentSource.storageKey))
+  const workspaceShots = await Promise.all(snapshots.map(async (snapshot) => {
     const shot = shotsById.get(snapshot.shotId) as Row
     const revision = parseRevision(shot.revisions.find((row: Row) => Number(row.revision) === snapshot.shotRevision))
-    for (const slot of ['first', 'middle', 'last']) media.push({ name: `${snapshot.stableKey}-${slot}.bin`, bytes: await getObjectBuffer(await resolvePromptMediaKey(String(revision.refs[slot] || ''))) })
+    const startTime = String(revision.payload.startTimecode || revision.payload.startTime || '')
+    const endTime = String(revision.payload.endTimecode || revision.payload.endTime || '')
+    const sequence = Number(shot.sequence)
+    const keyFor = async (slot: 'first' | 'middle' | 'last') => await resolvePromptMediaKey(String(revision.refs[slot] || ''))
+    const [first, middle, last] = await Promise.all([keyFor('first'), keyFor('middle'), keyFor('last')])
+    return {
+      stableShotId: snapshot.stableKey, sequence, startTime, endTime,
+      frames: {
+        first: { writeTo: async (destination: string) => await downloadObjectToFile(first, destination) },
+        middle: { writeTo: async (destination: string) => await downloadObjectToFile(middle, destination) },
+        last: { writeTo: async (destination: string) => await downloadObjectToFile(last, destination) },
+      },
+    }
+  }))
+  const workspace = await createVideoPromptWorkspace({ source: { writeTo: async (destination: string) => await downloadObjectToFile(sourceKey, destination) }, shots: workspaceShots })
+  try {
+    await reportTaskProgress(job, 40, { stage: 'executor-call', displayMode: 'indeterminate' })
+    const analysis = await runCodexVideoWorkspaceAnalysis({ targetKey: 'video', prompt: videoPrompt(), workspaceDirectory: workspace.directory })
+    await assertTaskActive(job, 'after_prompt_cli')
+    const raw = analysis.result as Row | Row[]
+    const rows: Row[] = Array.isArray(raw) ? raw : (Array.isArray((raw as Row).shots) ? (raw as Row).shots as Row[] : [])
+    const results = rows.map((row: Row) => ({ stableShotId: String(row.stableShotId || row.shotId || ''), analysis: parsePromptAnalysis('video', row.analysis || row.result), rawOutput: typeof row.rawOutput === 'string' ? row.rawOutput : null }))
+    if (results.some((row) => !row.stableShotId || !row.analysis)) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
+    const persisted = await persistVideoPromptRunAtomically({ projectId: job.data.projectId, expectedStableShotIds: snapshots.map((snapshot) => snapshot.stableKey), results, rawOutput: analysis.rawOutput, provenance: { taskId: job.data.taskId, schemaVersion: 'prompt.v1', modelVersion: 'codex', executorVersion: 'codex-cli.workspace.v1' } })
+    return { kind: 'video', runId: persisted.run.id, versionIds: persisted.versions.map((version: Row) => version.id), sessionId: analysis.sessionId, inputFingerprint: payload.inputFingerprint }
+  } finally {
+    await removeVideoPromptWorkspace(workspace.directory)
   }
-  await reportTaskProgress(job, 40, { stage: 'executor-call', displayMode: 'indeterminate' })
-  const analysis = await runCodexPromptAnalysis({ targetKey: 'video', prompt: videoPrompt(String(project.remakeProject.currentSource.fileName || 'source.mp4'), snapshots), media })
-  await assertTaskActive(job, 'after_prompt_cli')
-  const raw = analysis.result as Row | Row[]
-  const rows: Row[] = Array.isArray(raw) ? raw : (Array.isArray((raw as Row).shots) ? (raw as Row).shots as Row[] : [])
-  const results = rows.map((row: Row) => ({ stableShotId: String(row.stableShotId || row.shotId || ''), analysis: parsePromptAnalysis('video', row.analysis || row.result), rawOutput: typeof row.rawOutput === 'string' ? row.rawOutput : null }))
-  if (results.some((row) => !row.stableShotId || !row.analysis)) throw new Error('REMAKE_PROMPT_VIDEO_RESULT_INVALID')
-  const persisted = await persistVideoPromptRunAtomically({ projectId: job.data.projectId, expectedStableShotIds: snapshots.map((snapshot) => snapshot.stableKey), results, rawOutput: analysis.rawOutput, provenance: { taskId: job.data.taskId, schemaVersion: 'prompt.v1', modelVersion: 'codex', executorVersion: 'codex-cli.v1' } })
-  return { kind: 'video', runId: persisted.run.id, versionIds: persisted.versions.map((version: Row) => version.id), sessionId: analysis.sessionId, inputFingerprint: payload.inputFingerprint }
 }
 
 export async function processRemakePromptTask(job: Job<TaskJobData>) {

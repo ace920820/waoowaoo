@@ -57,6 +57,10 @@ export class LocalStorageProvider implements StorageProvider {
     return await fs.readFile(resolveUploadPath(key))
   }
 
+  async downloadObjectToFile(key: string, destination: string): Promise<void> {
+    await fs.copyFile(resolveUploadPath(key), destination)
+  }
+
   extractStorageKey(input: string | null | undefined): string | null {
     if (!input) return null
     if (input.startsWith('/api/files/')) {
