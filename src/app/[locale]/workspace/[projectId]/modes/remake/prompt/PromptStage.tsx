@@ -19,8 +19,8 @@ function trackFor(tracks: PromptTrackSummary[] | undefined, targetKey: PromptTra
 
 function stateFor(track: PromptTrackSummary | null) {
   if (!track?.latestVersion) return 'idle'
-  if (track.needsReview || track.latestVersion.reviewStatus !== 'APPROVED') return 'pending_review'
-  return 'approved'
+  if (track.needsReview) return 'pending_review'
+  return track.adoptedVersion ? 'approved' : 'pending_review'
 }
 
 export function PromptStage({ projectId, snapshot }: Props) {
@@ -46,11 +46,6 @@ export function PromptStage({ projectId, snapshot }: Props) {
   }), [filter, query, snapshot.shots])
 
   const analyzeVideo = () => analyze.mutate({ kind: 'video', operationKey: crypto.randomUUID() })
-  const analyzeShot = () => {
-    if (!selectedShot) return
-    slots.forEach((slot) => analyze.mutate({ kind: 'image', shotId: selectedShot.id, slot, operationKey: crypto.randomUUID() }))
-    analyzeVideo()
-  }
 
   if (!snapshot.source.mediaId && snapshot.shots.length === 0) return <section className="py-20 text-center text-slate-400">{t('noSource')}</section>
   if (!selectedShot) return <section className="py-20 text-center text-slate-400">{t('noPromptEligibleShot')}</section>
@@ -77,7 +72,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
       </aside>
 
       <div className="lg:col-span-8 space-y-6">
-        <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-r from-white via-indigo-50/20 to-white p-4 shadow-sm"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">Shot #{selectedShot.sequence ?? '-'}</span><h3 className="text-base font-bold text-slate-900">{selectedShot.stableKey}</h3></div><p className="mt-1 text-xs text-slate-500">{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</p></div><button type="button" disabled={analyze.isPending || !selectedShot.review?.promptEligible} onClick={analyzeShot} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><AppIcon name="bolt" size={16} className="text-amber-300" />{t('fullAnalysis')}</button></div></div>
+        <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-r from-white via-indigo-50/20 to-white p-4 shadow-sm"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">Shot #{selectedShot.sequence ?? '-'}</span><h3 className="text-base font-bold text-slate-900">{selectedShot.stableKey}</h3></div><p className="mt-1 text-xs text-slate-500">{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</p></div><button type="button" disabled={analyze.isPending || !selectedShot.review?.promptEligible} onClick={analyzeVideo} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><AppIcon name="bolt" size={16} className="text-amber-300" />{t('analyzeVideo')}</button></div></div>
         <div><div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><AppIcon name="layers" size={16} className="text-indigo-600" />{t('imagePrompt')} (Start / Middle / End)</h4><span className="text-xs text-slate-400">{t('imageProgress', { count: analyzedKeyframes })}</span></div><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><PromptImageTab projectId={projectId} shot={selectedShot} tasks={snapshot.tasks} /></div></div>
         <PromptVideoTab projectId={projectId} shot={selectedShot} task={snapshot.tasks.find((task) => task.type === 'remake_video_prompt_analyze' && ['queued', 'processing', 'running', 'failed'].includes(task.status)) ?? null} onAnalyzeVideo={analyzeVideo} isAnalyzing={analyze.isPending} />
       </div>

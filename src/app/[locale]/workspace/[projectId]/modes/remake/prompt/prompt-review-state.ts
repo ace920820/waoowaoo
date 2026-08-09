@@ -7,7 +7,7 @@ export function getPromptTaskState(taskStatus: string | undefined, track: Prompt
   if (taskStatus === 'processing' || taskStatus === 'running') return 'running'
   if (taskStatus === 'failed') return 'failed'
   if (track?.needsReview) return 'needsReview'
-  if (track?.latestVersion?.reviewStatus === 'APPROVED') return 'approved'
+  if (track?.adoptedVersion) return 'approved'
   if (track?.latestVersion) return 'pending'
   return 'idle'
 }

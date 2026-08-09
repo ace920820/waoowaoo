@@ -29,3 +29,15 @@ BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/unit/remake-projects/prompt-image-
 Result: 6 test files, 29 tests passed. `npm run typecheck` also passed.
 
 The database-backed `tests/integration/task/remake-prompt-image.test.ts` could not run because its isolated MySQL server at `127.0.0.1:3307` was unavailable. Production-db smoke validation submitted one normal Middle-frame task for project `e44be650-a801-4a76-b7e3-255d018d49b1`; it completed and persisted one `image:middle` Prompt version using `prompt.v2`.
+
+## Follow-up: Video Button and Adoption Status
+
+RED: `tests/unit/remake-projects/remake-prompt-stage-contract.test.ts` failed because the page-level action called the image batch helper and because an adopted version was presented as pending when a later unadopted version existed.
+
+GREEN command:
+
+```sh
+BILLING_TEST_BOOTSTRAP=0 npx vitest run tests/unit/remake-projects/remake-prompt-stage-contract.test.ts tests/unit/remake-projects/prompt-image-generation-state.test.tsx
+```
+
+Result: 2 test files, 9 tests passed. The action now calls only `analyzeVideo` and uses the existing `analyzeVideo` translation. Card and filter state treat an adopted version as approved unless the track requires review.
