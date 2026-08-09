@@ -45,7 +45,9 @@ export function PromptStage({ projectId, snapshot }: Props) {
   const videoTask = snapshot.tasks.find((task) => task.type === 'REMAKE_VIDEO_PROMPT_ANALYZE' && ['queued', 'processing'].includes(task.status))
   const analyzeVideo = () => analyze.mutate({ kind: 'video', operationKey: crypto.randomUUID() })
 
-  if (!snapshot.source.mediaUrl) return <section className="prompt-empty"><h2>{t('prompt')}</h2><p>{t('noSource')}</p></section>
+  // A signed playback URL can be absent while SceneDetect shots are already persisted.
+  // Treat the server-owned media id or existing shots as the source-of-truth for entry.
+  if (!snapshot.source.mediaId && snapshot.shots.length === 0) return <section className="prompt-empty"><h2>{t('prompt')}</h2><p>{t('noSource')}</p></section>
   if (!selectedShot) return <section className="prompt-empty"><h2>{t('prompt')}</h2><p>{t('noPromptEligibleShot')}</p></section>
 
   return <section className="prompt-stage" data-testid="remake-prompt-stage">
