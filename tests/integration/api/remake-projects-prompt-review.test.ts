@@ -71,4 +71,17 @@ describe('remake prompt review track route', () => {
     const response = await route.GET(buildMockRequest({ path: `/api/remake-projects/${projectId}/prompts/tracks/${trackId}`, method: 'GET' }), { params: Promise.resolve({ projectId, trackId }) })
     expect(response.status).toBe(404)
   })
+
+  it('returns a conflict for an invalidated or stale edit while retaining the prior adopted version', async () => {
+    promptService.savePromptHumanEdit.mockRejectedValueOnce(new Error('REMAKE_PROMPT_INPUT_STALE'))
+    const route = await import('@/app/api/remake-projects/[projectId]/prompts/tracks/[trackId]/route')
+    const response = await route.POST(buildMockRequest({
+      path: `/api/remake-projects/${projectId}/prompts/tracks/${trackId}`,
+      method: 'POST',
+      body: { sourceVersionId: versionId, coreText: 'edited after upstream change' },
+    }), { params: Promise.resolve({ projectId, trackId }) })
+
+    expect(response.status).toBe(409)
+    expect(promptService.approveAndAdoptPromptVersion).not.toHaveBeenCalled()
+  })
 })
