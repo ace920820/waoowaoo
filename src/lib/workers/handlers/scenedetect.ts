@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { downloadAndUploadImage, generateUniqueKey, getObjectBuffer, getSignedUrl } from '@/lib/storage'
+import { downloadAndUploadImage, generateUniqueKey, getObjectBuffer } from '@/lib/storage'
+import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { commitSceneDetectImport } from '@/lib/remake-projects/scenedetect/adapter'
 import { createSceneDetectExecutorClient, sceneDetectExecutorMediaUrl } from '@/lib/remake-projects/scenedetect/executor-client'
 import { parseSceneDetectTaskPayload } from '@/lib/remake-projects/scenedetect/task-contract'
@@ -11,7 +12,7 @@ import { reportTaskProgress } from '../shared'
 type SourceRow = Record<string, unknown>
 type ProjectRow = SourceRow & { remakeProject?: SourceRow & { currentSource?: SourceRow | null } }
 
-/** 下载 SceneDetect executor 生成的关键帧图，上传平台存储，返回平台可访问 URL；失败降级为空串。 */
+/** Download executor frames into Waoo storage and retain opaque media IDs for later review. */
 async function uploadKeyframe(relPath: string | undefined, analysisId: string): Promise<string> {
   if (typeof relPath !== 'string' || !relPath.startsWith('/media/')) return ''
   try {
@@ -19,7 +20,7 @@ async function uploadKeyframe(relPath: string | undefined, analysisId: string): 
       sceneDetectExecutorMediaUrl(relPath),
       generateUniqueKey(`scenedetect/${analysisId}/frames`, 'jpg'),
     )
-    return getSignedUrl(key)
+    return (await ensureMediaObjectFromStorageKey(key, { mimeType: 'image/jpeg' })).id
   } catch {
     return ''
   }
@@ -30,7 +31,7 @@ async function projectPayloadWithKeyframes(input: { projectId: string; analysisI
   const rawShots = Array.isArray(input.response.shots) ? input.response.shots : []
   const shots = await Promise.all(rawShots.map(async (shot, index) => {
     const s = shot as Record<string, unknown>
-    const [firstFrameUrl, middleFrameUrl, lastFrameUrl] = await Promise.all([
+    const [first, middle, last] = await Promise.all([
       uploadKeyframe(s.firstFrameUrl as string | undefined, input.analysisId),
       uploadKeyframe(s.middleFrameUrl as string | undefined, input.analysisId),
       uploadKeyframe(s.lastFrameUrl as string | undefined, input.analysisId),
@@ -38,7 +39,8 @@ async function projectPayloadWithKeyframes(input: { projectId: string; analysisI
     return {
       ...s,
       id: String(s.id || `scene-${index + 1}`),
-      firstFrameUrl, middleFrameUrl, lastFrameUrl,
+      mediaIds: { first, middle, last },
+      firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '',
       keyframeSource: 'AI', status: 'pending', modifiedSource: 'AI',
       tags: Array.isArray(s.tags) ? s.tags : [],
       notes: String(s.notes || ''),

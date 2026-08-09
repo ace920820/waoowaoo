@@ -129,7 +129,11 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       },
       keyframes: Object.fromEntries(['start', 'middle', 'end'].map((slot) => {
         const mediaId = refs[slot === 'start' ? 'first' : slot === 'end' ? 'last' : 'middle'] ?? null
-        return [slot, { mediaId, mediaUrl: mediaUrl(input.projectId, mediaId) }]
+        const legacyField = slot === 'start' ? 'firstFrameUrl' : slot === 'end' ? 'lastFrameUrl' : 'middleFrameUrl'
+        // Pre-media-ID analyses stored server-generated signed frame URLs in their payload.
+        // Keep them readable while new analyses use the opaque media route above.
+        const legacyUrl = typeof payload[legacyField] === 'string' && payload[legacyField] ? payload[legacyField] : null
+        return [slot, { mediaId, mediaUrl: mediaUrl(input.projectId, mediaId) ?? legacyUrl }]
       })),
       promptTracks: ((shot.promptTracks as Row[] | undefined) ?? []).map((track) => {
         const versions = (track.versions as Row[] | undefined) ?? []

@@ -99,7 +99,7 @@ export async function commitSceneDetectImport(input: {
         ? await tx.remakeShotRevision.findFirst({ where: { shotId: row.id }, orderBy: { revision: 'desc' } })
         : null
       await tx.remakeShotRevision.create({
-        data: { shotId: row.id, revision: Number(latestRevision?.revision ?? 0) + 1, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot) },
+        data: { shotId: row.id, revision: Number(latestRevision?.revision ?? 0) + 1, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}) },
       })
       await tx.remakeProvenanceRecord.create({
         data: { shotId: row.id, schema: 'scenedetect.v2', executor: parsed.provenance?.executorVersion ?? 'legacy_json_import', capability: parsed.provenance?.mode ?? 'analysis', payload: operationPayload(input.operationKey, project) },
