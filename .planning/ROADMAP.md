@@ -116,8 +116,8 @@
 **Plans**: 4 plans
 
 Plans:
-- [ ] `07-01-PLAN.md` — 建立 append-only Prompt schema、版本/审核/采用/失效合同与整段 Video 原子持久化
-- [ ] `07-02-PLAN.md` — 接入统一 Task、Codex CLI Worker、认证触发路由与 Redis 图片三并发门禁
+- [x] `07-01-PLAN.md` — 建立 append-only Prompt schema、版本/审核/采用/失效合同与整段 Video 原子持久化
+- [x] `07-02-PLAN.md` — 接入统一 Task、Codex CLI Worker、认证触发路由与 Redis 图片三并发门禁
 - [ ] `07-03-PLAN.md` — 扩展 snapshot/API/query，并将外部 Prompt 前端合入现有 RemakeWorkbench
 - [ ] `07-04-PLAN.md` — 完成 unit/API/Worker/Playwright/真实 Codex 验证与阻塞式真实用户流验收
 **UI hint**: yes
