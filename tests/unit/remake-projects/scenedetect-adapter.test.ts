@@ -45,6 +45,14 @@ describe('SceneDetect adapter contracts', () => {
     expect(() => parseSceneDetectInput({ ...project, shots: [{ ...shot, endFrame: 5 }] })).toThrow(/frame/i)
   })
 
+  it('preserves server-owned keyframe media IDs during import validation', () => {
+    const parsed = parseSceneDetectInput({
+      ...project,
+      shots: [{ ...shot, mediaIds: { first: 'media-first', middle: 'media-middle', last: 'media-last' }, firstFrameUrl: '', middleFrameUrl: '', lastFrameUrl: '' }],
+    })
+    expect(parsed.shots[0]?.mediaIds).toEqual({ first: 'media-first', middle: 'media-middle', last: 'media-last' })
+  })
+
   it('keeps Waoo IDs stable across repeated analysis runs of the same source', () => {
     const key = createExternalShotKey('project-1', 'analysis-1', shot.id)
     const first = resolveWaooShotId(key, new Map())
