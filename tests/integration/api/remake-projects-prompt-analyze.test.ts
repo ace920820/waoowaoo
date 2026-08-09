@@ -51,4 +51,25 @@ describe('POST /api/remake-projects/[projectId]/prompts/analyze', () => {
     expect(incomplete.status).toBe(400)
     expect(submitTaskMock).not.toHaveBeenCalled()
   })
+
+  it('submits whole-video analysis using only shots from the current source revision', async () => {
+    prismaMock.project.findUnique.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      type: 'remake',
+      remakeProject: {
+        id: '22222222-2222-4222-8222-222222222222',
+        currentSource: { id: 'source-1', sourceRevision: 2, status: 'analyzed' },
+        shots: [
+          { ...shot, revisions: [{ ...shot.revisions[0], sourceRevision: 2 }] },
+          { ...shot, id: '55555555-5555-4555-8555-555555555555', stableKey: 'old-shot', currentRevision: 1 },
+        ],
+      },
+    })
+
+    const { POST } = await import('@/app/api/remake-projects/[projectId]/prompts/analyze/route')
+    const response = await POST(new NextRequest('http://localhost/api/remake-projects/11111111-1111-4111-8111-111111111111/prompts/analyze', { method: 'POST', body: JSON.stringify({ kind: 'video', operationKey: 'video-current-source' }) }), { params: Promise.resolve({ projectId: '11111111-1111-4111-8111-111111111111' }) })
+
+    expect(response.status).toBe(202)
+    expect(submitTaskMock).toHaveBeenCalledWith(expect.objectContaining({ targetType: 'remake_project' }))
+  })
 })
