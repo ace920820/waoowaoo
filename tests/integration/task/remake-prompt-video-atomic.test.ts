@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
+import { normalizeVideoPromptStableShotIds, persistVideoPromptRunAtomically } from '@/lib/remake-projects/prompt/service'
 import { prisma } from '@/lib/prisma'
 import { resetBillingState } from '../../helpers/db-reset'
 
@@ -39,6 +39,12 @@ describe('remake whole-video Prompt atomic persistence', () => {
     await expect(prisma.remakePromptRun.count()).resolves.toBe(1)
     await expect(prisma.remakePromptVersion.count()).resolves.toBe(2)
     await expect(prisma.remakePromptTrack.findMany({ select: { adoptedVersionId: true } })).resolves.toEqual([{ adoptedVersionId: null }, { adoptedVersionId: null }])
+  })
+
+  it('maps a unique external scene ID from Codex back to its manifest stableShotId', () => {
+    const stableShotId = 'project-id:analysis-id:scene-15'
+    expect(normalizeVideoPromptStableShotIds([stableShotId], [{ stableShotId: 'scene-15', analysis: videoAnalysis }]))
+      .toEqual([{ stableShotId, analysis: videoAnalysis }])
   })
 
   it.each([

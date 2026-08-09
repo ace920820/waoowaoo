@@ -60,6 +60,13 @@ describe('remake prompt stage contract', () => {
     }
   })
 
+  it('shows a failed whole-video task reason instead of silently returning to the idle action', () => {
+    const video = readFileSync(videoPath, 'utf8')
+    expect(video).toContain("task?.status === 'failed'")
+    expect(video).toContain('task?.errorMessage')
+    expect(video).toContain('version?.coreText')
+  })
+
   it('derives review state from server task and track facts', () => {
     const pendingTrack = { id: 'track-1', targetKey: 'image:start', latestVersion: { id: 'version-2', versionNumber: 2, reviewStatus: 'PENDING' }, adoptedVersion: { id: 'version-1', versionNumber: 1, reviewStatus: 'APPROVED' }, needsReview: false } as const
 
