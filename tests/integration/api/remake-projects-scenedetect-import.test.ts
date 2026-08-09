@@ -87,6 +87,22 @@ describe('SceneDetect import boundary', () => {
     expect(prismaMock.remakeShot.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'legacy-shot-1' } }))
   })
 
+  it('prefers the exact external identity when legacy duplicate shot records also match the suffix', async () => {
+    prismaMock.remakeShot.findFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      if (where.externalIdentity === 'external-shot-1') {
+        return { id: 'canonical-shot-1', stableKey: 'project-1:legacy-analysis:external-shot-1', externalIdentity: 'external-shot-1', currentRevision: 4 }
+      }
+      return { id: 'duplicate-shot-1', stableKey: 'project-1:older-analysis:external-shot-1', externalIdentity: 'older-analysis:external-shot-1', currentRevision: 4 }
+    })
+    const { POST } = await import('@/app/api/remake-projects/[projectId]/scenedetect/import/route')
+    const response = await POST(buildMockRequest({
+      path: '/api/remake-projects/project-1/scenedetect/import', method: 'POST', body: { mode: 'commit', analysisId: 'analysis-next', operationKey: 'op-exact-identity', payload: { ...payload, project: { ...payload.project, id: 'analysis-next' } } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    expect(response.status).toBe(201)
+    expect(prismaMock.remakeShot.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'canonical-shot-1' } }))
+    expect(prismaMock.remakeShot.upsert).not.toHaveBeenCalled()
+  })
+
   it('rejects private DNS results, URL credentials, and oversized media before ingestion', async () => {
     const { validateExternalMediaUrl, normalizeMediaInput } = await import('@/lib/remake-projects/scenedetect/media')
     await expect(validateExternalMediaUrl('https://media.example/frame.jpg', { allowlistedHosts: new Set(['media.example']), resolveHost: async () => ['192.168.1.10'] })).rejects.toThrow(/private/i)
