@@ -68,7 +68,7 @@ describe('remake prompt stage contract', () => {
   })
 
   it('finds the persisted lowercase image Prompt task before its track exists', () => {
-    const task = findImagePromptTask([{ id: 'task-1', type: 'remake_image_prompt_analyze', targetType: 'remake_shot', targetId: 'shot-1', status: 'queued', createdAt: '', updatedAt: '' }], null, 'shot-1')
+    const task = findImagePromptTask([{ id: 'task-1', type: 'remake_image_prompt_analyze', targetType: 'remake_shot', targetId: 'shot-1', promptSlot: 'middle', status: 'queued', createdAt: '', updatedAt: '' }], null, 'shot-1', 'middle')
     expect(task?.status).toBe('queued')
   })
 })

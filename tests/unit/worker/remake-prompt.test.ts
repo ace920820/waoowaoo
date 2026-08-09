@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { parseCodexJsonl, redactCodexOutput, runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
+import { parseCodexJsonl, promptResultSchema, redactCodexOutput, runCodexPromptAnalysis } from '@/lib/remake-projects/prompt/executor'
 
 const resolveStorageKeyMock = vi.hoisted(() => vi.fn())
 const getMediaObjectByIdMock = vi.hoisted(() => vi.fn())
@@ -9,7 +9,14 @@ vi.mock('@/lib/media/service', () => ({ getMediaObjectById: getMediaObjectByIdMo
 
 const imageAnalysis = {
   analysisBasis: { visibleFacts: ['one subject'], photographicInferences: ['eye level'], generationRecommendations: ['keep framing'] },
-  structuredPrompt: { cameraAndComposition: {}, depthAndImaging: {}, subjects: [], sceneAndSpace: {}, lighting: {}, colorAndStyle: {} },
+  structuredPrompt: {
+    cameraAndComposition: { aspectRatio: '16:9', cameraPositionAndAngle: 'eye level', lensAndFieldOfView: 'standard', focalLengthRange: '35mm equivalent', shotScale: 'medium', subjectLayout: 'centered', subjectOccupancy: '50% frame height', spatialRelations: 'single subject', perspectiveAndVisualFlow: 'neutral perspective' },
+    depthAndImaging: { depthOfField: 'medium', focusPlane: 'face', sharpnessDistribution: 'subject sharp', motionAndLensEffects: 'none', exposureRecommendations: 'balanced exposure' },
+    subjects: [{ label: 'subject 1', category: 'person', positionAndScale: 'center', appearance: 'visible figure', materials: 'fabric', wardrobeAndEquipment: 'simple clothing', actionAndPose: 'standing', orientationAndGaze: 'faces camera', occlusionAndCrop: 'uncropped', relations: 'no other subject', lighting: 'soft frontal light' }],
+    sceneAndSpace: { setting: 'street', atmosphereMedium: 'clear air', foreground: 'none', midground: 'subject', background: 'street', visibilityAndDepth: 'medium depth', narrativePressure: 'calm' },
+    lighting: { keyLight: 'soft front', qualityAndFalloff: 'soft', fillLight: 'ambient', rimAndReflectedLight: 'none', emissiveEffects: 'none', volumetricsAndOcclusion: 'none', highlightsAndShadows: 'soft shadows' },
+    colorAndStyle: { temperatureAndTone: 'neutral', paletteRelationships: 'muted blue', saturationBrightnessContrast: 'medium', whiteBalanceAndExposure: 'balanced', mediumAndTexture: 'cinematic image', postProcessing: 'subtle grain' },
+  },
   integratedGenerationPrompt: 'A single subject at eye level.',
   negativeConstraints: ['no extra subject'],
   pendingQuestions: ['exact lens is unknown'],
@@ -29,7 +36,7 @@ const videoAnalysis = {
   temporalProgression: 'cross, glance back, exit frame',
 }
 
-function fakeChild(lines: string[]) {
+function fakeChild(lines: string[], exitCode = 0, stderr = '') {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -38,12 +45,29 @@ function fakeChild(lines: string[]) {
   })
   child.stdin.once('finish', () => {
     child.stdout.end(lines.join('\n'))
-    child.emit('close', 0, null)
+    child.stderr.end(stderr)
+    child.emit('close', exitCode, null)
   })
   return child
 }
 
 describe('remake prompt Codex executor', () => {
+  it('builds a strict image schema for every nested object accepted by Codex', () => {
+    const schema = promptResultSchema('image:start')
+    const visit = (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return
+      const row = value as Record<string, unknown>
+      if (row.type === 'object') {
+        expect(row.additionalProperties).toBe(false)
+        expect(Object.keys(row.properties as Record<string, unknown>)).toEqual(row.required)
+      }
+      visit(row.properties)
+      visit(row.items)
+    }
+
+    visit(schema)
+  })
+
   it('resolves persisted MediaObject IDs to storage keys before reading prompt media', async () => {
     getMediaObjectByIdMock.mockResolvedValueOnce({ storageKey: 'images/scenedetect/frame-1.jpg' })
     const { resolvePromptMediaKey } = await import('@/lib/workers/handlers/remake-prompt')
@@ -59,16 +83,51 @@ describe('remake prompt Codex executor', () => {
     ])
     const spawn = vi.fn(() => child)
 
-    const output = await runCodexPromptAnalysis({ targetKey: 'image:start', prompt: 'analyze this image', media: [{ name: 'start.jpg', bytes: Buffer.from('image') }] }, { spawn: spawn as never })
+    const output = await runCodexPromptAnalysis({ targetKey: 'image:start', prompt: 'analyze this image', media: [{ name: 'start.jpg', bytes: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }] }, { spawn: spawn as never })
 
     expect(spawn).toHaveBeenCalledTimes(1)
     const [command, args, options] = spawn.mock.calls[0] as unknown as [string, string[], Record<string, unknown>]
     expect(command).toBe('codex')
     expect(args).toContain('exec')
+    expect(args).toContain('--image')
+    expect(args[args.indexOf('--image') + 1]).toMatch(/\.jpg$/)
     expect(args).not.toContain('resume')
     expect(options).toMatchObject({ shell: false })
     expect(output.sessionId).toBe('session-new')
     expect(output.result).toEqual(imageAnalysis)
+  })
+
+  it('attaches PNG and WebP media but never attaches a source video as an image', async () => {
+    const child = fakeChild([JSON.stringify({ type: 'final', result: imageAnalysis })])
+    const spawn = vi.fn(() => child)
+    await runCodexPromptAnalysis({
+      targetKey: 'image:middle', prompt: 'analyze image',
+      media: [
+        { name: 'frame', bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) },
+        { name: 'frame', bytes: Buffer.from('RIFFxxxxWEBP') },
+        { name: 'source', bytes: Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]) },
+      ],
+    }, { spawn: spawn as never })
+
+    const args = (spawn.mock.calls[0] as unknown as [string, string[], unknown])[1]
+    const imagePaths = args.filter((value, index) => args[index - 1] === '--image')
+    expect(imagePaths).toHaveLength(2)
+    expect(imagePaths).toEqual(expect.arrayContaining([expect.stringMatching(/\.png$/), expect.stringMatching(/\.webp$/)]))
+    expect(imagePaths.some((path) => path.endsWith('.mp4'))).toBe(false)
+  })
+
+  it('keeps actionable but redacted Codex stderr when the CLI exits nonzero', async () => {
+    const child = fakeChild([], 1, 'Invalid schema at /tmp/private/result-schema.json api_key=very-secret https://example.test/path')
+    await expect(runCodexPromptAnalysis({ targetKey: 'image:start', prompt: 'analyze image' }, { spawn: vi.fn(() => child) as never }))
+      .rejects.toThrow('Invalid schema')
+    await expect(runCodexPromptAnalysis({ targetKey: 'image:start', prompt: 'analyze image' }, { spawn: vi.fn(() => fakeChild([], 1, 'Invalid schema at /tmp/private api_key=very-secret')) as never }))
+      .rejects.not.toThrow(/private|very-secret/)
+  })
+
+  it('retains a non-keyword CLI error after redaction instead of collapsing it to an exit code', async () => {
+    await expect(runCodexPromptAnalysis({ targetKey: 'image:start', prompt: 'analyze image' }, {
+      spawn: vi.fn(() => fakeChild([], 1, 'Could not read /tmp/private/source.jpg token=very-secret')) as never,
+    })).rejects.toThrow('Could not read [redacted-path]')
   })
 
   it('fails closed for ambiguous sessions or invalid final schemas', () => {

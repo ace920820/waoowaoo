@@ -108,6 +108,23 @@ describe('remake project core', () => {
     }))
   })
 
+  it('derives an image Prompt slot from its immutable creation event without exposing task payload', async () => {
+    prismaMock.task.findMany.mockResolvedValueOnce([{
+      id: 'task-middle', type: 'remake_image_prompt_analyze', targetType: 'remake_shot', targetId: 'shot-1', status: 'failed',
+      errorCode: 'CODEX_PROCESS_FAILED', errorMessage: 'failed', createdAt: new Date(), updatedAt: new Date(),
+      events: [{ payload: { slot: 'middle', inputSnapshot: { storageKey: 'private/key' }, secret: 'must-not-leak' } }],
+    }] as unknown as never[])
+    const { getRemakeProjectSnapshot } = await import('@/lib/remake-projects/service')
+
+    const snapshot = await getRemakeProjectSnapshot({ projectId: 'remake-project-1', userId: 'user-1' })
+    const task = snapshot?.tasks[0] as Record<string, unknown>
+    expect(task).toMatchObject({ id: 'task-middle', promptSlot: 'middle' })
+    expect(task).not.toHaveProperty('events')
+    expect(task).not.toHaveProperty('payload')
+    expect(JSON.stringify(task)).not.toContain('private/key')
+    expect(JSON.stringify(task)).not.toContain('must-not-leak')
+  })
+
   it('records a new revision and marks affected outputs for review without auto-approval', async () => {
     const { createRemakeShotRevision } = await import('@/lib/remake-projects/service')
 

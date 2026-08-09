@@ -6,7 +6,14 @@ import { resetBillingState } from '../../helpers/db-reset'
 
 const imageAnalysis = {
   analysisBasis: { visibleFacts: ['one subject'], photographicInferences: ['eye level'], generationRecommendations: ['retain framing'] },
-  structuredPrompt: { cameraAndComposition: { framing: 'medium' }, depthAndImaging: { depthOfField: 'medium' }, subjects: [{ action: 'walk' }], sceneAndSpace: { setting: 'street' }, lighting: { key: 'soft' }, colorAndStyle: { palette: 'blue' } },
+  structuredPrompt: {
+    cameraAndComposition: { aspectRatio: '16:9', cameraPositionAndAngle: 'eye level', lensAndFieldOfView: 'standard', focalLengthRange: '35mm', shotScale: 'medium', subjectLayout: 'center', subjectOccupancy: '40%', spatialRelations: 'one subject', perspectiveAndVisualFlow: 'neutral' },
+    depthAndImaging: { depthOfField: 'medium', focusPlane: 'subject', sharpnessDistribution: 'subject sharp', motionAndLensEffects: 'none', exposureRecommendations: 'balanced' },
+    subjects: [{ label: 'subject 1', category: 'person', positionAndScale: 'center', appearance: 'person', materials: 'fabric', wardrobeAndEquipment: 'clothing', actionAndPose: 'walk', orientationAndGaze: 'forward', occlusionAndCrop: 'none', relations: 'none', lighting: 'soft' }],
+    sceneAndSpace: { setting: 'street', atmosphereMedium: 'clear', foreground: 'none', midground: 'person', background: 'street', visibilityAndDepth: 'medium', narrativePressure: 'calm' },
+    lighting: { keyLight: 'soft', qualityAndFalloff: 'soft', fillLight: 'ambient', rimAndReflectedLight: 'none', emissiveEffects: 'none', volumetricsAndOcclusion: 'none', highlightsAndShadows: 'soft' },
+    colorAndStyle: { temperatureAndTone: 'cool', paletteRelationships: 'blue', saturationBrightnessContrast: 'moderate', whiteBalanceAndExposure: 'balanced', mediumAndTexture: 'photographic', postProcessing: 'none' },
+  },
   integratedGenerationPrompt: 'A person walks down a blue street.',
   negativeConstraints: ['no extra people'],
   pendingQuestions: ['exact lens unknown'],
@@ -39,7 +46,7 @@ describe('remake image prompt persistence', () => {
       inputSnapshot: fixture.snapshot,
       analysis: imageAnalysis,
       rawOutput: '{"complete":"raw result"}',
-      provenance: { taskId: randomUUID(), skillVersion: 'image-to-structured-prompt', schemaVersion: 'prompt.v1', modelVersion: 'codex', executorVersion: 'codex-cli.v1' },
+      provenance: { taskId: randomUUID(), skillVersion: 'image-to-structured-prompt', schemaVersion: 'prompt.v2', modelVersion: 'codex', executorVersion: 'codex-cli.v1' },
     })
 
     expect(version).toMatchObject({ integratedGenerationPrompt: imageAnalysis.integratedGenerationPrompt, negativeConstraints: imageAnalysis.negativeConstraints, rawOutput: '{"complete":"raw result"}', skillVersion: 'image-to-structured-prompt' })

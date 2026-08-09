@@ -16,12 +16,12 @@ describe('remake prompt contracts', () => {
         generationRecommendations: ['35mm equivalent'],
       },
       structuredPrompt: {
-        cameraAndComposition: { framing: 'medium shot' },
-        depthAndImaging: { depthOfField: 'medium' },
-        subjects: [{ identity: 'person', action: 'walking' }],
-        sceneAndSpace: { setting: 'street' },
-        lighting: { keyLight: 'soft side light' },
-        colorAndStyle: { palette: 'muted blue' },
+        cameraAndComposition: { aspectRatio: '16:9', cameraPositionAndAngle: 'eye level', lensAndFieldOfView: 'standard', focalLengthRange: '35mm', shotScale: 'medium shot', subjectLayout: 'centered', subjectOccupancy: '40%', spatialRelations: 'one subject', perspectiveAndVisualFlow: 'neutral' },
+        depthAndImaging: { depthOfField: 'medium', focusPlane: 'subject', sharpnessDistribution: 'subject sharp', motionAndLensEffects: 'none', exposureRecommendations: 'balanced' },
+        subjects: [{ label: 'subject 1', category: 'person', positionAndScale: 'center', appearance: 'person', materials: 'fabric', wardrobeAndEquipment: 'casual clothes', actionAndPose: 'walking', orientationAndGaze: 'forward', occlusionAndCrop: 'none', relations: 'none', lighting: 'soft side light' }],
+        sceneAndSpace: { setting: 'street', atmosphereMedium: 'clear', foreground: 'none', midground: 'person', background: 'street', visibilityAndDepth: 'medium', narrativePressure: 'calm' },
+        lighting: { keyLight: 'soft side light', qualityAndFalloff: 'soft', fillLight: 'ambient', rimAndReflectedLight: 'none', emissiveEffects: 'none', volumetricsAndOcclusion: 'none', highlightsAndShadows: 'soft' },
+        colorAndStyle: { temperatureAndTone: 'cool', paletteRelationships: 'muted blue', saturationBrightnessContrast: 'moderate', whiteBalanceAndExposure: 'balanced', mediumAndTexture: 'photographic', postProcessing: 'none' },
       },
       integratedGenerationPrompt: 'Medium shot of a person walking down a muted blue street.',
       negativeConstraints: ['no extra limbs', 'do not reverse walking direction'],
@@ -30,7 +30,7 @@ describe('remake prompt contracts', () => {
 
     expect(parsed.integratedGenerationPrompt).toContain('Medium shot')
     expect(parsed.negativeConstraints).toContain('no extra limbs')
-    expect(parsed.structuredPrompt.subjects[0]?.action).toBe('walking')
+    expect(parsed.structuredPrompt.subjects[0]?.actionAndPose).toBe('walking')
     expect(Object.keys(parsed.structuredPrompt)).toEqual([
       'cameraAndComposition',
       'depthAndImaging',
