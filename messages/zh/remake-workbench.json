@@ -47,6 +47,7 @@
   "selectShot": "选择镜头",
   "searchShots": "搜索镜头",
   "all": "全部",
+  "copy": "复制",
   "imageProgress": "图片已采用 {count}/3",
   "shot": "镜头",
   "readyForAnalysis": "可分析",
