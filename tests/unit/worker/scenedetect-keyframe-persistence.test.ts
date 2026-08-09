@@ -49,14 +49,15 @@ describe('SceneDetect analysis keyframe persistence', () => {
   })
 
   it('keeps executor-assigned fallback shot IDs unique across transfer batches', async () => {
-    mocks.download.mockResolvedValue('frames/key.jpg')
+    mocks.download.mockResolvedValue('frames/key.jpg' as never)
     mocks.execute.mockResolvedValueOnce({
       analysisId: 'analysis-1', metadata: { fps: 30, totalFrames: 150 },
       shots: Array.from({ length: 5 }, (_, index) => ({ shotNumber: index + 1, startFrame: index * 30, endFrame: index * 30 + 29, rawStartFrame: index * 30, rawEndFrame: index * 30 + 29, startTimecode: '', endTimecode: '', duration: 1, durationFrames: 30, firstFrameUrl: `/media/analysis-1/${index}-first.jpg`, middleFrameUrl: `/media/analysis-1/${index}-middle.jpg`, lastFrameUrl: `/media/analysis-1/${index}-last.jpg` })),
-    })
+    } as never)
     const { handleSceneDetectTask } = await import('@/lib/workers/handlers/scenedetect')
     await handleSceneDetectTask({ id: 'task-2', data: { projectId: 'project-1', userId: 'user-1', payload: {} } } as never)
-    const input = mocks.commit.mock.calls[0]?.[0] as { payload: { payload: { shots: Array<{ id: string }> } } }
+    const input = (mocks.commit.mock.calls as unknown as Array<[ { payload: { payload: { shots: Array<{ id: string }> } } } ]>)[0]?.[0]
+    expect(input).toBeDefined()
     expect(input.payload.payload.shots.map((shot) => shot.id)).toEqual(['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5'])
   })
 })

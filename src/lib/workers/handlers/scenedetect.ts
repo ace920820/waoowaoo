@@ -50,7 +50,7 @@ async function projectPayloadWithKeyframes(input: { projectId: string; analysisI
   // A long video can yield dozens of Shots. Limit frame transfers to avoid exhausting
   // the executor or image-processing pool and silently losing every media reference.
   for (let index = 0; index < rawShots.length; index += 4) {
-    shots.push(...await Promise.all(rawShots.slice(index, index + 4).map(persistShot)))
+    shots.push(...await Promise.all(rawShots.slice(index, index + 4).map((shot, chunkIndex) => persistShot(shot, index + chunkIndex))))
   }
   return {
     schemaVersion: 2, type: 'scenedetect-project',
