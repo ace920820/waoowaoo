@@ -41,6 +41,16 @@ function fingerprintVideo(snapshots: PromptInputSnapshot[], sourceRevision: numb
   return createHash('sha256').update(stableJson({ sourceRevision, snapshots })).digest('hex')
 }
 
+function fingerprintImageDedupe(input: {
+  projectId: string
+  shotId: string
+  slot: z.infer<typeof slotSchema>
+  operationKey: string
+  inputFingerprint: string
+}): string {
+  return createHash('sha256').update(stableJson(input)).digest('hex')
+}
+
 function assertProjectSnapshot(projectId: string, snapshot: PromptInputSnapshot) {
   if (snapshot.projectId !== projectId) throw new Error('REMAKE_PROMPT_PROJECT_MISMATCH')
 }
@@ -80,11 +90,12 @@ export function buildRemakePromptTaskDescriptor(input: DescriptorInput) {
     assertImageSlot(inputSnapshot, input.slot)
     const inputFingerprint = promptInputFingerprint(inputSnapshot)
     const payload = imagePayloadSchema.parse({ kind: 'image', operationKey: input.operationKey, slot: input.slot, inputSnapshot, inputFingerprint })
+    const dedupeFingerprint = fingerprintImageDedupe({ projectId: input.projectId, shotId: inputSnapshot.shotId, slot: input.slot, operationKey: input.operationKey, inputFingerprint })
     return {
       taskType: TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE,
       targetType: 'remake_shot', targetId: inputSnapshot.shotId,
       inputFingerprint, payload,
-      dedupeKey: `remake-prompt:image:${input.projectId}:${inputSnapshot.shotId}:${input.slot}:${input.operationKey}:${inputFingerprint}`,
+      dedupeKey: `remake-prompt:image:${dedupeFingerprint}`,
     }
   }
   const snapshots = input.snapshots.map((snapshot) => promptInputSnapshotSchema.parse(snapshot))
