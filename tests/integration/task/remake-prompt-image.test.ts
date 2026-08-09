@@ -13,7 +13,7 @@ const imageAnalysis = {
 }
 
 async function createPromptReadyShot() {
-  const user = await prisma.user.create({ data: { email: `prompt-image-${randomUUID()}@example.com` } })
+  const user = await prisma.user.create({ data: { name: 'Prompt image test user', email: `prompt-image-${randomUUID()}@example.com` } })
   const project = await prisma.project.create({ data: { userId: user.id, name: 'Prompt image test', type: 'remake' } })
   const remake = await prisma.remakeProject.create({ data: { projectId: project.id, creationRequestId: randomUUID() } })
   const source = await prisma.remakeSource.create({ data: { remakeProjectId: remake.id, sourceRevision: 1, status: 'analyzed' } })

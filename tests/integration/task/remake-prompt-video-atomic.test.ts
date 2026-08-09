@@ -10,7 +10,7 @@ const videoAnalysis = {
 }
 
 async function createPromptReadyProject() {
-  const user = await prisma.user.create({ data: { email: `prompt-video-${randomUUID()}@example.com` } })
+  const user = await prisma.user.create({ data: { name: 'Prompt video test user', email: `prompt-video-${randomUUID()}@example.com` } })
   const project = await prisma.project.create({ data: { userId: user.id, name: 'Prompt video test', type: 'remake' } })
   const remake = await prisma.remakeProject.create({ data: { projectId: project.id, creationRequestId: randomUUID() } })
   const source = await prisma.remakeSource.create({ data: { remakeProjectId: remake.id, sourceRevision: 1, status: 'analyzed' } })
