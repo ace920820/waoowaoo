@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Clock3, History, Image, Play, Sparkles } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Clock3, History, Image, Play, Search, Sparkles } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { PromptTrackSummary, RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 import { useAnalyzeRemakePrompt, useApproveAndAdoptRemakePrompt } from '@/lib/query/mutations/remake-prompt-mutations'
@@ -37,6 +37,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
   const [selectedShotId, setSelectedShotId] = useState(snapshot.shots[0]?.id ?? '')
   const [tab, setTab] = useState<'image' | 'video'>('image')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const analyze = useAnalyzeRemakePrompt(projectId)
   const selectedShot = snapshot.shots.find((shot) => shot.id === selectedShotId) ?? snapshot.shots[0]
   const eligible = snapshot.shots.filter((shot) => shot.review?.promptEligible).length
@@ -44,6 +45,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
   const hasVideo = snapshot.shots.some((shot) => trackFor(shot.promptTracks, 'video')?.latestVersion)
   const videoTask = snapshot.tasks.find((task) => task.type === 'REMAKE_VIDEO_PROMPT_ANALYZE' && ['queued', 'processing'].includes(task.status))
   const analyzeVideo = () => analyze.mutate({ kind: 'video', operationKey: crypto.randomUUID() })
+  const visibleShots = snapshot.shots.filter((shot) => `${shot.sequence ?? ''} ${shot.stableKey}`.toLowerCase().includes(query.toLowerCase()))
 
   // A signed playback URL can be absent while SceneDetect shots are already persisted.
   // Treat the server-owned media id or existing shots as the source-of-truth for entry.
@@ -57,7 +59,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
     </header>
     <div className="prompt-metrics"><div><span>可分析镜头</span><strong>{eligible} / {snapshot.shots.length}</strong></div><div><span>{t('pendingReview')}</span><strong>{pending}</strong></div><div><span>{t('approved')}</span><strong>{snapshot.shots.flatMap((shot) => shot.promptTracks ?? []).filter((track) => track.adoptedVersion).length}</strong></div><div><span>图片并发</span><strong>3</strong></div></div>
     <div className="prompt-workarea">
-      <aside className="prompt-shot-list"><h3>镜头列表 <span>{snapshot.shots.length}</span></h3>{snapshot.shots.map((shot) => <button key={shot.id} type="button" className={shot.id === selectedShot.id ? 'is-selected' : ''} onClick={() => setSelectedShotId(shot.id)}><b>#{shot.sequence ?? '-'}</b><span>{shot.stableKey}</span><small>{String(shot.timeRange?.start ?? '-')} - {String(shot.timeRange?.end ?? '-')}</small></button>)}</aside>
+      <aside className="prompt-shot-list"><h3>镜头列表 <span>{visibleShots.length}</span></h3><label className="prompt-search"><Search size={14}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索镜头..." /></label><div className="prompt-filters"><span>全部镜头</span><span>{t('pendingReview')}</span><span>{t('approved')}</span></div><div className="prompt-shot-scroll">{visibleShots.map((shot) => <button key={shot.id} type="button" className={shot.id === selectedShot.id ? 'is-selected' : ''} onClick={() => setSelectedShotId(shot.id)}><div><b>#{shot.sequence ?? '-'}</b><span>{shot.stableKey}</span></div><small>{String(shot.timeRange?.start ?? '-')} - {String(shot.timeRange?.end ?? '-')}</small><div className="prompt-thumb-row">{slots.map((slot) => shot.keyframes?.[slot]?.mediaUrl ? <img key={slot} src={shot.keyframes[slot].mediaUrl!} alt="" /> : <i key={slot}>{slot[0].toUpperCase()}</i>)}</div><small>Prompt 进度: {(shot.promptTracks ?? []).filter((track) => track.adoptedVersion).length}/4</small></button>)}</div></aside>
       <div className="prompt-detail">
         <header className="prompt-shot-heading"><div><p>Shot #{selectedShot.sequence ?? '-'}</p><h3>{selectedShot.stableKey}</h3><span>{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</span></div>{selectedShot.review?.promptEligible ? <em>可分析</em> : <em className="is-muted">{selectedShot.review?.reason ?? '未满足前置条件'}</em>}</header>
         <div className="prompt-tabs"><button className={tab === 'image' ? 'is-active' : ''} onClick={() => setTab('image')}><Image size={15}/>{t('imagePrompt')}</button><button className={tab === 'video' ? 'is-active' : ''} onClick={() => setTab('video')}><Sparkles size={15}/>{t('videoPrompt')}</button></div>
