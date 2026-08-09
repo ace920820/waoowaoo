@@ -24,10 +24,15 @@ function parseJsonObject(value: unknown): Row {
   try { return object(JSON.parse(value)) } catch { return {} }
 }
 
-function currentSnapshot(projectId: string, remakeProjectId: string, sourceRevision: number, shot: Row) {
+function currentRevision(shot: Row): Row | null {
   const revisions = Array.isArray(shot.revisions) ? shot.revisions.map(object) : []
   const revision = revisions.find((row) => Number(row.revision) === Number(shot.currentRevision))
-  if (!revision || revision.lifecycleState === 'retired') return null
+  return revision && revision.lifecycleState !== 'retired' ? revision : null
+}
+
+function currentSnapshot(projectId: string, remakeProjectId: string, sourceRevision: number, shot: Row) {
+  const revision = currentRevision(shot)
+  if (!revision) return null
   const payload = parseJsonObject(revision.payload)
   const refs = parseJsonObject(revision.keyframeMediaRefs)
   const keyframeMediaRefs = Object.fromEntries(Object.entries(refs).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim().length > 0))
@@ -62,7 +67,9 @@ export const POST = apiHandler(async (request: NextRequest, context: { params: P
     const submitted = await submitTask({ userId: auth.session.user.id, locale: 'zh', projectId, type: descriptor.taskType, targetType: descriptor.targetType, targetId: descriptor.targetId, payload: descriptor.payload, dedupeKey: descriptor.dedupeKey, maxAttempts: 1 })
     return NextResponse.json({ taskId: submitted.taskId }, { status: 202 })
   }
-  const allShots = Array.isArray(remake.shots) ? remake.shots.map(object) : []
+  const allShots = (Array.isArray(remake.shots) ? remake.shots.map(object) : []).filter((shot) =>
+    Number(currentRevision(shot)?.sourceRevision) === Number(source.sourceRevision),
+  )
   if (!snapshots.length || snapshots.length !== allShots.length) throw new ApiError('INVALID_PARAMS', { details: 'All current Shots must be confirmed with complete keyframes' })
   const descriptor = buildRemakePromptTaskDescriptor({ kind: 'video', projectId, operationKey: input.operationKey, sourceRevision: Number(source.sourceRevision), snapshots })
   const submitted = await submitTask({ userId: auth.session.user.id, locale: 'zh', projectId, type: descriptor.taskType, targetType: descriptor.targetType, targetId: descriptor.targetId, payload: descriptor.payload, dedupeKey: descriptor.dedupeKey, maxAttempts: 1 })
