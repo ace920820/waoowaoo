@@ -30,6 +30,7 @@ export type RemakeSnapshot = {
     status: string
     errorCode?: string | null
     errorMessage?: string | null
+    promptSlot?: 'start' | 'middle' | 'end' | null
     createdAt: string
     updatedAt: string
   }>

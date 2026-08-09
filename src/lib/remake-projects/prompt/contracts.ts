@@ -5,7 +5,28 @@ export const promptTargetKeySchema = z.enum([...IMAGE_PROMPT_TARGET_KEYS, 'video
 export type PromptTargetKey = z.infer<typeof promptTargetKeySchema>
 
 const stringListSchema = z.array(z.string().min(1))
-const promptObjectSchema = z.record(z.unknown())
+const text = z.string().min(1)
+
+const cameraAndCompositionSchema = z.object({
+  aspectRatio: text, cameraPositionAndAngle: text, lensAndFieldOfView: text, focalLengthRange: text,
+  shotScale: text, subjectLayout: text, subjectOccupancy: text, spatialRelations: text, perspectiveAndVisualFlow: text,
+}).strict()
+const depthAndImagingSchema = z.object({
+  depthOfField: text, focusPlane: text, sharpnessDistribution: text, motionAndLensEffects: text, exposureRecommendations: text,
+}).strict()
+const subjectSchema = z.object({
+  label: text, category: text, positionAndScale: text, appearance: text, materials: text, wardrobeAndEquipment: text,
+  actionAndPose: text, orientationAndGaze: text, occlusionAndCrop: text, relations: text, lighting: text,
+}).strict()
+const sceneAndSpaceSchema = z.object({
+  setting: text, atmosphereMedium: text, foreground: text, midground: text, background: text, visibilityAndDepth: text, narrativePressure: text,
+}).strict()
+const lightingSchema = z.object({
+  keyLight: text, qualityAndFalloff: text, fillLight: text, rimAndReflectedLight: text, emissiveEffects: text, volumetricsAndOcclusion: text, highlightsAndShadows: text,
+}).strict()
+const colorAndStyleSchema = z.object({
+  temperatureAndTone: text, paletteRelationships: text, saturationBrightnessContrast: text, whiteBalanceAndExposure: text, mediumAndTexture: text, postProcessing: text,
+}).strict()
 
 export const imagePromptAnalysisSchema = z.object({
   analysisBasis: z.object({
@@ -14,12 +35,12 @@ export const imagePromptAnalysisSchema = z.object({
     generationRecommendations: stringListSchema,
   }).strict(),
   structuredPrompt: z.object({
-    cameraAndComposition: promptObjectSchema,
-    depthAndImaging: promptObjectSchema,
-    subjects: z.array(promptObjectSchema),
-    sceneAndSpace: promptObjectSchema,
-    lighting: promptObjectSchema,
-    colorAndStyle: promptObjectSchema,
+    cameraAndComposition: cameraAndCompositionSchema,
+    depthAndImaging: depthAndImagingSchema,
+    subjects: z.array(subjectSchema),
+    sceneAndSpace: sceneAndSpaceSchema,
+    lighting: lightingSchema,
+    colorAndStyle: colorAndStyleSchema,
   }).strict(),
   integratedGenerationPrompt: z.string().min(1),
   negativeConstraints: stringListSchema,

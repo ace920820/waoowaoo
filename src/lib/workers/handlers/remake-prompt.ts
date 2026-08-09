@@ -72,10 +72,10 @@ export async function handleRemakeImagePromptTask(job: Job<TaskJobData>) {
   await reportTaskProgress(job, 20, { stage: 'source-read', displayMode: 'detail' })
   const bytes = await getObjectBuffer(key)
   await reportTaskProgress(job, 40, { stage: 'executor-call', displayMode: 'indeterminate' })
-  const analysis = await runCodexPromptAnalysis({ targetKey: targetKeyForSlot(payload.slot), prompt: imagePrompt(snapshot, payload.slot), media: [{ name: `${payload.slot}.bin`, bytes }] })
+  const analysis = await runCodexPromptAnalysis({ targetKey: targetKeyForSlot(payload.slot), prompt: imagePrompt(snapshot, payload.slot), media: [{ name: payload.slot, bytes, contentType: 'image/jpeg' }] })
   await assertTaskActive(job, 'after_prompt_cli')
   const parsed = parsePromptAnalysis(targetKeyForSlot(payload.slot), analysis.result)
-  const version = await persistImagePromptVersion({ projectId: job.data.projectId, shotId: snapshot.shotId, targetKey: targetKeyForSlot(payload.slot), inputSnapshot: snapshot, analysis: parsed, rawOutput: analysis.rawOutput, provenance: { taskId: job.data.taskId, skillVersion: 'image-to-structured-prompt', schemaVersion: 'prompt.v1', modelVersion: 'codex', executorVersion: 'codex-cli.v1' } })
+  const version = await persistImagePromptVersion({ projectId: job.data.projectId, shotId: snapshot.shotId, targetKey: targetKeyForSlot(payload.slot), inputSnapshot: snapshot, analysis: parsed, rawOutput: analysis.rawOutput, provenance: { taskId: job.data.taskId, skillVersion: 'image-to-structured-prompt', schemaVersion: 'prompt.v2', modelVersion: 'codex', executorVersion: 'codex-cli.v1' } })
   return { kind: 'image', versionId: version.id, sessionId: analysis.sessionId, inputFingerprint: payload.inputFingerprint }
 }
 

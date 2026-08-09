@@ -3,6 +3,7 @@ import { TASK_TYPE } from '@/lib/task/types'
 import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
 
 type Row = Record<string, unknown>
+type PromptSlot = 'start' | 'middle' | 'end'
 
 function parseObject(value: unknown): Row {
   if (!value) return {}
@@ -14,6 +15,14 @@ function mediaUrl(projectId: string, mediaId: unknown): string | null {
   return typeof mediaId === 'string' && mediaId.trim()
     ? `/api/remake-projects/${encodeURIComponent(projectId)}/scenedetect/media/${encodeURIComponent(mediaId)}`
     : null
+}
+
+function promptSlotFromCreatedEvent(task: Row): PromptSlot | null {
+  if (task.type !== TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE) return null
+  const events = Array.isArray(task.events) ? task.events : []
+  const payload = parseObject(parseObject(events[0]).payload)
+  const slot = payload.slot
+  return slot === 'start' || slot === 'middle' || slot === 'end' ? slot : null
 }
 
 type RemakeClient = {
@@ -84,7 +93,10 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   const remake = projectRow.remakeProject as Row | null | undefined
   const tasks = await client.task.findMany({
     where: { projectId: input.projectId, userId: input.userId },
-    select: { id: true, type: true, targetType: true, targetId: true, status: true, errorCode: true, errorMessage: true, createdAt: true, updatedAt: true },
+    select: {
+      id: true, type: true, targetType: true, targetId: true, status: true, errorCode: true, errorMessage: true, createdAt: true, updatedAt: true,
+      events: { where: { eventType: 'task.created' }, orderBy: { id: 'asc' }, take: 1, select: { payload: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
   return {
@@ -156,7 +168,10 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         ?.find((revision) => revision.lifecycleState === 'active' && Number(revision.sourceRevision) === Number(sourceRevision))
       return Boolean(active)
     }),
-    tasks,
+    tasks: (tasks as Row[]).map((task) => {
+      const { events: _events, ...safeTask } = task
+      return { ...safeTask, promptSlot: promptSlotFromCreatedEvent(task) }
+    }),
   }
 }
 
