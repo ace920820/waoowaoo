@@ -178,9 +178,10 @@ export function toSceneDetectProject(snapshot: Snapshot): SceneDetectProject {
         endTimecode: payload.endTimecode ?? '',
         duration: payload.duration ?? 0,
         durationFrames: payload.durationFrames ?? 1,
-        firstFrameUrl: payload.firstFrameUrl ?? '',
-        middleFrameUrl: payload.middleFrameUrl ?? '',
-        lastFrameUrl: payload.lastFrameUrl ?? '',
+        // Opaque IDs are resolved by the authenticated runtime route; never retain stale blob URLs.
+        firstFrameUrl: mediaIds?.first ? '' : payload.firstFrameUrl ?? '',
+        middleFrameUrl: mediaIds?.middle ? '' : payload.middleFrameUrl ?? '',
+        lastFrameUrl: mediaIds?.last ? '' : payload.lastFrameUrl ?? '',
         mediaIds,
         keyframeFrames: payload.keyframeFrames,
         keyframeSource: payload.keyframeSource,

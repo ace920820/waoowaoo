@@ -67,10 +67,14 @@ export type SceneDetectEmbeddedAppProps = {
 
 export default function App({ embedded = false, initialProject = null, runtime = null }: SceneDetectEmbeddedAppProps = {}) {
   // Application Main State
-  const [status, setStatus] = useState<AnalysisStatus>('analyzed_review');
-  const [metadata, setMetadata] = useState<VideoMetadata | null>(() => embedded ? null : SAMPLE_VIDEOS[0].metadata);
-  const [shots, setShots] = useState<Shot[]>(() => embedded ? [] : SAMPLE_VIDEOS[0].shots);
-  const [activeShotId, setActiveShotId] = useState<string | null>(() => embedded ? null : SAMPLE_VIDEOS[0].shots[0]?.id || null);
+  // In embedded mode the Waoo runtime restores the canonical project before mounting.
+  // Seed the vendor editor from that server-owned project instead of treating it as new.
+  const [status, setStatus] = useState<AnalysisStatus>(() => initialProject?.analysis.status || 'analyzed_review');
+  const [metadata, setMetadata] = useState<VideoMetadata | null>(() => initialProject
+    ? projectToMetadata(initialProject, initialProject.source.videoUrl || '')
+    : embedded ? null : SAMPLE_VIDEOS[0].metadata);
+  const [shots, setShots] = useState<Shot[]>(() => initialProject?.shots || (embedded ? [] : SAMPLE_VIDEOS[0].shots));
+  const [activeShotId, setActiveShotId] = useState<string | null>(() => initialProject?.view.activeShotId || (embedded ? null : SAMPLE_VIDEOS[0].shots[0]?.id || null));
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
