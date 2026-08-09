@@ -6,6 +6,7 @@ import { findImagePromptTask } from '@/app/[locale]/workspace/[projectId]/modes/
 const stagePath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptStage.tsx'
 const imagePath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptImageTab.tsx'
 const videoPath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptVideoTab.tsx'
+const stylesPath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/prompt-stage.css'
 
 describe('remake prompt stage contract', () => {
   it('renders the reference review workspace with keyframe and video prompt sections visible together', () => {
@@ -74,5 +75,13 @@ describe('remake prompt stage contract', () => {
   it('finds the persisted lowercase image Prompt task before its track exists', () => {
     const task = findImagePromptTask([{ id: 'task-1', type: 'remake_image_prompt_analyze', targetType: 'remake_shot', targetId: 'shot-1', promptSlot: 'middle', status: 'queued', createdAt: '', updatedAt: '' }], null, 'shot-1', 'middle')
     expect(task?.status).toBe('queued')
+  })
+
+  it('uses distinct neutral, review, and approved colors for image Prompt status badges', () => {
+    const styles = readFileSync(stylesPath, 'utf8')
+
+    expect(styles).toContain('.prompt-state.idle { color: #667085; background: #f2f4f7; }')
+    expect(styles).toContain('.prompt-state.pending { color: #b54708; background: #fffaeb; }')
+    expect(styles).toContain('.prompt-state.approved { color: #087443; background: #ecfdf3; }')
   })
 })
