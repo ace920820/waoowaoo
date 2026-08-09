@@ -7,13 +7,16 @@ const imagePath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/Pr
 const videoPath = 'src/app/[locale]/workspace/[projectId]/modes/remake/prompt/PromptVideoTab.tsx'
 
 describe('remake prompt stage contract', () => {
-  it('composes separate server-driven image and video review tabs', () => {
+  it('renders the reference review workspace with keyframe and video prompt sections visible together', () => {
     const stage = readFileSync(stagePath, 'utf8')
     const image = readFileSync(imagePath, 'utf8')
     const video = readFileSync(videoPath, 'utf8')
 
     expect(stage).toContain("from './PromptImageTab'")
     expect(stage).toContain("from './PromptVideoTab'")
+    expect(stage).toContain('prompt-keyframe-section')
+    expect(stage).toContain('prompt-video-section')
+    expect(stage).not.toContain('prompt-tabs')
     expect(image).toContain('useRemakePromptTrack')
     expect(image).toContain('useSaveRemakePromptVersion')
     expect(image).toContain('useApproveAndAdoptRemakePrompt')
