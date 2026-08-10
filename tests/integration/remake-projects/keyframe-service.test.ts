@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({
   project: { findFirst: vi.fn() },
   remakeShot: { findFirst: vi.fn() },
-  remakeKeyframeTrack: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
+  remakeKeyframeTrack: { findUnique: vi.fn(), findFirst: vi.fn(), upsert: vi.fn(), update: vi.fn() },
   remakeKeyframeBatch: { findMany: vi.fn() },
   remakeKeyframeCandidate: { findFirst: vi.fn() },
   remakeKeyframeAdoptionEvent: { create: vi.fn() },
@@ -19,6 +19,7 @@ describe('remake keyframe service', () => {
     db.project.findFirst.mockResolvedValue({ id: 'project-1' })
     db.remakeShot.findFirst.mockResolvedValue({ id: 'shot-1', remakeProjectId: 'remake-1', stableKey: 'shot-1', currentRevision: 1, remakeProject: { currentSource: { sourceRevision: 1 } }, revisions: [{ id: 'revision-1', revision: 1, sourceRevision: 1, lifecycleState: 'active', keyframeMediaRefs: '{}' }] })
     db.remakeKeyframeTrack.findUnique.mockResolvedValue({ id: 'track-1', selectedForGeneration: true, adoptedCandidateId: null })
+    db.remakeKeyframeTrack.findFirst.mockResolvedValue({ id: 'track-1', selectedForGeneration: true, adoptedCandidateId: null, shotRevision: { revision: 1, lifecycleState: 'active', shot: { id: 'shot-1', currentRevision: 1, remakeProject: { projectId: 'project-1' } } } })
   })
 
   it('persists current-revision selection and rejects an unapproved slot', async () => {
@@ -30,8 +31,9 @@ describe('remake keyframe service', () => {
   })
 
   it('adopts only an authorized candidate and records the replacement event', async () => {
-    db.remakeKeyframeCandidate.findFirst.mockResolvedValue({ id: 'candidate-2', batch: { track: { id: 'track-1', shotRevisionId: 'revision-1', shotRevision: { shot: { remakeProject: { projectId: 'project-1' } } } } } })
+    db.remakeKeyframeCandidate.findFirst.mockResolvedValue({ id: 'candidate-2', batch: { trackId: 'track-1' }, outputVersion: { invalidatedAt: null, status: 'completed' } })
     const service = await import('@/lib/remake-projects/keyframes/service')
+    db.remakeKeyframeTrack.update.mockResolvedValue({ id: 'track-1', adoptedCandidateId: 'candidate-2' })
     await expect(service.adoptKeyframeCandidate({ projectId: 'project-1', userId: 'user-1', trackId: 'track-1', candidateId: 'candidate-2' })).resolves.toMatchObject({ adoptedCandidateId: 'candidate-2' })
     expect(db.remakeKeyframeTrack.update).toHaveBeenCalled()
     expect(db.remakeKeyframeAdoptionEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ trackId: 'track-1', nextCandidateId: 'candidate-2' }) }))

@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
+import { resolveMediaRef } from '@/lib/media/service'
+import { getSignedUrl } from '@/lib/storage'
 import { getAdoptedPromptForGeneration } from '../prompt/service'
 import { keyframeInputFingerprint, keyframeInputSnapshotSchema, keyframeSlotSchema, type KeyframeInputSnapshot } from './contracts'
 import { buildRemakeKeyframeTaskDescriptor } from './task-contract'
@@ -91,10 +93,12 @@ export async function assertKeyframeSubmissionCurrent(snapshot: KeyframeInputSna
 
 export async function resolveKeyframeReferenceStorageKeys(snapshot: KeyframeInputSnapshot) {
   keyframeInputSnapshotSchema.parse(snapshot)
-  // Reference media are opaque IDs until the dedicated project-media resolver signs them.
-  // An empty list is legal and preserves the current image-generation path.
-  if (snapshot.referenceMediaIds.length) throw new Error('REMAKE_KEYFRAME_REFERENCE_UNAVAILABLE')
-  return []
+  const refs = await Promise.all(snapshot.referenceMediaIds.map(async (mediaId) => {
+    const media = await resolveMediaRef(mediaId, null)
+    if (!media?.storageKey) throw new Error('REMAKE_KEYFRAME_REFERENCE_UNAVAILABLE')
+    return getSignedUrl(media.storageKey)
+  }))
+  return refs
 }
 
 export async function setKeyframeSelection(input: { projectId: string; userId: string; shotId: string; slot: string; selectedForGeneration?: boolean; selected?: boolean }) {
