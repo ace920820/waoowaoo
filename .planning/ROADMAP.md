@@ -159,7 +159,14 @@ Phase 5 的 tracer 可以使用固定的 SceneDetect adapter fixture 验证稳�
   3. 用户修改 Prompt 或重新生成后，旧 Prompt、图片和采用记录不会被覆盖；仅需 Start/End 或模型不支持 Middle Frame 时，界面会显示真实输入合同。
   4. 未有已批准图片 Prompt 的关键帧不会进入默认批量生成，并会作为项目缺失项呈现给用户。
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+
+- [ ] `08-01-PLAN.md` — 审计并最小扩展现有 Remake 输出/溯源/失效 schema，持久化选择、不可变批次/候选/采用历史与 revision 动作表
+- [ ] `08-02-PLAN.md` — 复用现有 Task、图片队列/Worker、模型网关、存储和配置，完成 Remake 生成/API/采用/动作表/失效后端闭环
+- [ ] `08-03-PLAN.md` — 以薄 Remake 适配器接入原版分镜/成片与完整共享工具，完成双层 Shot、批次比较/采用和禁用视频提交
+- [ ] `08-04-PLAN.md` — 聚焦验证刷新持久化、动作表失效、共享工具、桌面/移动端与零视频提交/Task，并完成人工验收
 **UI hint**: yes
 
 ### Phase 9: 新视频镜头生成与版本选择

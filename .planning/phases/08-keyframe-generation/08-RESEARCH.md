@@ -282,17 +282,13 @@ These property names are the verbatim `promptInputSnapshotSchema` contract; Phas
 | A1 | A dedicated image-composition worker can produce and upload the three-frame action sheet with the current media/storage layer. | Architectural Responsibility / Pattern 4 | Planner must select the existing image composition helper or create a narrow deterministic implementation. |
 | A2 | The minimal durable schema is a track/batch/candidate model; exact Prisma model names and relations remain implementation discretion. | Summary / Pattern 2 | Migration shape may need adjustment to local naming and query requirements. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **现有资产库和项目配置入口的最小可复用组件边界是什么？**
-   - What we know: Stage route wrappers depend on Novel Promotion runtime, while lower image components accept explicit props. [VERIFIED: `StoryboardStage.tsx:8-30`; `ImageSection.tsx:19-43`]
-   - What's unclear: the nearest standalone asset/config launcher that can receive a Remake adapter is not established by this research.
-   - Recommendation: Wave 1 should map these component props before moving page UI; retain the canonical existing launcher rather than replicating it. [ASSUMED]
+1. **现有资产库和项目配置入口的最小可复用组件边界是什么？ — RESOLVED**
+   - Use `WorkspaceTopActions` as the shared launcher, `WorkspaceAssetLibraryModal` as the complete `AssetsStage` host, `SettingsModal` for the existing configuration UI, and `useUpdateProjectConfig(projectId)` for the canonical project mutation/invalidation path. `WorkspaceTopActions` accepts only open/refresh callbacks and labels, while `WorkspaceAssetLibraryModal` accepts explicit project/loading/focus props, so a thin Remake controller can reuse the full capabilities without importing a Novel Promotion stage route or creating a second store. [VERIFIED: `WorkspaceTopActions.tsx:7-49`; `WorkspaceAssetLibraryModal.tsx:8-78`; `ConfigEditModal.tsx:41-159`; `useProjectConfigMutations.ts:83-125`]
 
-2. **动作表的 renderer should use which existing composition primitive?**
-   - What we know: existing image worker uploads generated image sources to object storage. [VERIFIED: `panel-image-task-handler.ts:343-357`]
-   - What's unclear: no source inspected here proves a reusable three-image contact-sheet helper.
-   - Recommendation: make it a small deterministic Worker capability with a focused asset/provenance test, not a generic editing feature. [ASSUMED]
+2. **动作表的 renderer should use which existing composition primitive? — RESOLVED**
+   - Use the installed `sharp@0.34.5` primitive in a narrow image Worker helper: normalize each source buffer with Sharp, use `withLabelBar`/the existing SVG label pattern for position and timestamp text, compose the three normalized cells horizontally with `sharp(...).composite(...)`, then persist through `uploadImageSourceToCos`. This is an in-repo composition/storage path, requires no package install, and keeps the renderer deterministic and revision-provenanced. [VERIFIED: `package.json:160`; `src/lib/image-label.ts:2-42`; `src/lib/workers/utils.ts:641-666`; `src/lib/workers/utils.ts:669-675`]
 
 ## Environment Availability
 
