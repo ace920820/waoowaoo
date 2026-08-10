@@ -14,6 +14,10 @@ provides:
 affects: [08-04, phase-09-video-generation]
 requirements-completed: [KFRM-01, KFRM-02, KFRM-03, KFRM-04, KFRM-05, KFRM-06, KFRM-07]
 status: complete
+actuals:
+  tokens: 17697
+  tasks: 3
+  commits: 5
 ---
 
 # Phase 08 Plan 03: Remake Keyframe and Video Surfaces
@@ -36,8 +40,14 @@ Implemented the Remake production-stage frontend adapters against the 08-02 snap
 
 ## Deviations from Plan
 
-1. [Rule 3 - Environment] Atomic git commits could not be created because the sandbox denies writes to `.git/index.lock` (`Operation not permitted`). Production changes and this summary remain in the worktree for handoff; unrelated untracked browser artifacts were preserved.
-2. The existing lower-level Novel Storyboard and Video shell components were not modified. Remake-owned wrappers consume the shared shell/configuration/tool boundaries while retaining Remake-specific snapshot semantics.
+- The existing lower-level Novel Storyboard and Video shell components were not modified. Remake-owned wrappers consume the shared shell/configuration/tool boundaries while retaining Remake-specific snapshot semantics.
+
+## Task Commits
+
+- `6d01b36` — mount Remake production stages and keyframe adapters.
+- `4db6369` — cover the two-layer keyframe workflow.
+- `39df3ec` — cover truthful Remake Video inputs.
+- `63e8a70` — cover free Remake keyframe navigation.
 
 ## Self-Check: PASSED
 
