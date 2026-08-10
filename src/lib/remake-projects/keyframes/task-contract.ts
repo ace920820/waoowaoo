@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TASK_TYPE } from '@/lib/task/types'
 import { keyframeInputFingerprint, keyframeInputSnapshotSchema, type KeyframeInputSnapshot } from './contracts'
 
 const operationKeySchema = z.string().trim().min(1).max(200)
@@ -27,7 +28,7 @@ export function buildRemakeKeyframeTaskDescriptor(input: {
   const inputFingerprint = keyframeInputFingerprint(inputSnapshot)
   const payload = payloadSchema.parse({ kind: 'keyframe', operationKey: input.operationKey, inputSnapshot, inputFingerprint })
   return {
-    taskType: 'remake_keyframe_generate' as const,
+    taskType: TASK_TYPE.REMAKE_KEYFRAME_IMAGE_GENERATE,
     targetType: 'remake_shot' as const,
     targetId: inputSnapshot.shotId,
     inputFingerprint,

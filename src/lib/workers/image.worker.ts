@@ -15,6 +15,7 @@ import {
   handlePanelVariantTask,
   handleShotGroupImageTask,
 } from './handlers/image-task-handlers'
+import { handleRemakeKeyframeImageTask } from './handlers/remake-keyframe-image'
 
 type AnyObj = Record<string, unknown>
 
@@ -45,6 +46,8 @@ async function processImageTask(job: Job<TaskJobData>) {
       return await handleShotGroupImageTask(job)
     case TASK_TYPE.PANEL_VARIANT:
       return await handlePanelVariantTask(job)
+    case TASK_TYPE.REMAKE_KEYFRAME_IMAGE_GENERATE:
+      return await handleRemakeKeyframeImageTask(job)
     default:
       throw new Error(`Unsupported image task type: ${job.data.type}`)
   }

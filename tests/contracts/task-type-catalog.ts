@@ -56,6 +56,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.REMAKE_PROJECT_INITIALIZE]: 'tests/integration/api/remake-project-core.test.ts',
   [TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE]: 'tests/unit/worker/remake-prompt.test.ts',
   [TASK_TYPE.REMAKE_VIDEO_PROMPT_ANALYZE]: 'tests/unit/worker/remake-prompt.test.ts',
+  [TASK_TYPE.REMAKE_KEYFRAME_IMAGE_GENERATE]: 'tests/unit/worker/remake-keyframe-image.test.ts',
 } as const satisfies Record<TaskType, string>
 
 export const TASK_TYPE_CATALOG: ReadonlyArray<TaskTypeCoverageEntry> = (Object.values(TASK_TYPE) as TaskType[])
