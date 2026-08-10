@@ -168,7 +168,16 @@ export function SettingsModal({
     const [localMoodPresets, setLocalMoodPresets] = useState<StoryboardMoodPreset[]>(storyboardMoodPresets)
 
     useEffect(() => {
-        setLocalMoodPresets(storyboardMoodPresets)
+        setLocalMoodPresets((prev) => {
+            if (prev === storyboardMoodPresets) return prev
+            if (prev.length !== storyboardMoodPresets.length) return storyboardMoodPresets
+            for (let i = 0; i < prev.length; i++) {
+                const a = prev[i]
+                const b = storyboardMoodPresets[i]
+                if (a.id !== b.id || a.label !== b.label || a.prompt !== b.prompt) return storyboardMoodPresets
+            }
+            return prev
+        })
     }, [storyboardMoodPresets])
     const userModels = useMemo<UserModels>(() => ({
         llm: Array.isArray(availableModels?.llm) ? availableModels.llm : [],
