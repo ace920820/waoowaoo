@@ -74,5 +74,5 @@
   "videoProjectActionHint": "Use the top-level Analyze full video action to process all confirmed shots together.",
   "coreEvent": "Core event description",
   "detailedAnalysis": "View detailed analysis",
-  "stages": { "overview": "Project overview", "scenedetect": "Shot analysis", "prompt": "Prompt analysis" }
+  "stages": { "overview": "Project overview", "scenedetect": "Shot analysis", "prompt": "Prompt analysis", "storyboard": "Storyboard", "video": "Video" }
 }

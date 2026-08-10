@@ -9,6 +9,9 @@ const requiredPromptKeys = [
   'versionHistory', 'edit', 'saveAsNewVersion', 'approveAndAdopt', 'fullAnalysis',
 ] as const
 
+// Must stay in sync with REMAKE_WORKBENCH_STAGES in RemakeWorkbench.tsx.
+const requiredStageKeys = ['overview', 'scenedetect', 'prompt', 'storyboard', 'video'] as const
+
 describe('remake workbench message loading', () => {
   it('loads and exposes the remake workbench namespace for every supported locale', () => {
     const source = readFileSync('src/i18n.ts', 'utf8')
@@ -27,5 +30,17 @@ describe('remake workbench message loading', () => {
     }
     expect(zh.stages).toMatchObject({ prompt: expect.any(String) })
     expect(en.stages).toMatchObject({ prompt: expect.any(String) })
+  })
+
+  it('covers every workbench stage in both locales (MISSING_MESSAGE guard)', () => {
+    const zh = JSON.parse(readFileSync('messages/zh/remake-workbench.json', 'utf8')) as Record<string, Record<string, string>>
+    const en = JSON.parse(readFileSync('messages/en/remake-workbench.json', 'utf8')) as Record<string, Record<string, string>>
+
+    expect(Object.keys(zh.stages).sort()).toEqual([...requiredStageKeys].sort())
+    expect(Object.keys(en.stages).sort()).toEqual([...requiredStageKeys].sort())
+    for (const key of requiredStageKeys) {
+      expect(zh.stages[key]).toEqual(expect.any(String))
+      expect(en.stages[key]).toEqual(expect.any(String))
+    }
   })
 })

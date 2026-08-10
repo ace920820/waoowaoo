@@ -74,5 +74,5 @@
   "videoProjectActionHint": "请使用页面顶部的“分析整段视频”一次性分析全部已确认镜头。",
   "coreEvent": "核心内容描述",
   "detailedAnalysis": "查看详细分析",
-  "stages": { "overview": "项目概览", "scenedetect": "镜头分析", "prompt": "Prompt 分析" }
+  "stages": { "overview": "项目概览", "scenedetect": "镜头分析", "prompt": "Prompt 分析", "storyboard": "分镜", "video": "成片" }
 }
