@@ -41,7 +41,7 @@ describe('remake prompt stage contract', () => {
     expect(image).not.toMatch(/all frames|batch.?analy[sz]e/i)
     expect(video).toContain('project-level video analysis')
     expect(video).toContain('onAnalyzeVideo')
-    expect(video).toContain("task?.status === 'queued'")
+    expect(video).toContain('getPromptTaskState(task?.status, track)')
     expect(stage).toContain("kind: 'video'")
     expect(stage).toContain('onClick={analyzeVideo}')
     expect(stage).not.toContain('const analyzeShot')
@@ -62,8 +62,8 @@ describe('remake prompt stage contract', () => {
 
   it('shows a failed whole-video task reason instead of silently returning to the idle action', () => {
     const video = readFileSync(videoPath, 'utf8')
-    expect(video).toContain("task?.status === 'failed'")
-    expect(video).toContain('task.errorMessage ||')
+    expect(video).toContain("state === 'failed'")
+    expect(video).toContain('task?.errorMessage ||')
     expect(video).toContain('version?.coreText')
   })
 
@@ -72,7 +72,7 @@ describe('remake prompt stage contract', () => {
 
     expect(getPromptTaskState('queued', pendingTrack)).toBe('queued')
     expect(getPromptTaskState('processing', pendingTrack)).toBe('running')
-    expect(getPromptTaskState('failed', pendingTrack)).toBe('pending')
+    expect(getPromptTaskState('failed', pendingTrack)).toBe('approved')
     expect(getPromptTaskState('failed', null)).toBe('failed')
     expect(getPromptTaskState(undefined, pendingTrack)).toBe('approved')
     expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: null })).toBe('approved')
