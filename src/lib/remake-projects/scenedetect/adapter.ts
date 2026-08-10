@@ -3,6 +3,7 @@ import { extractStorageKey } from '@/lib/storage'
 import { createExternalShotKey } from './id-map'
 import { parseSceneDetectInput, type SceneDetectProject } from './contracts'
 import { parseSceneDetectResultEnvelope, wrapLegacySceneDetectProject } from './result-envelope'
+import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
 
 type Row = Record<string, unknown>
 
@@ -116,9 +117,10 @@ export async function commitSceneDetectImport(input: {
         ? await tx.remakeShotRevision.findFirst({ where: { shotId: row.id }, orderBy: { revision: 'desc' } })
         : null
       const nextRevision = Number(latestRevision?.revision ?? 0) + 1
-      await tx.remakeShotRevision.create({
+      const createdRevision = await tx.remakeShotRevision.create({
         data: { shotId: row.id, revision: nextRevision, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}) },
       })
+      await invalidateKeyframeOutputsForRevision({ tx: tx as unknown, shotId: String(row.id), revisionId: String(createdRevision.id), reason: 'scenedetect_import' })
       await tx.remakeShot.update({
         where: { id: row.id },
         data: { sequence: shot.shotNumber, externalIdentity: shot.id, currentRevision: nextRevision, version: { increment: 1 }, reviewStatus: 'pending', needsReview: false },

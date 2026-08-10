@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { TASK_TYPE } from '@/lib/task/types'
 import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
+import { invalidateKeyframeOutputsForRevision } from './keyframes/invalidation'
 
 type Row = Record<string, unknown>
 type PromptSlot = 'start' | 'middle' | 'end'
@@ -85,7 +86,32 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   const client = remakeClient()
   const project = await client.project.findUnique({
     where: { id: input.projectId },
-    include: { remakeProject: { include: { currentSource: true, shots: { include: { revisions: true, provenance: true, promptTracks: { include: { versions: { orderBy: { versionNumber: 'desc' } } } } }, orderBy: [{ sequence: 'asc' }, { id: 'asc' }] } } } },
+    include: {
+      remakeProject: {
+        include: {
+          currentSource: true,
+          shots: {
+            include: {
+              outputs: { include: { invalidations: true, provenanceRecords: true } },
+              revisions: {
+                include: {
+                  keyframeTracks: {
+                    include: {
+                      batches: { include: { candidates: { include: { outputVersion: true } } } },
+                      adoptionEvents: true,
+                      invalidations: true,
+                    },
+                  },
+                },
+              },
+              provenance: true,
+              promptTracks: { include: { versions: { orderBy: { versionNumber: 'desc' } } } },
+            },
+            orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
+          },
+        },
+      },
+    },
   })
   if (!project) return null
   const projectRow = project as Row
@@ -119,6 +145,8 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       const current = revisions.find((revision) => Number(revision.revision) === Number(shot.currentRevision)) ?? revisions.find((revision) => revision.lifecycleState === 'active')
       const payload = parseObject(current?.payload)
       const refs = parseObject(current?.keyframeMediaRefs)
+      const tracks = ((current?.keyframeTracks as Row[] | undefined) ?? [])
+      const actionSheets = ((shot.outputs as Row[] | undefined) ?? []).filter((output) => output.kind === 'action_sheet')
       const review = evaluateSceneDetectReviewGate({
         status: payload.status === 'keep' || payload.status === 'discard' ? payload.status : 'pending', needsReview: Boolean(shot.needsReview),
         revisionState: typeof current?.lifecycleState === 'string' ? current.lifecycleState : null,
@@ -147,6 +175,35 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         const legacyUrl = typeof payload[legacyField] === 'string' && payload[legacyField] ? payload[legacyField] : null
         return [slot, { mediaId, mediaUrl: mediaUrl(input.projectId, mediaId) ?? legacyUrl }]
       })),
+      keyframeGeneration: {
+        tracks: tracks.map((track) => ({
+          id: track.id,
+          slot: track.slot,
+          selectedForGeneration: Boolean(track.selectedForGeneration),
+          adoptedCandidateId: track.adoptedCandidateId ?? null,
+          eligible: !((track.invalidations as Row[] | undefined) ?? []).length,
+          batches: ((track.batches as Row[] | undefined) ?? []).map((batch) => ({
+            id: batch.id,
+            operationKey: batch.operationKey,
+            inputFingerprint: batch.inputFingerprint,
+            createdAt: batch.createdAt,
+            candidates: ((batch.candidates as Row[] | undefined) ?? []).map((candidate) => ({
+              id: candidate.id,
+              ordinal: candidate.ordinal,
+              outputVersionId: candidate.outputVersionId,
+              eligible: !Boolean((candidate.outputVersion as Row | undefined)?.invalidatedAt),
+            })),
+          })),
+          adoptionEvents: track.adoptionEvents ?? [],
+        })),
+        actionSheet: (() => {
+          const sheet = actionSheets.find((output) => output.revisionId === current?.id && !output.invalidatedAt)
+          return sheet
+            ? { status: 'current', id: sheet.id, mediaId: sheet.mediaId ?? null, fingerprint: sheet.fingerprint }
+            : { status: review.confirmed ? 'missing' : 'waiting', id: null, mediaId: null, fingerprint: null }
+        })(),
+        history: actionSheets.map((output) => ({ id: output.id, revisionId: output.revisionId, mediaId: output.mediaId ?? null, fingerprint: output.fingerprint, invalidated: Boolean(output.invalidatedAt) })),
+      },
       promptTracks: ((shot.promptTracks as Row[] | undefined) ?? []).map((track) => {
         const versions = (track.versions as Row[] | undefined) ?? []
         const latest = versions[0]
@@ -176,23 +233,17 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
 }
 
 export async function createRemakeShotRevision(input: { shotId: string; changeReason: string; userId: string }) {
-  const client = remakeClient()
-  const shot = await client.remakeShot.findUnique({ where: { id: input.shotId }, include: { revisions: { orderBy: { revision: 'desc' }, take: 1 }, outputs: { select: { id: true } }, remakeProject: { select: { project: { select: { userId: true } } } } } })
-  if (!shot) return null
-  const shotRow = shot as Row
-  const remakeProject = shotRow.remakeProject as Row | undefined
-  const project = remakeProject?.project as Row | undefined
-  if (project?.userId !== input.userId) return null
-  const revisions = (shotRow.revisions as Row[] | undefined) ?? []
-  const outputs = (shotRow.outputs as Row[] | undefined) ?? []
-  const revision = await client.remakeShotRevision.create({
-    data: { shotId: String(shotRow.id), revision: Number(revisions[0]?.revision ?? 0) + 1, changeReason: input.changeReason },
+  const client = prisma as unknown as TransactionClient
+  return client.$transaction(async (tx) => {
+    const shot = await tx.remakeShot.findUnique({ where: { id: input.shotId }, include: { revisions: { orderBy: { revision: 'desc' }, take: 1 }, remakeProject: { select: { project: { select: { userId: true } } } } } })
+    if (!shot) return null
+    const shotRow = shot as Row
+    const project = ((shotRow.remakeProject as Row | undefined)?.project as Row | undefined)
+    if (project?.userId !== input.userId) return null
+    const revisions = (shotRow.revisions as Row[] | undefined) ?? []
+    const revision = await tx.remakeShotRevision.create({ data: { shotId: String(shotRow.id), revision: Number(revisions[0]?.revision ?? 0) + 1, changeReason: input.changeReason } })
+    await tx.remakeShot.update({ where: { id: shotRow.id }, data: { currentRevision: revision.revision, reviewStatus: 'needs_review', needsReview: true } })
+    await invalidateKeyframeOutputsForRevision({ tx: tx as unknown, shotId: String(shotRow.id), revisionId: String(revision.id), reason: input.changeReason })
+    return { revision, reviewStatus: 'needs_review' as const }
   })
-  await client.remakeShot.update({ where: { id: shotRow.id }, data: { reviewStatus: 'needs_review', needsReview: true } })
-  if (outputs.length) {
-    await client.remakeInvalidation.createMany({
-      data: outputs.map((output) => ({ shotId: shotRow.id, revisionId: revision.id, reason: input.changeReason, status: 'needs_review', outputVersionId: output.id })),
-    })
-  }
-  return { revision, reviewStatus: 'needs_review' as const }
 }

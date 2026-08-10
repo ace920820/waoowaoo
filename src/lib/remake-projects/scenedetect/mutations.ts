@@ -3,6 +3,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { parseSceneDetectInput, toSceneDetectProject, type SceneDetectProject, type SceneDetectShot } from './contracts'
 import { invalidatePromptVersionsForShotRevision } from '../prompt/service'
+import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
 
 type Row = Record<string, any>
 type Client = any
@@ -69,7 +70,7 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       const hasOutputs = Array.isArray(row.outputs) && row.outputs.length > 0
       await tx.remakeShot.update({ where: { id: row.id }, data: { sequence: incoming.shotNumber, currentRevision: nextRevision, version: { increment: 1 }, ...(hasOutputs || incoming.status !== 'pending' ? { needsReview: true, reviewStatus: 'needs_review' } : {}) } })
       nextVersions.set(String(row.id), Number(nextVersions.get(String(row.id)) ?? 0) + 1)
-      if (hasOutputs) await tx.remakeInvalidation.createMany({ data: row.outputs.map((output: Row) => ({ shotId: row.id, revisionId: created.id, outputVersionId: output.id, reason: input.operationKey || 'native_mutation', status: 'needs_review' })) })
+      await invalidateKeyframeOutputsForRevision({ tx, shotId: row.id, revisionId: created.id, reason: input.operationKey || 'native_mutation' })
       await invalidatePromptVersionsForShotRevision({ tx, shotId: row.id, revisionId: created.id, reason: input.operationKey || 'native_mutation' })
       revision = Math.max(revision, nextRevision)
     }
@@ -83,7 +84,7 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       await tx.remakeShotRevision.update({ where: { id: current.id }, data: { lifecycleState: 'retired' } })
       await tx.remakeShot.update({ where: { id: row.id }, data: { currentRevision: nextRevision, version: { increment: 1 }, reviewStatus: 'needs_review', needsReview: true } })
       nextVersions.set(String(row.id), Number(nextVersions.get(String(row.id)) ?? 0) + 1)
-      if (Array.isArray(row.outputs) && row.outputs.length) await tx.remakeInvalidation.createMany({ data: row.outputs.map((output: Row) => ({ shotId: row.id, revisionId: created.id, outputVersionId: output.id, reason: 'delete', status: 'needs_review' })) })
+      await invalidateKeyframeOutputsForRevision({ tx, shotId: row.id, revisionId: created.id, reason: 'delete' })
       await invalidatePromptVersionsForShotRevision({ tx, shotId: row.id, revisionId: created.id, reason: 'delete' })
       revision = Math.max(revision, nextRevision)
     }

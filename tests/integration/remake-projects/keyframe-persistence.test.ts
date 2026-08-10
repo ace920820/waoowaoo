@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 
-const db = prisma as any
+const db = prisma
 const CURRENT_MIGRATION = '20260810120000_add_remake_keyframe_generation'
 const BASELINE_COMMIT = process.env.REMAKE_KEYFRAME_BASELINE_COMMIT || 'e933e2a'
 const ids = {
@@ -81,7 +81,7 @@ describe('remake keyframe persistence', () => {
     expect(track.selectedForGeneration).toBe(false)
     await expect(db.remakeKeyframeTrack.create({ data: { shotRevisionId: ids.revisionId, slot: 'start' } })).rejects.toMatchObject({ code: 'P2002' })
     const selected = await db.remakeKeyframeTrack.update({ where: { id: track.id }, data: { selectedForGeneration: true } })
-    expect((await db.remakeKeyframeTrack.findUnique({ where: { id: selected.id } })).selectedForGeneration).toBe(true)
+    expect((await db.remakeKeyframeTrack.findUnique({ where: { id: selected.id } }))?.selectedForGeneration).toBe(true)
 
     const batch = await db.remakeKeyframeBatch.create({
       data: {
@@ -97,7 +97,7 @@ describe('remake keyframe persistence', () => {
         requestedCandidateCount: 2,
       },
     })
-    await expect(db.remakeKeyframeBatch.create({ data: { ...batch, id: randomUUID() } })).rejects.toMatchObject({ code: 'P2002' })
+    await expect(db.remakeKeyframeBatch.create({ data: { trackId: batch.trackId, promptVersionId: batch.promptVersionId, taskId: batch.taskId, operationKey: batch.operationKey, inputFingerprint: batch.inputFingerprint, inputSnapshot: { slot: 'start', promptVersionId: ids.promptVersionId, promptText: 'Rainy city street at dusk.' }, modelId: batch.modelId, modelOptions: { aspectRatio: '16:9' }, referenceMediaIds: [], requestedCandidateCount: batch.requestedCandidateCount } })).rejects.toMatchObject({ code: 'P2002' })
     const firstOutput = await db.remakeOutputVersion.create({ data: { shotId: ids.shotId, revisionId: ids.revisionId, kind: 'keyframe_candidate', fingerprint: 'candidate-1', taskId: batch.taskId, status: 'completed' } })
     const secondOutput = await db.remakeOutputVersion.create({ data: { shotId: ids.shotId, revisionId: ids.revisionId, kind: 'keyframe_candidate', fingerprint: 'candidate-2', taskId: batch.taskId, status: 'completed' } })
     const first = await db.remakeKeyframeCandidate.create({ data: { batchId: batch.id, outputVersionId: firstOutput.id, ordinal: 1 } })
@@ -108,13 +108,14 @@ describe('remake keyframe persistence', () => {
     await db.remakeKeyframeAdoptionEvent.create({ data: { trackId: track.id, previousCandidateId: null, nextCandidateId: first.id } })
     await db.remakeKeyframeTrack.update({ where: { id: track.id }, data: { adoptedCandidateId: second.id } })
     await db.remakeKeyframeAdoptionEvent.create({ data: { trackId: track.id, previousCandidateId: first.id, nextCandidateId: second.id } })
-    expect((await db.remakeKeyframeTrack.findUnique({ where: { id: track.id } })).adoptedCandidateId).toBe(second.id)
+    expect((await db.remakeKeyframeTrack.findUnique({ where: { id: track.id } }))?.adoptedCandidateId).toBe(second.id)
     expect(await db.remakeKeyframeAdoptionEvent.count({ where: { trackId: track.id } })).toBe(2)
 
     const actionSheet = await db.remakeOutputVersion.create({ data: { shotId: ids.shotId, revisionId: ids.revisionId, kind: 'action_sheet', fingerprint: 'action-sheet-v1', status: 'completed' } })
     await db.remakeProvenanceRecord.create({ data: { shotId: ids.shotId, outputVersionId: actionSheet.id, schema: 'remake-keyframe-action-sheet@1', payload: JSON.stringify({ renderer: 'action-sheet@1', sources: [{ slot: 'start', mediaId: 'start', timestamp: 0 }, { slot: 'middle', mediaId: 'middle', timestamp: 10 }, { slot: 'end', mediaId: 'end', timestamp: 20 }] }) } })
     await db.remakeInvalidation.create({ data: { shotId: ids.shotId, revisionId: ids.revisionId, outputVersionId: actionSheet.id, reason: 'test', status: 'needs_review' } })
-    expect(JSON.parse((await db.remakeProvenanceRecord.findFirst({ where: { outputVersionId: actionSheet.id } })).payload).sources.map((source: { slot: string }) => source.slot)).toEqual(['start', 'middle', 'end'])
+    const provenance = await db.remakeProvenanceRecord.findFirst({ where: { outputVersionId: actionSheet.id } })
+    expect(JSON.parse(provenance?.payload ?? '{}').sources.map((source: { slot: string }) => source.slot)).toEqual(['start', 'middle', 'end'])
     await expect(db.remakeOutputVersion.create({ data: { shotId: ids.shotId, revisionId: ids.revisionId, kind: 'action_sheet', fingerprint: 'action-sheet-v1', status: 'completed' } })).rejects.toMatchObject({ code: 'P2002' })
   })
 })

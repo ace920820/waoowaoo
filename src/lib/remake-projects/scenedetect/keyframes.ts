@@ -6,6 +6,7 @@ import { sceneDetectExecutorMediaUrl } from './executor-client'
 import { generateUniqueKey, uploadObject } from '@/lib/storage'
 import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { invalidatePromptVersionsForShotRevision } from '../prompt/service'
+import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
 
 export type FrameTuple = { first: number; middle: number; last: number }
 export function keyframeTupleHash(tuple: FrameTuple): string {
@@ -59,6 +60,7 @@ export async function persistSceneDetectKeyframeResult(input: { projectId: strin
     await tx.remakeShotRevision.update({ where: { id: target.id }, data: { lifecycleState: 'retired' } })
     await tx.remakeShot.update({ where: { id: shot.id }, data: { currentRevision: nextRevision, version: { increment: 1 }, needsReview: true, reviewStatus: 'needs_review' } })
     await invalidatePromptVersionsForShotRevision({ tx, shotId: shot.id, revisionId: created.id, reason: 'keyframe_extract' })
+    await invalidateKeyframeOutputsForRevision({ tx, shotId: shot.id, revisionId: created.id, reason: 'keyframe_extract' })
     return { applied: true, revision: nextRevision, mediaIds }
   })
 }
