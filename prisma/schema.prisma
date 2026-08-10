@@ -525,6 +525,7 @@ model RemakeShotRevision {
   shot         RemakeShot          @relation(fields: [shotId], references: [id], onDelete: Cascade)
   outputs      RemakeOutputVersion[]
   promptVersions RemakePromptVersion[]
+  keyframeTracks RemakeKeyframeTrack[]
 
   @@unique([shotId, revision])
   @@index([shotId])
@@ -539,28 +540,44 @@ model RemakeOutputVersion {
   shotId     String
   revisionId String?
   mediaId    String?
+  kind       String               @default("generated")
+  fingerprint String?
+  taskId     String?
+  inputSnapshot Json?
+  invalidatedAt DateTime?
   status     String               @default("pending")
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @default(now()) @updatedAt
   shot       RemakeShot           @relation(fields: [shotId], references: [id], onDelete: Cascade)
   revision   RemakeShotRevision?  @relation(fields: [revisionId], references: [id], onDelete: SetNull)
+  candidate  RemakeKeyframeCandidate?
+  provenanceRecords RemakeProvenanceRecord[]
+  invalidations RemakeInvalidation[]
 
+  @@unique([revisionId, kind, fingerprint])
   @@index([shotId])
   @@index([revisionId])
+  @@index([taskId])
   @@map("remake_output_versions")
 }
 
 model RemakeProvenanceRecord {
   id         String      @id @default(uuid())
   shotId     String
+  outputVersionId String?
+  keyframeBatchId String?
   schema     String
   executor   String?
   capability String?
   payload    String?     @db.Text
   createdAt  DateTime    @default(now())
   shot       RemakeShot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  outputVersion RemakeOutputVersion? @relation(fields: [outputVersionId], references: [id], onDelete: SetNull)
+  keyframeBatch RemakeKeyframeBatch? @relation(fields: [keyframeBatchId], references: [id], onDelete: SetNull)
 
   @@index([shotId])
+  @@index([outputVersionId])
+  @@index([keyframeBatchId])
   @@map("remake_provenance_records")
 }
 
@@ -570,16 +587,26 @@ model RemakeInvalidation {
   revisionId String?
   outputVersionId String?
   promptVersionId String?
+  keyframeTrackId String?
+  keyframeBatchId String?
+  keyframeCandidateId String?
   reason     String
   status     String      @default("needs_review")
   createdAt  DateTime    @default(now())
   shot       RemakeShot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  outputVersion RemakeOutputVersion? @relation(fields: [outputVersionId], references: [id], onDelete: SetNull)
   promptVersion RemakePromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  keyframeTrack RemakeKeyframeTrack? @relation(fields: [keyframeTrackId], references: [id], onDelete: SetNull)
+  keyframeBatch RemakeKeyframeBatch? @relation(fields: [keyframeBatchId], references: [id], onDelete: SetNull)
+  keyframeCandidate RemakeKeyframeCandidate? @relation(fields: [keyframeCandidateId], references: [id], onDelete: SetNull)
 
   @@index([shotId])
   @@index([revisionId])
   @@index([outputVersionId])
   @@index([promptVersionId])
+  @@index([keyframeTrackId])
+  @@index([keyframeBatchId])
+  @@index([keyframeCandidateId])
   @@map("remake_invalidations")
 }
 
@@ -628,6 +655,7 @@ model RemakePromptVersion {
   shotRevision              RemakeShotRevision?      @relation(fields: [shotRevisionId], references: [id], onDelete: SetNull)
   adoptedByTrack            RemakePromptTrack?       @relation("RemakePromptTrackAdoptedVersion")
   invalidations             RemakeInvalidation[]
+  keyframeBatches           RemakeKeyframeBatch[]
 
   @@unique([trackId, versionNumber])
   @@index([runId])
@@ -635,6 +663,86 @@ model RemakePromptVersion {
   @@index([taskId])
   @@index([inputFingerprint])
   @@map("remake_prompt_versions")
+}
+
+model RemakeKeyframeTrack {
+  id                    String                       @id @default(uuid())
+  shotRevisionId        String
+  slot                  String
+  selectedForGeneration Boolean                      @default(false)
+  adoptedCandidateId    String?                      @unique
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @default(now()) @updatedAt
+  shotRevision          RemakeShotRevision           @relation(fields: [shotRevisionId], references: [id], onDelete: Cascade)
+  batches               RemakeKeyframeBatch[]
+  adoptedCandidate      RemakeKeyframeCandidate?     @relation("RemakeKeyframeTrackAdoptedCandidate", fields: [adoptedCandidateId], references: [id], onDelete: SetNull)
+  adoptionEvents        RemakeKeyframeAdoptionEvent[]
+  invalidations         RemakeInvalidation[]
+
+  @@unique([shotRevisionId, slot])
+  @@index([shotRevisionId, selectedForGeneration])
+  @@map("remake_keyframe_tracks")
+}
+
+model RemakeKeyframeBatch {
+  id                      String                   @id @default(uuid())
+  trackId                 String
+  promptVersionId         String?
+  taskId                  String?
+  operationKey            String
+  inputFingerprint        String
+  inputSnapshot           Json
+  modelId                 String
+  modelOptions            Json
+  referenceMediaIds       Json
+  requestedCandidateCount Int
+  createdAt               DateTime                 @default(now())
+  track                   RemakeKeyframeTrack      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  promptVersion           RemakePromptVersion?     @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  candidates              RemakeKeyframeCandidate[]
+  provenanceRecords       RemakeProvenanceRecord[]
+  invalidations           RemakeInvalidation[]
+
+  @@unique([trackId, operationKey])
+  @@index([promptVersionId])
+  @@index([taskId])
+  @@index([inputFingerprint])
+  @@map("remake_keyframe_batches")
+}
+
+model RemakeKeyframeCandidate {
+  id              String                          @id @default(uuid())
+  batchId         String
+  outputVersionId String @unique
+  ordinal         Int
+  createdAt       DateTime                        @default(now())
+  batch           RemakeKeyframeBatch             @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  outputVersion   RemakeOutputVersion             @relation(fields: [outputVersionId], references: [id], onDelete: Cascade)
+  adoptedByTrack  RemakeKeyframeTrack?            @relation("RemakeKeyframeTrackAdoptedCandidate")
+  previousAdoptions RemakeKeyframeAdoptionEvent[]  @relation("RemakeKeyframeAdoptionPreviousCandidate")
+  nextAdoptions   RemakeKeyframeAdoptionEvent[]   @relation("RemakeKeyframeAdoptionNextCandidate")
+  invalidations   RemakeInvalidation[]
+
+  @@unique([batchId, ordinal])
+  @@index([batchId, createdAt])
+  @@map("remake_keyframe_candidates")
+}
+
+model RemakeKeyframeAdoptionEvent {
+  id                  String                  @id @default(uuid())
+  trackId             String
+  previousCandidateId String?
+  nextCandidateId     String?
+  reviewerId          String?
+  createdAt           DateTime                @default(now())
+  track               RemakeKeyframeTrack     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  previousCandidate   RemakeKeyframeCandidate? @relation("RemakeKeyframeAdoptionPreviousCandidate", fields: [previousCandidateId], references: [id], onDelete: SetNull)
+  nextCandidate       RemakeKeyframeCandidate? @relation("RemakeKeyframeAdoptionNextCandidate", fields: [nextCandidateId], references: [id], onDelete: SetNull)
+
+  @@index([trackId, createdAt])
+  @@index([previousCandidateId])
+  @@index([nextCandidateId])
+  @@map("remake_keyframe_adoption_events")
 }
 
 model RemakePromptRun {
