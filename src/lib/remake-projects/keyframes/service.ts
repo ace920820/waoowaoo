@@ -97,6 +97,70 @@ export async function resolveKeyframeReferenceStorageKeys(snapshot: KeyframeInpu
   return []
 }
 
+export async function setKeyframeSelection(input: { projectId: string; userId: string; shotId: string; slot: string; selectedForGeneration?: boolean; selected?: boolean }) {
+  const slot = keyframeSlotSchema.parse(input.slot)
+  const project = await prisma.project.findFirst({ where: { id: input.projectId, userId: input.userId, type: 'remake' }, select: { id: true } })
+  if (!project) throw new Error('REMAKE_KEYFRAME_PROJECT_NOT_FOUND')
+  const current = await currentKeyframe(prisma, input)
+  const selectedForGeneration = input.selectedForGeneration ?? input.selected ?? false
+  if (selectedForGeneration) {
+    const prompt = await getAdoptedPromptForGeneration({ projectId: input.projectId, shotId: input.shotId, targetKey: promptTargetKey(slot) })
+    if (!prompt) throw new Error('REMAKE_KEYFRAME_PROMPT_NOT_APPROVED')
+  }
+  return await prisma.remakeKeyframeTrack.upsert({
+    where: { shotRevisionId_slot: { shotRevisionId: current.revisionId, slot } },
+    create: { shotRevisionId: current.revisionId, slot, selectedForGeneration },
+    update: { selectedForGeneration },
+  })
+}
+
+export async function getKeyframeTrackHistory(input: { projectId: string; userId: string; trackId: string }) {
+  const batches = await prisma.remakeKeyframeBatch.findMany({
+    where: { trackId: input.trackId, track: { shotRevision: { shot: { remakeProject: { projectId: input.projectId, project: { userId: input.userId } } } } } },
+    orderBy: { createdAt: 'desc' },
+    include: { candidates: { orderBy: { ordinal: 'asc' }, include: { outputVersion: true } } },
+  })
+  return {
+    trackId: input.trackId,
+    adoptedCandidateId: null,
+    batches: batches.map((batch) => ({ id: batch.id, operationKey: batch.operationKey, requestedCandidateCount: batch.requestedCandidateCount, createdAt: batch.createdAt, candidates: batch.candidates.map((candidate) => ({ id: candidate.id, ordinal: candidate.ordinal, mediaId: candidate.outputVersion.mediaId, status: candidate.outputVersion.status, invalidated: Boolean(candidate.outputVersion.invalidatedAt) })) })),
+  }
+}
+
+export async function getKeyframeTrackDetail(input: { projectId: string; userId: string; trackId: string }) {
+  const track = await prisma.remakeKeyframeTrack.findFirst({
+    where: { id: input.trackId, shotRevision: { shot: { remakeProject: { projectId: input.projectId, project: { userId: input.userId } } } } },
+    include: {
+      adoptedCandidate: true,
+      batches: { orderBy: { createdAt: 'desc' }, include: { candidates: { orderBy: { ordinal: 'asc' }, include: { outputVersion: true } } } },
+      adoptionEvents: { orderBy: { createdAt: 'desc' } },
+      shotRevision: { include: { shot: { select: { id: true, currentRevision: true } } } },
+    },
+  })
+  if (!track) return null
+  return {
+    track: { id: track.id, slot: track.slot, selectedForGeneration: track.selectedForGeneration, adoptedCandidateId: track.adoptedCandidateId, shotId: track.shotRevision.shot.id, revision: track.shotRevision.revision, isCurrent: track.shotRevision.shot.currentRevision === track.shotRevision.revision },
+    history: track.batches.map((batch) => ({ id: batch.id, taskId: batch.taskId, operationKey: batch.operationKey, modelId: batch.modelId, options: batch.modelOptions, referenceMediaIds: batch.referenceMediaIds, requestedCandidateCount: batch.requestedCandidateCount, createdAt: batch.createdAt, candidates: batch.candidates.map((candidate) => ({ id: candidate.id, ordinal: candidate.ordinal, outputVersionId: candidate.outputVersionId, mediaId: candidate.outputVersion.mediaId, status: candidate.outputVersion.status, invalidated: Boolean(candidate.outputVersion.invalidatedAt) })) })),
+    adoptionEvents: track.adoptionEvents.map((event) => ({ id: event.id, previousCandidateId: event.previousCandidateId, nextCandidateId: event.nextCandidateId, createdAt: event.createdAt })),
+  }
+}
+
+export async function adoptKeyframeCandidate(input: { projectId: string; userId: string; trackId: string; candidateId: string }) {
+  return await prisma.$transaction(async (tx) => {
+    const track = await (tx.remakeKeyframeTrack.findFirst ?? tx.remakeKeyframeTrack.findUnique)({
+      where: { id: input.trackId, shotRevision: { shot: { remakeProject: { projectId: input.projectId, project: { userId: input.userId } } } } },
+      include: { shotRevision: { include: { shot: true } }, adoptedCandidate: true },
+    })
+    if (!track) throw new Error('REMAKE_KEYFRAME_TRACK_NOT_FOUND')
+    if (track.shotRevision && (track.shotRevision.shot.currentRevision !== track.shotRevision.revision || track.shotRevision.lifecycleState !== 'active')) throw new Error('REMAKE_KEYFRAME_INPUT_STALE')
+    const candidate = await tx.remakeKeyframeCandidate.findFirst({ where: { id: input.candidateId, batch: { trackId: track.id }, outputVersion: { invalidatedAt: null, status: 'completed' } } })
+    if (!candidate) throw new Error('REMAKE_KEYFRAME_CANDIDATE_NOT_FOUND')
+    const updated = await tx.remakeKeyframeTrack.update({ where: { id: track.id }, data: { adoptedCandidateId: candidate.id } })
+    await tx.remakeKeyframeAdoptionEvent.create({ data: { trackId: track.id, previousCandidateId: track.adoptedCandidateId, nextCandidateId: candidate.id, reviewerId: input.userId } })
+    return updated ?? { id: track.id, adoptedCandidateId: candidate.id }
+  })
+}
+
 export async function appendKeyframeGenerationBatch(input: {
   taskId: string
   operationKey: string
