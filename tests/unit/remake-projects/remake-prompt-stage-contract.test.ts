@@ -72,11 +72,21 @@ describe('remake prompt stage contract', () => {
 
     expect(getPromptTaskState('queued', pendingTrack)).toBe('queued')
     expect(getPromptTaskState('processing', pendingTrack)).toBe('running')
-    expect(getPromptTaskState('failed', pendingTrack)).toBe('failed')
+    expect(getPromptTaskState('failed', pendingTrack)).toBe('pending')
+    expect(getPromptTaskState('failed', null)).toBe('failed')
     expect(getPromptTaskState(undefined, pendingTrack)).toBe('approved')
     expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: null })).toBe('approved')
     expect(getPromptTaskState(undefined, { ...pendingTrack, needsReview: true })).toBe('needsReview')
     expect(getPromptTaskState(undefined, { ...pendingTrack, latestVersion: { ...pendingTrack.latestVersion, reviewStatus: 'APPROVED' } })).toBe('approved')
+  })
+
+  it('uses the shared review state and gives immediate approval feedback in the video Prompt card', () => {
+    const video = readFileSync(videoPath, 'utf8')
+
+    expect(video).toContain("from './prompt-review-state'")
+    expect(video).toContain('getPromptTaskState')
+    expect(video).toContain('onSuccess: () => setAdoptedVersionId(version.id)')
+    expect(video).toContain("isAdopted ? t('adopted') : t('approveAndAdopt')")
   })
 
   it('finds the persisted lowercase image Prompt task before its track exists', () => {
