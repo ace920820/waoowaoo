@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID, createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { submitTask } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
 import { parseSceneDetectInput, toSceneDetectProject, type SceneDetectProject, type SceneDetectShot } from './contracts'
 import { invalidatePromptVersionsForShotRevision } from '../prompt/service'
 import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
+import { actionSheetFingerprint } from '../keyframes/action-sheet'
 
 type Row = Record<string, any>
 type Client = any
@@ -38,7 +41,8 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
   const owner = await client.project.findUnique({ where: { id: input.projectId }, select: { userId: true, type: true } })
   if (!owner || owner.userId !== input.userId || owner.type !== 'remake') throw new Error('REMAKE_PROJECT_ACCESS_DENIED')
 
-  return client.$transaction(async (tx: Client) => {
+  const actionSheetTasks: Array<{ shotId: string; revisionId: string; fingerprint: string; sources: Array<{ slot: 'start' | 'middle' | 'end'; mediaId: string; timestamp: number }> }> = []
+  const result = await client.$transaction(async (tx: Client) => {
     const meta = await tx.remakeProject.findUnique({ where: { projectId: input.projectId }, include: { currentSource: true, shots: { include: { revisions: true, outputs: { select: { id: true } } } } } })
     if (!meta) throw new Error('REMAKE_PROJECT_NOT_FOUND')
     const currentToken = projectConcurrencyToken({ sourceRevision: meta.currentSource?.sourceRevision, shots: (meta.shots ?? []).map((s: Row) => ({ id: s.id, currentRevision: s.currentRevision, version: s.version })) })
@@ -66,6 +70,16 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       changed = true
       const nextRevision = Number(row.currentRevision ?? current?.revision ?? 0) + 1
       const created = await tx.remakeShotRevision.create({ data: { shotId: row.id, revision: nextRevision, lifecycleState: 'active', sourceRevision: meta.currentSource?.sourceRevision ?? null, changeReason: input.operationKey || 'native_mutation', payload: payloadFor(normalized), keyframeFrames: normalized.keyframeFrames ? JSON.stringify(normalized.keyframeFrames) : null } })
+      const mediaIds = normalized.mediaIds
+      const frames = normalized.keyframeFrames
+      if (normalized.status === 'keep' && mediaIds?.first && mediaIds.middle && mediaIds.last && frames) {
+        const sources = [
+          { slot: 'start' as const, mediaId: mediaIds.first, timestamp: frames.first },
+          { slot: 'middle' as const, mediaId: mediaIds.middle, timestamp: frames.middle },
+          { slot: 'end' as const, mediaId: mediaIds.last, timestamp: frames.last },
+        ]
+        actionSheetTasks.push({ shotId: String(row.id), revisionId: String(created.id), sources, fingerprint: actionSheetFingerprint({ revisionId: String(created.id), sources }) })
+      }
       if (current) await tx.remakeShotRevision.update({ where: { id: current.id }, data: { lifecycleState: 'retired' } })
       const hasOutputs = Array.isArray(row.outputs) && row.outputs.length > 0
       await tx.remakeShot.update({ where: { id: row.id }, data: { sequence: incoming.shotNumber, currentRevision: nextRevision, version: { increment: 1 }, ...(hasOutputs || incoming.status !== 'pending' ? { needsReview: true, reviewStatus: 'needs_review' } : {}) } })
@@ -95,4 +109,18 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
     const token = projectConcurrencyToken({ sourceRevision: meta.currentSource?.sourceRevision, shots: (meta.shots ?? []).map((s: Row) => ({ id: s.id, currentRevision: s.currentRevision, version: nextVersions.get(String(s.id)) ?? Number(s.version ?? 0) })) })
     return { changed: true, project: canonical, token, idRemap, revision }
   })
+  for (const task of actionSheetTasks) {
+    await submitTask({
+      userId: input.userId,
+      locale: 'zh',
+      projectId: input.projectId,
+      type: TASK_TYPE.REMAKE_KEYFRAME_ACTION_SHEET,
+      targetType: 'remake_shot',
+      targetId: task.shotId,
+      dedupeKey: `remake-action-sheet:${task.revisionId}:${task.fingerprint}`,
+      payload: { kind: 'action_sheet', projectId: input.projectId, shotId: task.shotId, revisionId: task.revisionId, confirmed: true, sources: task.sources, fingerprint: task.fingerprint },
+      maxAttempts: 1,
+    })
+  }
+  return result
 }

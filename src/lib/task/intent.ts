@@ -70,6 +70,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.REMAKE_IMAGE_PROMPT_ANALYZE]: 'analyze',
   [TASK_TYPE.REMAKE_VIDEO_PROMPT_ANALYZE]: 'analyze',
   [TASK_TYPE.REMAKE_KEYFRAME_IMAGE_GENERATE]: 'generate',
+  [TASK_TYPE.REMAKE_KEYFRAME_ACTION_SHEET]: 'process',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {
