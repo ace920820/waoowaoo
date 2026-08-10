@@ -1,0 +1,143 @@
+import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
+
+export const REMAKE_KEYFRAME_SLOTS = ['start', 'middle', 'end'] as const
+export type RemakeKeyframeSlot = typeof REMAKE_KEYFRAME_SLOTS[number]
+
+export type RemakeKeyframeCandidate = {
+  id: string
+  ordinal: number
+  outputVersionId?: string
+  mediaId?: string | null
+  mediaUrl?: string | null
+  status?: string
+  eligible: boolean
+  invalidated?: boolean
+}
+
+export type RemakeKeyframeBatch = {
+  id: string
+  taskId?: string | null
+  operationKey: string
+  inputFingerprint?: string
+  modelId?: string | null
+  options?: Record<string, unknown>
+  referenceMediaIds?: string[]
+  requestedCandidateCount: number
+  createdAt: string
+  candidates: RemakeKeyframeCandidate[]
+}
+
+export type RemakeKeyframeSlotView = {
+  id: string | null
+  slot: RemakeKeyframeSlot
+  selectedForGeneration: boolean
+  eligible: boolean
+  reason: string | null
+  adoptedCandidateId: string | null
+  adoptedCandidate: RemakeKeyframeCandidate | null
+  batches: RemakeKeyframeBatch[]
+}
+
+export type RemakeShotView = {
+  id: string
+  stableId: string
+  label: string
+  sequence: number | null
+  revision: number | null
+  reviewStatus: string
+  prompt: RemakeSnapshot['shots'][number]['promptTracks']
+  original: Record<RemakeKeyframeSlot, { mediaId: string | null; mediaUrl: string | null }>
+  slots: Record<RemakeKeyframeSlot, RemakeKeyframeSlotView>
+  actionSheet: NonNullable<RemakeSnapshot['shots'][number]['keyframeGeneration']>['actionSheet']
+  videoPromptStatus: 'approved' | 'missing' | 'needs_review'
+}
+
+function asCandidate(candidate: Record<string, unknown>): RemakeKeyframeCandidate {
+  const invalidated = Boolean(candidate.invalidated)
+  return {
+    id: String(candidate.id),
+    ordinal: Number(candidate.ordinal ?? 0),
+    outputVersionId: typeof candidate.outputVersionId === 'string' ? candidate.outputVersionId : undefined,
+    mediaId: typeof candidate.mediaId === 'string' ? candidate.mediaId : null,
+    mediaUrl: typeof candidate.mediaUrl === 'string' ? candidate.mediaUrl : null,
+    status: typeof candidate.status === 'string' ? candidate.status : undefined,
+    eligible: candidate.eligible !== false && !invalidated,
+    invalidated,
+  }
+}
+
+function asBatch(batch: Record<string, unknown>): RemakeKeyframeBatch {
+  return {
+    id: String(batch.id),
+    taskId: typeof batch.taskId === 'string' ? batch.taskId : null,
+    operationKey: String(batch.operationKey ?? batch.id),
+    inputFingerprint: typeof batch.inputFingerprint === 'string' ? batch.inputFingerprint : undefined,
+    modelId: typeof batch.modelId === 'string' ? batch.modelId : null,
+    options: batch.options && typeof batch.options === 'object' ? batch.options as Record<string, unknown> : {},
+    referenceMediaIds: Array.isArray(batch.referenceMediaIds) ? batch.referenceMediaIds.filter((value): value is string => typeof value === 'string') : [],
+    requestedCandidateCount: Number(batch.requestedCandidateCount ?? 0),
+    createdAt: String(batch.createdAt ?? ''),
+    candidates: Array.isArray(batch.candidates) ? batch.candidates.map((candidate) => asCandidate(candidate as Record<string, unknown>)) : [],
+  }
+}
+
+export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeShotView {
+  const generation = shot.keyframeGeneration
+  const tracks = generation?.tracks ?? []
+  const prompt = shot.promptTracks ?? []
+  const slots = Object.fromEntries(REMAKE_KEYFRAME_SLOTS.map((slot) => {
+    const track = tracks.find((candidate) => candidate.slot === slot)
+    const batches = (track?.batches ?? []).map((batch) => asBatch(batch as unknown as Record<string, unknown>))
+    const adopted = batches.flatMap((batch) => batch.candidates).find((candidate) => candidate.id === track?.adoptedCandidateId) ?? null
+    const promptTrack = prompt.find((candidate) => candidate.targetKey === `image:${slot}`)
+    const eligible = Boolean(shot.review?.promptEligible && promptTrack?.adoptedVersion && !promptTrack.needsReview && track?.eligible !== false)
+    return [slot, {
+      id: track?.id ?? null,
+      slot,
+      selectedForGeneration: Boolean(track?.selectedForGeneration),
+      eligible,
+      reason: !shot.review?.promptEligible ? shot.review?.reason ?? 'Shot 尚未通过审核' : !promptTrack?.adoptedVersion ? '图片 Prompt 尚未批准' : promptTrack.needsReview ? 'Prompt 已失效，需要复核' : track?.eligible === false ? '当前 revision 已失效' : null,
+      adoptedCandidateId: track?.adoptedCandidateId ?? null,
+      adoptedCandidate: adopted,
+      batches,
+    } satisfies RemakeKeyframeSlotView]
+  })) as Record<RemakeKeyframeSlot, RemakeKeyframeSlotView>
+  const videoTrack = prompt.find((candidate) => candidate.targetKey === 'video')
+  const videoPromptStatus = videoTrack?.needsReview ? 'needs_review' : videoTrack?.adoptedVersion ? 'approved' : 'missing'
+  return {
+    id: shot.id,
+    stableId: shot.stableKey,
+    label: `Shot #${shot.sequence ?? '-'}`,
+    sequence: shot.sequence,
+    revision: shot.currentRevision ?? null,
+    reviewStatus: shot.reviewStatus,
+    prompt,
+    original: {
+      start: shot.keyframes?.start ?? { mediaId: null, mediaUrl: null },
+      middle: shot.keyframes?.middle ?? { mediaId: null, mediaUrl: null },
+      end: shot.keyframes?.end ?? { mediaId: null, mediaUrl: null },
+    },
+    slots,
+    actionSheet: generation?.actionSheet ?? { status: 'waiting', id: null, mediaId: null, fingerprint: null },
+    videoPromptStatus,
+  }
+}
+
+export function adaptRemakeShots(snapshot: RemakeSnapshot): RemakeShotView[] {
+  return snapshot.shots.map(adaptRemakeShot)
+}
+
+export function eligibleKeyframeShotCount(shots: Array<{ slots: Record<RemakeKeyframeSlot, { eligible: boolean }> }>) {
+  return {
+    eligible: shots.filter((shot) => REMAKE_KEYFRAME_SLOTS.some((slot) => shot.slots[slot]?.eligible)).length,
+    total: shots.length,
+  }
+}
+
+export function canSelectRemakeKeyframeSlot(slot: Pick<RemakeKeyframeSlotView, 'eligible' | 'reason'>): boolean {
+  return slot.eligible && !slot.reason
+}
+
+export function orderedRemakeBatches(batches: RemakeKeyframeBatch[]): RemakeKeyframeBatch[] {
+  return [...batches].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}

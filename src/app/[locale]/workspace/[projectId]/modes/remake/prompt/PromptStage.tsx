@@ -9,7 +9,7 @@ import { PromptImageTab } from './PromptImageTab'
 import { PromptVideoTab } from './PromptVideoTab'
 import './prompt-stage.css'
 
-type Props = { projectId: string; snapshot: RemakeSnapshot }
+type Props = { projectId: string; snapshot: RemakeSnapshot; onEnterStoryboard?: () => void }
 type Filter = 'all' | 'pending_review' | 'approved'
 const slots = ['start', 'middle', 'end'] as const
 
@@ -23,7 +23,7 @@ function stateFor(track: PromptTrackSummary | null) {
   return track.adoptedVersion ? 'approved' : 'pending_review'
 }
 
-export function PromptStage({ projectId, snapshot }: Props) {
+export function PromptStage({ projectId, snapshot, onEnterStoryboard }: Props) {
   const t = useTranslations('remakeWorkbench')
   const [selectedShotId, setSelectedShotId] = useState(snapshot.shots[0]?.id ?? '')
   const [filter, setFilter] = useState<Filter>('all')
@@ -35,6 +35,10 @@ export function PromptStage({ projectId, snapshot }: Props) {
   const analyzedKeyframes = snapshot.shots.flatMap((shot) => slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))).filter((track) => Boolean(track?.latestVersion)).length
   const approvedPrompts = allTracks.filter((track) => Boolean(track.adoptedVersion)).length
   const pendingReview = allTracks.filter((track) => stateFor(track) === 'pending_review').length
+  const eligibleShots = snapshot.shots.filter((shot) => shot.review?.promptEligible && slots.every((slot) => {
+    const track = trackFor(shot.promptTracks, `image:${slot}`)
+    return Boolean(track?.adoptedVersion && !track.needsReview)
+  })).length
   const running = snapshot.tasks.filter((task) => ['queued', 'processing', 'running'].includes(task.status) && task.type.includes('prompt')).length
   const filteredShots = useMemo(() => snapshot.shots.filter((shot) => {
     const matches = `${shot.sequence ?? ''} ${shot.stableKey}`.toLowerCase().includes(query.toLowerCase())
@@ -54,7 +58,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
     <div className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
       <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
         <div className="space-y-1.5"><div className="flex items-center gap-2"><span className="rounded-lg bg-indigo-600 p-1.5 text-white"><AppIcon name="sparkles" size={20} /></span><h2 className="text-xl font-bold text-slate-900">{t('promptTitle')}</h2></div><p className="max-w-2xl text-xs leading-relaxed text-slate-500">{t('promptSubtitle')}</p></div>
-        <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3 py-1.5 text-xs text-slate-700"><span className={`h-2 w-2 rounded-full ${running ? 'bg-blue-500' : 'bg-slate-400'}`} />{t('tasks')}: {running} {t('running')}</div></div>
+        <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3 py-1.5 text-xs text-slate-700"><span className={`h-2 w-2 rounded-full ${running ? 'bg-blue-500' : 'bg-slate-400'}`} />{t('tasks')}: {running} {t('running')}</div><button type="button" onClick={onEnterStoryboard} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white" data-testid="remake-enter-storyboard">进入分镜 <AppIcon name="arrowRight" size={14} /></button></div>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
         <Metric label={t('shots')} value={`${snapshot.shots.length}`} detail={t('shot')} />
@@ -63,6 +67,7 @@ export function PromptStage({ projectId, snapshot }: Props) {
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3"><div className="flex items-center gap-1 text-[11px] font-medium text-indigo-700"><AppIcon name="bolt" size={12} />{t('pendingReview')}: {pendingReview}</div><div className="mt-1 text-xs text-indigo-900/80">{t('videoProjectActionHint')}</div></div>
       </div>
       <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5 text-xs text-amber-900"><AppIcon name="info" size={16} className="shrink-0 text-amber-600" />{t('videoProjectActionHint')}</div>
+      <p className="text-xs text-slate-500" data-testid="remake-storyboard-eligibility">可生成 {eligibleShots} / {snapshot.shots.length} 个 Shot</p>
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

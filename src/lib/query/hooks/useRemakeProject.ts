@@ -18,8 +18,40 @@ export type RemakeSnapshot = {
     review?: { promptEligible: boolean; reason?: string | null }
     timeRange?: { start: string | number | null; end: string | number | null }
     keyframes?: Record<'start' | 'middle' | 'end', { mediaId: string | null; mediaUrl: string | null }>
+    keyframeGeneration?: {
+      tracks: Array<{
+        id: string
+        slot: 'start' | 'middle' | 'end'
+        selectedForGeneration: boolean
+        adoptedCandidateId: string | null
+        eligible: boolean
+        batches: Array<{
+          id: string
+          taskId?: string | null
+          operationKey: string
+          inputFingerprint?: string
+          modelId?: string | null
+          options?: Record<string, unknown>
+          referenceMediaIds?: string[]
+          requestedCandidateCount: number
+          createdAt: string
+          candidates: Array<{
+            id: string
+            ordinal: number
+            outputVersionId?: string
+            mediaId?: string | null
+            mediaUrl?: string | null
+            status?: string
+            eligible: boolean
+            invalidated?: boolean
+          }>
+        }>
+      }>
+      actionSheet: { status: 'current' | 'missing' | 'waiting'; id: string | null; mediaId: string | null; fingerprint: string | null }
+      history: Array<{ id: string; revisionId: string; mediaId: string | null; fingerprint: string | null; invalidated: boolean }>
+    }
     promptTracks?: PromptTrackSummary[]
-    revisions: Array<{ id: string; revision: number; changeReason: string }>
+    revisions: Array<{ id: string; revision: number; changeReason: string; sourceRevision?: number | null; lifecycleState?: string; payload?: unknown; keyframeMediaRefs?: unknown }>
     provenance: Array<{ id: string; schema: string; executor: string; capability: string }>
   }>
   tasks: Array<{
