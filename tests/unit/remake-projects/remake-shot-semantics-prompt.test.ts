@@ -13,6 +13,17 @@ describe('ShotSemanticsPanel - 画面描述 Prompt 集成', () => {
     expect(source).toMatch(/imagePrompts\[currentPromptSlot\]/)
   })
 
+  it('「画面描述」同时展示并编辑「负面约束」', () => {
+    expect(source).toContain('负面约束')
+    expect(source).toContain('localPromptNegative')
+    expect(source).toMatch(/negativeConstraints/)
+    expect(source).toMatch(/整合生成提示词/)
+  })
+
+  it('保存 Prompt 时把负面约束按行提交', () => {
+    expect(source).toMatch(/negativeConstraints:[\s\S]*?split\(.\\n.\)/)
+  })
+
   it('原 description 字段改名为「镜头语义描述」', () => {
     expect(source).toContain('镜头语义描述')
   })

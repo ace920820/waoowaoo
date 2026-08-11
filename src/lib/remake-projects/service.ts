@@ -241,7 +241,17 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
           id: track.id,
           targetKey: track.targetKey,
           latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt ? 'needs_review' : latest.status } : null,
-          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status, coreText: adopted.integratedGenerationPrompt ?? null } : null,
+          adoptedVersion: adopted
+            ? {
+                id: adopted.id,
+                versionNumber: adopted.versionNumber,
+                reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status,
+                coreText: adopted.integratedGenerationPrompt ?? null,
+                negativeConstraints: Array.isArray(adopted.negativeConstraints)
+                  ? adopted.negativeConstraints.filter((item): item is string => typeof item === 'string')
+                  : [],
+              }
+            : null,
           needsReview: versions.some((version) => Boolean(version.invalidatedAt)),
         }
       }),

@@ -96,7 +96,7 @@ export type PromptTrackSummary = {
   id: string
   targetKey: 'image:start' | 'image:middle' | 'image:end' | 'video'
   latestVersion: { id: string; versionNumber: number; reviewStatus: string } | null
-  adoptedVersion: { id: string; versionNumber: number; reviewStatus: string; coreText?: string | null } | null
+  adoptedVersion: { id: string; versionNumber: number; reviewStatus: string; coreText?: string | null; negativeConstraints?: string[] } | null
   needsReview: boolean
 }
 

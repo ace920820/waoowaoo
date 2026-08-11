@@ -63,7 +63,7 @@ export type RemakeShotView = {
     propAssetIds: string[]
   }
   imagePromptStatus: Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>
-  imagePrompts: Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null }>
+  imagePrompts: Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null; negativeConstraints: string[] }>
   videoPrompt: { trackId: string | null; coreText: string | null }
 }
 
@@ -154,11 +154,18 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
     })) as Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>,
     imagePrompts: Object.fromEntries(REMAKE_KEYFRAME_SLOTS.map((slot) => {
       const track = prompt.find((candidate) => candidate.targetKey === `image:${slot}`)
+      const adopted = track?.adoptedVersion as
+        | { coreText?: string | null; negativeConstraints?: unknown }
+        | null
+        | undefined
       return [slot, {
         trackId: track?.id ?? null,
-        coreText: (track?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,
+        coreText: adopted?.coreText ?? null,
+        negativeConstraints: Array.isArray(adopted?.negativeConstraints)
+          ? adopted.negativeConstraints.filter((item): item is string => typeof item === 'string')
+          : [],
       }]
-    })) as Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null }>,
+    })) as Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null; negativeConstraints: string[] }>,
     videoPrompt: {
       trackId: videoTrack?.id ?? null,
       coreText: (videoTrack?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,

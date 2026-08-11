@@ -35,8 +35,10 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
   const currentPromptSlot = activeSlot
   const currentPromptTrackId = shot.imagePrompts[currentPromptSlot]?.trackId
   const currentPromptCoreText = shot.imagePrompts[currentPromptSlot]?.coreText
+  const currentPromptNegative = shot.imagePrompts[currentPromptSlot]?.negativeConstraints ?? []
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [localPromptText, setLocalPromptText] = useState(currentPromptCoreText ?? '')
+  const [localPromptNegative, setLocalPromptNegative] = useState(currentPromptNegative.join('\n'))
   const saveAndAdoptPrompt = useSaveAndAdoptRemakePrompt(projectId, currentPromptTrackId ?? '')
 
   const moodPreset = useMemo(
@@ -56,7 +58,8 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
     setLocalPropAssetIds(semantics.propAssetIds ?? [])
     setLocalCharacterTags(semantics.characterTags.join(', '))
     setLocalPromptText(currentPromptCoreText ?? '')
-  }, [shot.id, semantics.shotType, semantics.cameraMove, semantics.description, currentPromptCoreText,
+    setLocalPromptNegative(currentPromptNegative.join('\n'))
+  }, [shot.id, semantics.shotType, semantics.cameraMove, semantics.description, currentPromptCoreText, currentPromptNegative,
       semantics.moodPresetId, semantics.customMood, semantics.sceneTag, semantics.characterTags])
 
   const hasChanges = editing && (
@@ -92,12 +95,17 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
     if (!currentPromptTrackId) return
     await saveAndAdoptPrompt.mutateAsync({
       coreText: localPromptText.trim(),
+      negativeConstraints: localPromptNegative
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean),
     })
     setEditingPrompt(false)
   }
 
   const handlePromptCancel = () => {
     setLocalPromptText(currentPromptCoreText ?? '')
+    setLocalPromptNegative(currentPromptNegative.join('\n'))
     setEditingPrompt(false)
   }
 
@@ -233,15 +241,47 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
             )}
           </div>
           {editingPrompt ? (
-            <textarea
-              value={localPromptText}
-              onChange={(e) => setLocalPromptText(e.target.value)}
-              rows={4}
-              placeholder="反推的画面描述 Prompt…"
-              className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">整合生成提示词</p>
+                <textarea
+                  value={localPromptText}
+                  onChange={(e) => setLocalPromptText(e.target.value)}
+                  rows={4}
+                  placeholder="反推的画面描述 Prompt…"
+                  aria-label="整合生成提示词"
+                  className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">负面约束</p>
+                <textarea
+                  value={localPromptNegative}
+                  onChange={(e) => setLocalPromptNegative(e.target.value)}
+                  rows={3}
+                  placeholder="每行一条，例如：低质量、模糊、多余肢体…"
+                  aria-label="负面约束"
+                  className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
           ) : (
-            <ValueText value={currentPromptCoreText} placeholder="暂无已采用 Prompt" multiline />
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">整合生成提示词</p>
+                <ValueText value={currentPromptCoreText} placeholder="暂无已采用 Prompt" multiline />
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">负面约束</p>
+                {currentPromptNegative.length ? (
+                  <p className="whitespace-pre-wrap text-sm text-slate-700">
+                    {currentPromptNegative.join('\n')}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400">无</p>
+                )}
+              </div>
+            </div>
           )}
         </Field>
 

@@ -32,6 +32,7 @@ describe('saveAndAdoptPromptHumanEdit (service contract)', () => {
     expect(params).toContain('userId')
     expect(params).toContain('trackId')
     expect(params).toContain('coreText')
+    expect(params).toContain('negativeConstraints')
   })
 
   it('返回 version 和 isAdopted', () => {

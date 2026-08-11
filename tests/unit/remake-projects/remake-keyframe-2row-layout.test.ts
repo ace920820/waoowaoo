@@ -101,4 +101,27 @@ describe('Remake keyframe 2-row 3-column layout', () => {
     const columns = buildTwoRowLayout(shot)
     expect(columns.map((column) => column.slot)).toEqual(['start', 'middle', 'end'])
   })
+
+  it('imagePrompts carry adopted negative constraints alongside core text', () => {
+    const data = baseShot() as Record<string, unknown>
+    data.promptTracks = [
+      {
+        id: 'pt-start',
+        targetKey: 'image:start',
+        adoptedVersion: {
+          id: 'v1',
+          versionNumber: 1,
+          reviewStatus: 'approved',
+          coreText: 'adopted prompt',
+          negativeConstraints: ['blurry', 'low quality'],
+        },
+      },
+    ]
+    const shot = adaptRemakeShot(data as never)
+    expect(shot.imagePrompts.start).toMatchObject({
+      coreText: 'adopted prompt',
+      negativeConstraints: ['blurry', 'low quality'],
+    })
+    expect(shot.imagePrompts.middle.negativeConstraints).toEqual([])
+  })
 })
