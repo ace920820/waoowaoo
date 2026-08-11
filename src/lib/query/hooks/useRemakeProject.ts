@@ -23,6 +23,9 @@ export type RemakeSnapshot = {
       customMood: string | null
       sceneTag: string | null
       characterTags: string[]
+      sceneAssetId: string | null
+      characterAssetIds: string[]
+      propAssetIds: string[]
     }
     review?: { promptEligible: boolean; reason?: string | null }
     timeRange?: { start: string | number | null; end: string | number | null }

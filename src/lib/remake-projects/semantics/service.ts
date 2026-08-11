@@ -8,6 +8,9 @@ export type RemakeShotSemantics = {
   customMood: string | null
   sceneTag: string | null
   characterTags: string[]
+  sceneAssetId: string | null
+  characterAssetIds: string[]
+  propAssetIds: string[]
 }
 
 export async function updateRemakeShotSemantics(input: {
@@ -21,6 +24,9 @@ export async function updateRemakeShotSemantics(input: {
   customMood?: string | null
   sceneTag?: string | null
   characterTags?: string[] | null
+  sceneAssetId?: string | null
+  characterAssetIds?: string[] | null
+  propAssetIds?: string[] | null
 }): Promise<{ semantics: RemakeShotSemantics } | null> {
   const shot = await prisma.remakeShot.findUnique({
     where: { id: input.shotId },
@@ -41,6 +47,13 @@ export async function updateRemakeShotSemantics(input: {
   if (Object.prototype.hasOwnProperty.call(input, 'characterTags')) {
     data.characterTags = input.characterTags ? JSON.stringify(input.characterTags) : null
   }
+  if (Object.prototype.hasOwnProperty.call(input, 'sceneAssetId')) data.sceneAssetId = input.sceneAssetId
+  if (Object.prototype.hasOwnProperty.call(input, 'characterAssetIds')) {
+    data.characterAssetIds = input.characterAssetIds ? JSON.stringify(input.characterAssetIds) : null
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'propAssetIds')) {
+    data.propAssetIds = input.propAssetIds ? JSON.stringify(input.propAssetIds) : null
+  }
 
   const updated = await prisma.remakeShot.update({
     where: { id: input.shotId },
@@ -56,6 +69,9 @@ export async function updateRemakeShotSemantics(input: {
       customMood: updated.customMood ?? null,
       sceneTag: updated.sceneTag ?? null,
       characterTags: parseTags(updated.characterTags),
+    sceneAssetId: updated.sceneAssetId ?? null,
+    characterAssetIds: parseTags(updated.characterAssetIds),
+    propAssetIds: parseTags(updated.propAssetIds),
     },
   }
 }

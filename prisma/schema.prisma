@@ -509,6 +509,9 @@ model RemakeShot {
   customMood      String?               @db.Text
   sceneTag        String?
   characterTags   String?               @db.Text
+  sceneAssetId    String?
+  characterAssetIds String?             @db.Text
+  propAssetIds    String?               @db.Text
 
   @@unique([remakeProjectId, stableKey])
   @@unique([remakeProjectId, externalIdentity])

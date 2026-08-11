@@ -35,10 +35,9 @@ export function PromptStage({ projectId, snapshot, onEnterStoryboard }: Props) {
   const analyzedKeyframes = snapshot.shots.flatMap((shot) => slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))).filter((track) => Boolean(track?.latestVersion)).length
   const approvedPrompts = allTracks.filter((track) => Boolean(track.adoptedVersion)).length
   const pendingReview = allTracks.filter((track) => stateFor(track) === 'pending_review').length
-  const eligibleShots = snapshot.shots.filter((shot) => shot.review?.promptEligible && slots.every((slot) => {
-    const track = trackFor(shot.promptTracks, `image:${slot}`)
-    return Boolean(track?.adoptedVersion && !track.needsReview)
-  })).length
+  // 进入分镜的前提是原始镜头已通过审核门（关键帧完整且 revision 有效）。
+  // 单槽位 Prompt 是否已批准只影响该槽位的「用于生成」选择，不阻塞进入分镜。
+  const eligibleShots = snapshot.shots.filter((shot) => Boolean(shot.review?.promptEligible)).length
   const running = snapshot.tasks.filter((task) => ['queued', 'processing', 'running'].includes(task.status) && task.type.includes('prompt')).length
   const filteredShots = useMemo(() => snapshot.shots.filter((shot) => {
     const matches = `${shot.sequence ?? ''} ${shot.stableKey}`.toLowerCase().includes(query.toLowerCase())

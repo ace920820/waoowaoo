@@ -31,7 +31,7 @@ export function useSetRemakeKeyframeSelection(projectId: string) {
 export function useGenerateRemakeKeyframe(projectId: string) {
   const refetch = useSnapshotRefetch(projectId)
   return useMutation({
-    mutationFn: (input: { shotId: string; slot: 'start' | 'middle' | 'end'; operationKey: string; count: number; model: string; options?: Record<string, unknown>; referenceMediaIds?: string[] }) =>
+    mutationFn: (input: { shotId: string; slot: 'start' | 'middle' | 'end'; operationKey: string; count: number; model?: string; options?: Record<string, unknown>; referenceMediaIds?: string[] }) =>
       request(`/api/remake-projects/${projectId}/keyframes`, { action: 'generate', options: {}, referenceMediaIds: [], ...input }),
     onSuccess: refetch,
   })

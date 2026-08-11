@@ -407,3 +407,65 @@ export async function getAdoptedPromptForGeneration(input: { projectId: string; 
     throw error
   }
 }
+
+
+export async function saveAndAdoptPromptHumanEdit(input: {
+  projectId: string
+  userId: string
+  trackId: string
+  sourceVersionId?: string
+  coreText: string
+  negativeConstraints?: string[]
+}) {
+  const write = async (tx: Client) => {
+    // 1. 读取 track 和 source version
+    const track = await tx.remakePromptTrack.findFirst({
+      where: { id: input.trackId, remakeProject: { project: { userId: input.userId }, projectId: input.projectId } },
+      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 5 } },
+    }) as { id: string; shotId: string; targetKey: PromptTargetKey; versions: PromptVersionRow[] } | null
+    if (!track) throw new Error('REMAKE_PROMPT_TRACK_NOT_FOUND')
+
+    const source = input.sourceVersionId
+      ? track.versions.find((v) => v.id === input.sourceVersionId)
+      : track.versions[0]
+    if (!source || source.invalidatedAt) throw new Error('REMAKE_PROMPT_INPUT_STALE')
+
+    // 2. 基于 source 构造新的 analysis content
+    const parsed = parsePromptAnalysis(track.targetKey, source.parsedSections)
+    const analysis = track.targetKey === 'video'
+      ? { ...videoPromptAnalysisSchema.parse(parsed), coreEvent: input.coreText }
+      : { ...imagePromptAnalysisSchema.parse(parsed), integratedGenerationPrompt: input.coreText, negativeConstraints: input.negativeConstraints ?? imagePromptAnalysisSchema.parse(parsed).negativeConstraints }
+
+    const content: PromptContent = {
+      parsedSections: analysis,
+      integratedGenerationPrompt: input.coreText,
+      negativeConstraints: input.negativeConstraints,
+      rawOutput: null,
+    }
+
+    // 3. 追加新版本（在同一事务内）
+    const newVersion = await appendPromptVersion({
+      projectId: input.projectId,
+      shotId: track.shotId,
+      targetKey: track.targetKey,
+      inputSnapshot: promptInputSnapshotSchema.parse(source.inputSnapshot),
+      content,
+      tx,
+    })
+
+    // 4. 批准并采用（在同一事务内）
+    await approveAndAdoptPromptVersion({
+      projectId: input.projectId,
+      shotId: track.shotId,
+      versionId: newVersion.id,
+      reviewerId: input.userId,
+      tx,
+    })
+
+    return {
+      version: { id: newVersion.id, versionNumber: newVersion.versionNumber },
+      isAdopted: true,
+    }
+  }
+  return (prisma as Client).$transaction(write)
+}

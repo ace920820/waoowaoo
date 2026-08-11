@@ -12,6 +12,9 @@ const patchSchema = z.object({
   customMood: z.string().trim().max(500).nullable().optional(),
   sceneTag: z.string().trim().max(100).nullable().optional(),
   characterTags: z.array(z.string().trim().max(100)).max(20).nullable().optional(),
+  sceneAssetId: z.string().trim().max(100).nullable().optional(),
+  characterAssetIds: z.array(z.string().trim().max(100)).max(30).nullable().optional(),
+  propAssetIds: z.array(z.string().trim().max(100)).max(50).nullable().optional(),
 }).strict()
 
 export const PATCH = apiHandler(async (request: NextRequest, context: { params: Promise<{ projectId: string; shotId: string }> }) => {

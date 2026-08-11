@@ -20,6 +20,13 @@ async function openStage(page: Page, stage: 'prompt' | 'storyboard' | 'video') {
   await authenticate(page, fixture.sessionToken)
   await page.goto(`${baseUrl}/en/workspace/${fixture.projectId}?stage=${stage}`)
   await expect(page.locator('[data-testid="remake-workbench"]')).toBeVisible()
+  const stageTestId =
+    stage === 'prompt'
+      ? 'remake-prompt-stage'
+      : stage === 'storyboard'
+        ? 'remake-storyboard-stage'
+        : 'remake-video-stage'
+  await expect(page.getByTestId(stageTestId)).toBeVisible()
   return fixture
 }
 
@@ -38,9 +45,9 @@ test.describe('Remake keyframe real-route acceptance', () => {
     await expect(page.getByTestId('remake-video-stage')).toBeVisible()
   })
 
-  test('persists explicit legal selection while keeping unavailable slots and original frame identities intact', async ({ page, request }) => {
+  test('persists explicit legal selection while keeping unavailable slots and original frame identities intact', async ({ page }) => {
     const fixture = await openStage(page, 'storyboard')
-    const original = await request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)
+    const original = await page.request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)
     const before = await original.json()
     const frames = before.remake.shots[0].keyframes
     expect([frames.start.mediaId, frames.middle.mediaId, frames.end.mediaId]).toEqual(originalFrames)
@@ -50,10 +57,10 @@ test.describe('Remake keyframe real-route acceptance', () => {
     const start = page.locator('input[type="checkbox"]').first()
     await expect(start).not.toBeChecked()
     await start.check()
-    await expect.poll(async () => (await (await request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)).json()).remake.shots[0].keyframeGeneration.tracks[0].selectedForGeneration).toBe(true)
+    await expect.poll(async () => (await (await page.request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)).json()).remake.shots[0].keyframeGeneration.tracks[0].selectedForGeneration).toBe(true)
     await page.reload()
     await expect(page.locator('input[type="checkbox"]').first()).toBeChecked()
-    const after = await (await request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)).json()
+    const after = await (await page.request.get(`${baseUrl}/api/projects/${fixture.projectId}/data`)).json()
     expect([after.remake.shots[0].keyframes.start.mediaId, after.remake.shots[0].keyframes.middle.mediaId, after.remake.shots[0].keyframes.end.mediaId]).toEqual(originalFrames)
   })
 
@@ -68,7 +75,7 @@ test.describe('Remake keyframe real-route acceptance', () => {
 
     const videoRequests: string[] = []
     page.on('request', (request) => { if (/video|vgen/i.test(request.url()) && request.method() !== 'GET') videoRequests.push(request.url()) })
-    await page.goto(`${baseUrl}/en/workspace/${fixture.projectId}/modes/remake?stage=video`)
+    await page.goto(`${baseUrl}/en/workspace/${fixture.projectId}?stage=video`)
     const stage = page.getByTestId('remake-video-stage')
     await expect(stage).toHaveAttribute('data-video-submission-disabled', 'true')
     await expect(page.getByRole('button', { name: /视频生成.*Phase 9/i })).toBeDisabled()

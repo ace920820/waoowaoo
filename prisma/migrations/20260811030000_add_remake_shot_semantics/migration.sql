@@ -8,3 +8,9 @@ ALTER TABLE `remake_shots`
   ADD COLUMN `customMood` TEXT NULL,
   ADD COLUMN `sceneTag` VARCHAR(191) NULL,
   ADD COLUMN `characterTags` TEXT NULL;
+
+-- Asset-binding fields for scene, character, and prop references.
+ALTER TABLE `remake_shots`
+  ADD COLUMN `sceneAssetId` VARCHAR(191) NULL,
+  ADD COLUMN `characterAssetIds` TEXT NULL,
+  ADD COLUMN `propAssetIds` TEXT NULL;

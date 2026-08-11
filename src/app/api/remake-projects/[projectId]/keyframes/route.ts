@@ -11,7 +11,7 @@ const generateSchema = z.object({
   slot: z.enum(['start', 'middle', 'end']),
   operationKey: z.string().trim().min(1).max(200),
   count: z.number().int().min(1).max(4),
-  model: z.string().trim().min(1),
+  model: z.string().trim().min(1).optional(),
   options: z.record(z.unknown()).default({}),
   referenceMediaIds: z.array(z.string().uuid()).max(20).default([]),
 }).strict()

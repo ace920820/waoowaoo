@@ -58,6 +58,9 @@ export type RemakeShotView = {
     customMood: string | null
     sceneTag: string | null
     characterTags: string[]
+    sceneAssetId: string | null
+    characterAssetIds: string[]
+    propAssetIds: string[]
   }
   imagePromptStatus: Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>
   imagePrompts: Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null }>
@@ -140,6 +143,9 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
       customMood: null,
       sceneTag: null,
       characterTags: [],
+      sceneAssetId: null,
+      characterAssetIds: [],
+      propAssetIds: [],
     },
     imagePromptStatus: Object.fromEntries(REMAKE_KEYFRAME_SLOTS.map((slot) => {
       const track = prompt.find((candidate) => candidate.targetKey === `image:${slot}`)
@@ -177,4 +183,101 @@ export function canSelectRemakeKeyframeSlot(slot: Pick<RemakeKeyframeSlotView, '
 
 export function orderedRemakeBatches(batches: RemakeKeyframeBatch[]): RemakeKeyframeBatch[] {
   return [...batches].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}
+
+
+export type RemakeSourceSlotView = {
+  slot: RemakeKeyframeSlot
+  originalMediaId: string | null
+  originalMediaUrl: string | null
+  selectedForGeneration: boolean
+  eligible: boolean
+  reason: string | null
+  prompt: { id: string | null; versionNumber: number | null; status: 'approved' | 'missing' | 'needs_review'; coreText: string | null } | null
+}
+
+export function buildSourceSlotView(shot: RemakeShotView, slot: RemakeKeyframeSlot): RemakeSourceSlotView {
+  const slotState = shot.slots[slot]
+  const promptTrack = (shot.prompt ?? []).find((candidate) => candidate.targetKey === `image:${slot}`)
+  const adopted = (promptTrack as Record<string, unknown> | null | undefined)?.adoptedVersion
+  const hasAdopted = Boolean(adopted)
+  const needsReview = Boolean((promptTrack as Record<string, unknown> | null | undefined)?.needsReview)
+  let status: 'approved' | 'missing' | 'needs_review' = 'missing'
+  if (hasAdopted) status = needsReview ? 'needs_review' : 'approved'
+  const version = adopted ? (adopted as Record<string, unknown>).versionNumber : null
+  const coreText = adopted && typeof (adopted as Record<string, unknown>).coreText === 'string'
+    ? (adopted as Record<string, unknown>).coreText as string
+    : null
+  return {
+    slot,
+    originalMediaId: shot.original[slot].mediaId,
+    originalMediaUrl: shot.original[slot].mediaUrl,
+    selectedForGeneration: slotState.selectedForGeneration,
+    eligible: slotState.eligible,
+    reason: slotState.reason,
+    prompt: hasAdopted || needsReview
+      ? {
+          id: (promptTrack as Record<string, unknown>).id as string,
+          versionNumber: typeof version === 'number' ? version : null,
+          status,
+          coreText,
+        }
+      : null,
+  }
+}
+
+
+export type TwoRowSlotColumn = {
+  slot: RemakeKeyframeSlot
+  rowLabels: {
+    original: string
+    newFrame: string
+  }
+  original: {
+    mediaId: string | null
+    mediaUrl: string | null
+  }
+  newFrame: {
+    isEmpty: boolean
+    isAdopted: boolean
+    adoptedMediaUrl: string | null
+    candidateCount: number
+    batchCount: number
+    slotViewId: string | null
+  } | null
+}
+
+export function buildTwoRowLayout(shot: RemakeShotView): TwoRowSlotColumn[] {
+  return REMAKE_KEYFRAME_SLOTS.map((slot) => {
+    const slotView = shot.slots[slot]
+    const batches = slotView.batches
+    const totalCandidates = batches.reduce((sum, batch) => sum + batch.candidates.filter((candidate) => candidate.eligible).length, 0)
+    const adopted = slotView.adoptedCandidate
+    const isEmpty = !slotView.selectedForGeneration || totalCandidates === 0
+    let adoptedMediaUrl: string | null = null
+    if (adopted?.mediaUrl) {
+      adoptedMediaUrl = adopted.mediaUrl
+    } else if (adopted?.mediaId) {
+      adoptedMediaUrl = `/api/remake-projects/0/scenedetect/media/${adopted.mediaId}`
+    }
+    return {
+      slot,
+      rowLabels: {
+        original: '原始动作参考',
+        newFrame: '新画面参考',
+      },
+      original: {
+        mediaId: shot.original[slot].mediaId,
+        mediaUrl: shot.original[slot].mediaUrl,
+      },
+      newFrame: {
+        isEmpty,
+        isAdopted: Boolean(slotView.adoptedCandidateId),
+        adoptedMediaUrl,
+        candidateCount: totalCandidates,
+        batchCount: batches.length,
+        slotViewId: slotView.id,
+      },
+    } satisfies TwoRowSlotColumn
+  })
 }

@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { isErrorResponse, requireProjectAuthLight } from '@/lib/api-auth'
-import { approveAndAdoptPromptVersion, getPromptTrackDetail, savePromptHumanEdit } from '@/lib/remake-projects/prompt/service'
+import { approveAndAdoptPromptVersion, getPromptTrackDetail, savePromptHumanEdit, saveAndAdoptPromptHumanEdit } from '@/lib/remake-projects/prompt/service'
 
 const idSchema = z.string().uuid()
 const editSchema = z.object({
+  sourceVersionId: idSchema.optional(),
+  coreText: z.string().trim().min(1).max(200_000),
+  negativeConstraints: z.array(z.string().trim().min(1).max(2_000)).max(100).optional(),
+}).strict()
+const editAndAdoptSchema = z.object({
+  action: z.literal('human_edit_and_adopt'),
   sourceVersionId: idSchema.optional(),
   coreText: z.string().trim().min(1).max(200_000),
   negativeConstraints: z.array(z.string().trim().min(1).max(2_000)).max(100).optional(),
@@ -41,7 +47,30 @@ export const POST = apiHandler(async (request: NextRequest, context: { params: P
   const { projectId, trackId } = await context.params
   const auth = await authorizedTrack(projectId, trackId)
   if (isErrorResponse(auth)) return auth
-  const body = editSchema.safeParse(await request.json())
+  const rawBody = await request.json().catch(() => null)
+
+  // 尝试 edit_and_adopt 格式（带 action）
+  const editAndAdoptBody = editAndAdoptSchema.safeParse(rawBody)
+  if (editAndAdoptBody.success) {
+    try {
+      const result = await saveAndAdoptPromptHumanEdit({
+        projectId,
+        userId: auth.session.user.id,
+        trackId,
+        sourceVersionId: editAndAdoptBody.data.sourceVersionId,
+        coreText: editAndAdoptBody.data.coreText,
+        negativeConstraints: editAndAdoptBody.data.negativeConstraints,
+      })
+      return NextResponse.json({ version: result.version, isAdopted: result.isAdopted }, { status: 201 })
+    } catch (error) {
+      if (error instanceof Error && /NOT_FOUND|ACCESS_DENIED|TRACK_NOT_FOUND/.test(error.message)) throw new ApiError('NOT_FOUND')
+      if (error instanceof Error && /STALE|MISMATCH/.test(error.message)) throw new ApiError('CONFLICT')
+      throw error
+    }
+  }
+
+  // 回退到纯 edit 格式（原有行为）
+  const body = editSchema.safeParse(rawBody)
   if (!body.success) throw new ApiError('INVALID_PARAMS')
   try {
     const version = await savePromptHumanEdit({ projectId, userId: auth.session.user.id, trackId, ...body.data })

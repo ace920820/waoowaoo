@@ -174,6 +174,17 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
               try { return JSON.parse(String(shot.characterTags)) } catch { return [] }
             })()
           : [],
+        sceneAssetId: shot.sceneAssetId ?? null,
+        characterAssetIds: shot.characterAssetIds
+          ? (() => {
+              try { return JSON.parse(String(shot.characterAssetIds)) } catch { return [] }
+            })()
+          : [],
+        propAssetIds: shot.propAssetIds
+          ? (() => {
+              try { return JSON.parse(String(shot.propAssetIds)) } catch { return [] }
+            })()
+          : [],
       },
       review,
       timeRange: {
@@ -189,7 +200,12 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         return [slot, { mediaId, mediaUrl: mediaUrl(input.projectId, mediaId) ?? legacyUrl }]
       })),
       keyframeGeneration: {
-        tracks: tracks.map((track) => ({
+        tracks: [...tracks]
+          .sort((left, right) => {
+            const order = ['start', 'middle', 'end']
+            return order.indexOf(String(left.slot)) - order.indexOf(String(right.slot))
+          })
+          .map((track) => ({
           id: track.id,
           slot: track.slot,
           selectedForGeneration: Boolean(track.selectedForGeneration),
@@ -225,7 +241,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
           id: track.id,
           targetKey: track.targetKey,
           latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt ? 'needs_review' : latest.status } : null,
-          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status, coreText: adopted.coreText ?? null } : null,
+          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status, coreText: adopted.integratedGenerationPrompt ?? null } : null,
           needsReview: versions.some((version) => Boolean(version.invalidatedAt)),
         }
       }),

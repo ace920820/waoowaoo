@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
+import { resolveProjectModelCapabilityGenerationOptions, getUserModelConfig } from '@/lib/config-service'
 import { resolveMediaRef } from '@/lib/media/service'
 import { getSignedUrl } from '@/lib/storage'
 import { getAdoptedPromptForGeneration } from '../prompt/service'
@@ -41,7 +41,7 @@ export async function buildKeyframeGenerationSubmission(input: {
   slot: string
   operationKey: string
   count: number
-  model: string
+  model?: string
   options: Record<string, unknown>
   referenceMediaIds: string[]
 }) {
@@ -53,11 +53,19 @@ export async function buildKeyframeGenerationSubmission(input: {
   if (!track?.selectedForGeneration) throw new Error('REMAKE_KEYFRAME_SLOT_NOT_SELECTED')
   const prompt = await getAdoptedPromptForGeneration({ projectId: input.projectId, shotId: input.shotId, targetKey: promptTargetKey(slot) })
   if (!prompt) throw new Error('REMAKE_KEYFRAME_PROMPT_NOT_APPROVED')
+  // 解析最终使用的模型：显式 model > 用户 storyboardModel
+  let resolvedModel = input.model?.trim() || null
+  if (!resolvedModel) {
+    const userConfig = await getUserModelConfig(input.userId)
+    resolvedModel = userConfig.storyboardModel
+  }
+  if (!resolvedModel) throw new Error("REMAKE_KEYFRAME_MODEL_NOT_CONFIGURED")
+
   const capabilityOptions = await resolveProjectModelCapabilityGenerationOptions({
     projectId: input.projectId,
     userId: input.userId,
     modelType: 'image',
-    modelKey: input.model,
+    modelKey: resolvedModel,
     runtimeSelections: input.options as Record<string, string | number | boolean>,
   })
   const snapshot = keyframeInputSnapshotSchema.parse({
@@ -71,7 +79,7 @@ export async function buildKeyframeGenerationSubmission(input: {
     slot,
     promptVersionId: prompt.id,
     promptText: prompt.integratedGenerationPrompt,
-    model: { id: input.model },
+    model: { id: resolvedModel },
     options: capabilityOptions,
     referenceMediaIds: input.referenceMediaIds,
     requestedCandidateCount: input.count,

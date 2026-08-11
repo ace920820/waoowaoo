@@ -60,10 +60,20 @@ export async function seedRemakeKeyframeProject(): Promise<RemakeKeyframeFixture
   await prisma.remakeShotRevision.create({ data: { id: revisionId, shotId, revision: 1, changeReason: 'fixture confirmation', lifecycleState: 'active', sourceRevision: 1, payload: JSON.stringify({ status: 'keep', startTimecode: '00:00:00:00', endTimecode: '00:00:03:12' }), keyframeMediaRefs: JSON.stringify({ first: start.id, middle: middle.id, last: end.id }) } })
 
   const promptVersions: Record<string, string> = {}
+  const inputSnapshot = {
+    projectId,
+    remakeProjectId,
+    shotId,
+    stableKey: 'fixture-shot-001',
+    sourceRevision: 1,
+    shotRevision: 1,
+    shotRevisionId: revisionId,
+    keyframeMediaRefs: { first: start.id, middle: middle.id, last: end.id },
+  }
   for (const slot of ['start', 'middle', 'end', 'video'] as const) {
     const track = await prisma.remakePromptTrack.create({ data: { remakeProjectId, shotId, targetKey: slot === 'video' ? 'video' : `image:${slot}` } })
     const approved = slot !== 'middle'
-    const version = await prisma.remakePromptVersion.create({ data: { trackId: track.id, shotRevisionId: revisionId, versionNumber: 1, status: approved ? 'approved' : 'pending_review', inputFingerprint: randomUUID().replaceAll('-', ''), inputSnapshot: { fixture: true, slot }, integratedGenerationPrompt: `Long deterministic ${slot} prompt. `.repeat(12) } })
+    const version = await prisma.remakePromptVersion.create({ data: { trackId: track.id, shotRevisionId: revisionId, versionNumber: 1, status: approved ? 'approved' : 'pending_review', inputFingerprint: randomUUID().replaceAll('-', ''), inputSnapshot, integratedGenerationPrompt: `Long deterministic ${slot} prompt. `.repeat(12) } })
     if (approved) await prisma.remakePromptTrack.update({ where: { id: track.id }, data: { adoptedVersionId: version.id } })
     promptVersions[slot] = version.id
   }

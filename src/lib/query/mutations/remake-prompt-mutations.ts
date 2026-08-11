@@ -52,3 +52,15 @@ export function useApproveAndAdoptRemakePrompt(projectId: string, trackId: strin
     onSuccess: refresh,
   })
 }
+
+export function useSaveAndAdoptRemakePrompt(projectId: string, trackId: string) {
+  const refresh = usePromptRefresh(projectId, trackId)
+  return useMutation({
+    mutationFn: async (payload: { sourceVersionId?: string; coreText: string; negativeConstraints?: string[] }) => await requestJsonWithError<{ version: { id: string; versionNumber: number }; isAdopted: boolean }>(
+      `/api/remake-projects/${projectId}/prompts/tracks/${trackId}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'human_edit_and_adopt', ...payload }) },
+      'Failed to save and adopt prompt',
+    ),
+    onSuccess: refresh,
+  })
+}

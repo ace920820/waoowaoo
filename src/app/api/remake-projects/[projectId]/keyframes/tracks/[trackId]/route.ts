@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { isErrorResponse, requireProjectAuthLight } from '@/lib/api-auth'
-import { adoptKeyframeCandidate, getKeyframeTrackHistory } from '@/lib/remake-projects/keyframes/service'
+import { adoptKeyframeCandidate, getKeyframeTrackDetail } from '@/lib/remake-projects/keyframes/service'
 
 const idSchema = z.string().trim().min(1)
 const adoptSchema = z.object({ candidateId: idSchema }).strict()
@@ -18,7 +18,7 @@ export const GET = apiHandler(async (_request: NextRequest, context: { params: P
   const { projectId, trackId } = await context.params
   const auth = await authorized(projectId, trackId)
   if (isErrorResponse(auth)) return auth
-  const detail = await getKeyframeTrackHistory({ projectId, userId: auth.session.user.id, trackId })
+  const detail = await getKeyframeTrackDetail({ projectId, userId: auth.session.user.id, trackId })
   if (!detail) throw new ApiError('NOT_FOUND')
   return NextResponse.json(detail)
 })

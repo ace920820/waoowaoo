@@ -6,15 +6,15 @@ current_phase: 08
 current_phase_name: keyframe-generation
 status: executing
 stopped_at: Phase 8 UI-SPEC approved
-last_updated: "2026-08-10T09:43:08.910Z"
-last_activity: 2026-08-10
-last_activity_desc: Phase 08 execution started
+last_updated: "2026-08-11T09:50:00.000Z"
+last_activity: 2026-08-11
+last_activity_desc: Phase 08 Plans 01-08 executed; Wave 08 (画面描述 Prompt 编辑 + 经典生成卡片) complete, E2E 10/10 green
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 22
-  completed_plans: 15
-  percent: 25
+  total_plans: 25
+  completed_plans: 18
+  percent: 72
 ---
 
 # STATE
@@ -138,20 +138,22 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 08 (keyframe-generation) — EXECUTING
-Plan: 1 of 4
+Plan: 8 of 8
 Status: Executing Phase 08
-Last activity: 2026-08-10 — Phase 08 execution started
+Last activity: 2026-08-11 — Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Operator Next Steps
 
-- Execute 07-04 verification and real Codex/human acceptance before completing Phase 07 requirements.
+- 执行 Phase 08 人工验收（桌面/移动端视觉与交互走查）：画面描述可编辑并即时生效、空卡生成按钮、悬浮浮窗、候选比较 radio。
+- 修复 `check:config-center-guards` 中 `video.worker.ts` 的 4 个既有 modelId 降级违规（历史遗留，非本 wave 范围）。
+- Phase 07-04 的 verification/真实 Codex/人工验收仍需在 Phase 07 关闭前完成。
 
 ## Session
 
 **Last session:** 2026-08-10T04:50:42.993Z
-**Stopped at:** Phase 8 UI-SPEC approved
+**Stopped at:** Phase 8 Wave 08 complete — 08-08-SUMMARY.md
 **Resume file:** .planning/phases/08-keyframe-generation/08-UI-SPEC.md
 
 ## Performance Metrics

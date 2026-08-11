@@ -122,8 +122,8 @@ export const Timeline: React.FC<TimelineProps> = ({
         {/* Playhead Time Ruler Labels */}
         <div className="absolute top-0 left-0 right-0 h-5 flex justify-between text-[10px] font-mono text-slate-500 pointer-events-none select-none">
           <span>00:00.000</span>
-          <span>{metadata ? (metadata.duration / 2).toFixed(1) + 's' : '00:30.000'}</span>
-          <span>{metadata ? metadata.duration.toFixed(1) + 's' : '01:00.000'}</span>
+          <span>{metadata && typeof metadata.duration === 'number' ? (metadata.duration / 2).toFixed(1) + 's' : '00:30.000'}</span>
+          <span>{metadata && typeof metadata.duration === 'number' ? metadata.duration.toFixed(1) + 's' : '01:00.000'}</span>
         </div>
 
         {/* Timeline Bar Container */}
