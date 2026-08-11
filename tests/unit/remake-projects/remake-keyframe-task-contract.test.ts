@@ -34,7 +34,7 @@ describe('remake keyframe task contract', () => {
       inputSnapshot: frozenInput,
     })
 
-    expect(descriptor.taskType).toBe('remake_keyframe_generate')
+    expect(descriptor.taskType).toBe('remake_keyframe_image_generate')
     expect(descriptor.targetType).toBe('remake_shot')
     expect(descriptor.targetId).toBe(ids.shotId)
     expect(descriptor.payload).toMatchObject({

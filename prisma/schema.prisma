@@ -502,6 +502,13 @@ model RemakeShot {
   provenance      RemakeProvenanceRecord[]
   invalidations   RemakeInvalidation[]
   promptTracks    RemakePromptTrack[]
+  shotType        String?               @db.Text
+  cameraMove      String?               @db.Text
+  description     String?               @db.Text
+  moodPresetId    String?
+  customMood      String?               @db.Text
+  sceneTag        String?
+  characterTags   String?               @db.Text
 
   @@unique([remakeProjectId, stableKey])
   @@unique([remakeProjectId, externalIdentity])

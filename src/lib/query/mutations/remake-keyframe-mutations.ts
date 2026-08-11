@@ -49,3 +49,22 @@ export function useAdoptRemakeKeyframeCandidate(projectId: string) {
 // Concise aliases used by the Remake page adapters.
 export const useSelectRemakeKeyframe = useSetRemakeKeyframeSelection
 export const useAdoptRemakeKeyframe = useAdoptRemakeKeyframeCandidate
+
+// Shot semantics update (used by the Remake Storyboard semantics panel)
+export function useUpdateRemakeShotSemantics(projectId: string) {
+  const refetch = useSnapshotRefetch(projectId)
+  return useMutation({
+    mutationFn: (input: { shotId: string; patch: Record<string, unknown> }) =>
+      (async () => {
+        const response = await apiFetch(`/api/remake-projects/${projectId}/shots/${input.shotId}/semantics`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input.patch),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Failed to update shot semantics')
+        return payload as { semantics: Record<string, unknown> }
+      })(),
+    onSuccess: refetch,
+  })
+}

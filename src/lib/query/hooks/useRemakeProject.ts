@@ -15,6 +15,15 @@ export type RemakeSnapshot = {
     reviewStatus: string
     needsReview: boolean
     currentRevision?: number | null
+    semantics?: {
+      shotType: string | null
+      cameraMove: string | null
+      description: string | null
+      moodPresetId: string | null
+      customMood: string | null
+      sceneTag: string | null
+      characterTags: string[]
+    }
     review?: { promptEligible: boolean; reason?: string | null }
     timeRange?: { start: string | number | null; end: string | number | null }
     keyframes?: Record<'start' | 'middle' | 'end', { mediaId: string | null; mediaUrl: string | null }>
@@ -84,7 +93,7 @@ export type PromptTrackSummary = {
   id: string
   targetKey: 'image:start' | 'image:middle' | 'image:end' | 'video'
   latestVersion: { id: string; versionNumber: number; reviewStatus: string } | null
-  adoptedVersion: { id: string; versionNumber: number; reviewStatus: string } | null
+  adoptedVersion: { id: string; versionNumber: number; reviewStatus: string; coreText?: string | null } | null
   needsReview: boolean
 }
 

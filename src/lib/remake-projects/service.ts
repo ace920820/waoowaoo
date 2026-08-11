@@ -162,6 +162,19 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       needsReview: shot.needsReview,
       currentRevision: shot.currentRevision ?? null,
       version: shot.version ?? 0,
+      semantics: {
+        shotType: shot.shotType ?? null,
+        cameraMove: shot.cameraMove ?? null,
+        description: shot.description ?? null,
+        moodPresetId: shot.moodPresetId ?? null,
+        customMood: shot.customMood ?? null,
+        sceneTag: shot.sceneTag ?? null,
+        characterTags: shot.characterTags
+          ? (() => {
+              try { return JSON.parse(String(shot.characterTags)) } catch { return [] }
+            })()
+          : [],
+      },
       review,
       timeRange: {
         start: payload.startTimecode ?? payload.startTime ?? null,
@@ -212,7 +225,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
           id: track.id,
           targetKey: track.targetKey,
           latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt ? 'needs_review' : latest.status } : null,
-          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status } : null,
+          adoptedVersion: adopted ? { id: adopted.id, versionNumber: adopted.versionNumber, reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status, coreText: adopted.coreText ?? null } : null,
           needsReview: versions.some((version) => Boolean(version.invalidatedAt)),
         }
       }),

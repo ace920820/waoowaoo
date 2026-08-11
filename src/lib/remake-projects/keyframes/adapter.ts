@@ -50,6 +50,18 @@ export type RemakeShotView = {
   slots: Record<RemakeKeyframeSlot, RemakeKeyframeSlotView>
   actionSheet: NonNullable<RemakeSnapshot['shots'][number]['keyframeGeneration']>['actionSheet']
   videoPromptStatus: 'approved' | 'missing' | 'needs_review'
+  semantics: {
+    shotType: string | null
+    cameraMove: string | null
+    description: string | null
+    moodPresetId: string | null
+    customMood: string | null
+    sceneTag: string | null
+    characterTags: string[]
+  }
+  imagePromptStatus: Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>
+  imagePrompts: Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null }>
+  videoPrompt: { trackId: string | null; coreText: string | null }
 }
 
 function asCandidate(candidate: Record<string, unknown>): RemakeKeyframeCandidate {
@@ -120,6 +132,31 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
     slots,
     actionSheet: generation?.actionSheet ?? { status: 'waiting', id: null, mediaId: null, fingerprint: null },
     videoPromptStatus,
+    semantics: shot.semantics ?? {
+      shotType: null,
+      cameraMove: null,
+      description: null,
+      moodPresetId: null,
+      customMood: null,
+      sceneTag: null,
+      characterTags: [],
+    },
+    imagePromptStatus: Object.fromEntries(REMAKE_KEYFRAME_SLOTS.map((slot) => {
+      const track = prompt.find((candidate) => candidate.targetKey === `image:${slot}`)
+      const status = track?.needsReview ? 'needs_review' : track?.adoptedVersion ? 'approved' : 'missing'
+      return [slot, status]
+    })) as Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>,
+    imagePrompts: Object.fromEntries(REMAKE_KEYFRAME_SLOTS.map((slot) => {
+      const track = prompt.find((candidate) => candidate.targetKey === `image:${slot}`)
+      return [slot, {
+        trackId: track?.id ?? null,
+        coreText: (track?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,
+      }]
+    })) as Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null }>,
+    videoPrompt: {
+      trackId: videoTrack?.id ?? null,
+      coreText: (videoTrack?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,
+    },
   }
 }
 
