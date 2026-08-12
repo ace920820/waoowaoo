@@ -99,16 +99,21 @@ function ShotBlock({ projectId, shot }: { projectId: string; shot: RemakeShotVie
     middle: 1,
     end: 1,
   })
-  // 默认选中逻辑：第一个已批准 → 第一个待审核 → 第一个未分析
-  const defaultSlot: RemakeKeyframeSlot = (() => {
-    const statuses = shot.imagePromptStatus
+  // 根据 prompt 状态计算默认选中的槽位：第一个已批准 → 第一个待审核 → 第一个（start）
+  function computeDefaultSlot(s: RemakeShotView): RemakeKeyframeSlot {
+    const statuses = s.imagePromptStatus
     const approved = REMAKE_KEYFRAME_SLOTS.find((slot) => statuses[slot] === 'approved')
     if (approved) return approved
     const pending = REMAKE_KEYFRAME_SLOTS.find((slot) => statuses[slot] === 'needs_review')
     if (pending) return pending
     return 'start'
-  })()
-  const [selectedSourceSlot, setSelectedSourceSlot] = useState<RemakeKeyframeSlot>(defaultSlot)
+  }
+  const [selectedSourceSlot, setSelectedSourceSlot] = useState<RemakeKeyframeSlot>(() => computeDefaultSlot(shot))
+
+  // 切换镜头时，根据新镜头的 prompt 状态重新选中默认槽位
+  useEffect(() => {
+    setSelectedSourceSlot(computeDefaultSlot(shot))
+  }, [shot.id])
   const [pendingSlot, setPendingSlot] = useState<RemakeKeyframeSlot | null>(null)
   const [hints, setHints] = useState<Record<RemakeKeyframeSlot, string | null>>({
     start: null,
