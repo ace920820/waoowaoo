@@ -182,6 +182,48 @@ function VideoShotCard({
   const [confirmingReplace, setConfirmingReplace] = useState(false)
   const [pendingAdoptVersionId, setPendingAdoptVersionId] = useState<string | null>(null)
 
+  // Video prompt editing state
+  const [editingPrompt, setEditingPrompt] = useState(false)
+  const [promptEditText, setPromptEditText] = useState(shot.videoPrompt.coreText ?? '')
+  const [savingPrompt, setSavingPrompt] = useState(false)
+  const [promptError, setPromptError] = useState<string | null>(null)
+
+  // Sync prompt text when shot changes
+  useEffect(() => {
+    setPromptEditText(shot.videoPrompt.coreText ?? '')
+    setEditingPrompt(false)
+    setPromptError(null)
+  }, [shot.id, shot.videoPrompt.coreText])
+
+  const handleSavePrompt = useCallback(async () => {
+    if (!shot.videoPrompt.trackId || !promptEditText.trim()) return
+    setSavingPrompt(true)
+    setPromptError(null)
+    try {
+      const res = await fetch(
+        `/api/remake-projects/${encodeURIComponent(projectId)}/prompts/tracks/${encodeURIComponent(shot.videoPrompt.trackId)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'human_edit_and_adopt',
+            coreText: promptEditText.trim(),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || data.details || '保存失败')
+      }
+      setEditingPrompt(false)
+      onGenerated()
+    } catch (err) {
+      setPromptError(err instanceof Error ? err.message : '保存失败')
+    } finally {
+      setSavingPrompt(false)
+    }
+  }, [shot.videoPrompt.trackId, promptEditText, projectId, onGenerated])
+
   // Model + capability state
   const [selectedModel, setSelectedModel] = useState(defaultVideoModel)
   useEffect(() => {
@@ -518,21 +560,107 @@ function VideoShotCard({
           </InputGroup>
 
           <InputGroup
+            title="Video Prompt"
+            description={`当前采用版本。${input.videoPrompt === 'needs_review' ? '上游变化后需复核。' : ''}`}
+          >
+            {shot.videoPrompt.trackId && shot.videoPrompt.coreText ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-medium rounded px-2 py-0.5 ${
+                    input.videoPrompt === 'approved'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : input.videoPrompt === 'needs_review'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {input.videoPrompt === 'approved' ? '已批准' : input.videoPrompt === 'needs_review' ? '需复核' : '缺失'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPrompt((v) => !v)}
+                    data-testid="edit-prompt-button"
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                  >
+                    {editingPrompt ? '收起' : '编辑'}
+                  </button>
+                </div>
+                {editingPrompt ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={promptEditText}
+                      onChange={(e) => setPromptEditText(e.target.value)}
+                      data-testid="prompt-edit-textarea"
+                      rows={6}
+                      className="w-full rounded border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-indigo-400 focus:outline-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSavePrompt}
+                        disabled={savingPrompt || !promptEditText.trim()}
+                        data-testid="save-prompt-button"
+                        className={`rounded px-3 py-1.5 text-xs font-medium ${
+                          savingPrompt || !promptEditText.trim()
+                            ? 'bg-slate-200 text-slate-500'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        {savingPrompt ? '保存中...' : '保存并采用'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPromptEditText(shot.videoPrompt.coreText ?? '')
+                          setEditingPrompt(false)
+                        }}
+                        className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    {promptError && (
+                      <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {promptError}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
+                    {shot.videoPrompt.coreText}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Missing text="暂无已采用的 Video Prompt" />
+            )}
+          </InputGroup>
+
+          <InputGroup
             title="动作表参考（可选）"
-            description="原始三帧动作表，作为可选附加输入。"
+            description="原始三帧纵向拼接图，Start → Middle → End，从上到下。"
           >
             {input.actionSheet.status === 'current' && input.actionSheet.mediaId ? (
-              <label className="flex items-center gap-2 text-xs text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={selected.includeActionSheet}
-                  onChange={toggleActionSheet}
-                  data-testid="ref-action-sheet"
-                />
-                <span>包含动作表（附加参考）</span>
-              </label>
+              <div className="space-y-2">
+                <div className="relative overflow-hidden rounded border border-slate-200">
+                  <img
+                    src={mediaUrl(projectId, input.actionSheet.mediaId) || ''}
+                    alt="动作表"
+                    className="w-full object-cover"
+                    data-testid="action-sheet-image"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={selected.includeActionSheet}
+                    onChange={toggleActionSheet}
+                    data-testid="ref-action-sheet"
+                  />
+                  <span>包含动作表（附加参考输入）</span>
+                </label>
+              </div>
             ) : (
-              <Missing text={`动作表状态：${input.actionSheet.status === 'missing' ? '缺失' : '等待生成'}`} />
+              <Missing text={`动作表状态：${input.actionSheet.status === 'missing' ? '缺失' : '等待生成中...'}`} />
             )}
           </InputGroup>
 
