@@ -25,6 +25,32 @@ function mediaUrl(projectId: string, mediaId: string | null | undefined) {
   return mediaId ? `/api/remake-projects/${encodeURIComponent(projectId)}/scenedetect/media/${encodeURIComponent(mediaId)}` : null
 }
 
+/**
+ * Prompt 状态角标 —— 参考 prompt 分析页的状态配色
+ */
+function PromptStatusBadge({ status }: { status: 'approved' | 'missing' | 'needs_review' }) {
+  const config = (() => {
+    switch (status) {
+      case 'approved':
+        return { label: '已批准', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' }
+      case 'needs_review':
+        return { label: '待审核', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' }
+      case 'missing':
+      default:
+        return { label: '未分析', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' }
+    }
+  })()
+
+  return (
+    <div
+      className={`absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${config.bg} ${config.text}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+      {config.label}
+    </div>
+  )
+}
+
 export default function RemakeStoryboardStage({ projectId, snapshot }: { projectId: string; snapshot: RemakeSnapshot }) {
   const shots = useMemo(() => adaptRemakeShots(snapshot), [snapshot])
   const [selectedShotId, setSelectedShotId] = useState(shots[0]?.id ?? '')
@@ -73,7 +99,16 @@ function ShotBlock({ projectId, shot }: { projectId: string; shot: RemakeShotVie
     middle: 1,
     end: 1,
   })
-  const [selectedSourceSlot, setSelectedSourceSlot] = useState<RemakeKeyframeSlot>('start')
+  // 默认选中逻辑：第一个已批准 → 第一个待审核 → 第一个未分析
+  const defaultSlot: RemakeKeyframeSlot = (() => {
+    const statuses = shot.imagePromptStatus
+    const approved = REMAKE_KEYFRAME_SLOTS.find((slot) => statuses[slot] === 'approved')
+    if (approved) return approved
+    const pending = REMAKE_KEYFRAME_SLOTS.find((slot) => statuses[slot] === 'needs_review')
+    if (pending) return pending
+    return 'start'
+  })()
+  const [selectedSourceSlot, setSelectedSourceSlot] = useState<RemakeKeyframeSlot>(defaultSlot)
   const [pendingSlot, setPendingSlot] = useState<RemakeKeyframeSlot | null>(null)
   const [hints, setHints] = useState<Record<RemakeKeyframeSlot, string | null>>({
     start: null,
@@ -353,7 +388,7 @@ function TwoRowGrid({
                 onClick={handleFrameClick}
                 className="block w-full text-left"
               >
-                <div className="overflow-hidden rounded bg-slate-100" style={{ aspectRatio: '16 / 9' }}>
+                <div className="relative overflow-hidden rounded bg-slate-100" style={{ aspectRatio: '16 / 9' }}>
                   {column.original.mediaUrl ? (
                     <img
                       src={column.original.mediaUrl}
@@ -365,6 +400,8 @@ function TwoRowGrid({
                       原始帧缺失
                     </div>
                   )}
+                  {/* Prompt 状态角标 */}
+                  <PromptStatusBadge status={shot.imagePromptStatus[column.slot]} />
                 </div>
               </button>
               <div className="mt-2 flex items-center justify-between gap-2">
