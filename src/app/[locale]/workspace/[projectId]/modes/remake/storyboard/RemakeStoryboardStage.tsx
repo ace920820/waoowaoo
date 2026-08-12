@@ -93,7 +93,6 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
                 }`}
               >
                 <strong>{shot.label}</strong>
-                <span className="mt-1 block text-xs text-slate-500">{shot.stableId}</span>
               </button>
             ))}
           </aside>
@@ -212,7 +211,7 @@ function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string;
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <h3 className="text-lg font-bold text-slate-900">
-            {shot.label} · {shot.stableId}
+            {shot.label}
           </h3>
           <p className="text-xs text-slate-500">Revision {shot.revision ?? '-'} · 原始证据不可覆盖</p>
         </div>

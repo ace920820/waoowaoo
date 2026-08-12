@@ -122,7 +122,7 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
   return {
     id: shot.id,
     stableId: shot.stableKey,
-    label: `Shot #${shot.sequence ?? '-'}`,
+    label: `镜头${String(shot.sequence ?? 1).padStart(2, '0')}`,
     sequence: shot.sequence,
     revision: shot.currentRevision ?? null,
     reviewStatus: shot.reviewStatus,
