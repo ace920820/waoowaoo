@@ -62,6 +62,25 @@ export type RemakeSnapshot = {
       actionSheet: { status: 'current' | 'missing' | 'waiting'; id: string | null; mediaId: string | null; fingerprint: string | null }
       history: Array<{ id: string; revisionId: string; mediaId: string | null; fingerprint: string | null; invalidated: boolean }>
     }
+    videoGeneration?: {
+      track: {
+        id: string
+        adoptedVersionId: string | null
+        hasInvalidated: boolean
+        batches: Array<{
+          id: string
+          operationKey: string
+          versions: Array<{
+            id: string
+            ordinal: number
+            mediaUrl: string | null
+            status: string
+            invalidated: boolean
+            note: string | null
+          }>
+        }>
+      } | null
+    }
     promptTracks?: PromptTrackSummary[]
     revisions: Array<{ id: string; revision: number; changeReason: string; sourceRevision?: number | null; lifecycleState?: string; payload?: unknown; keyframeMediaRefs?: unknown }>
     provenance: Array<{ id: string; schema: string; executor: string; capability: string }>

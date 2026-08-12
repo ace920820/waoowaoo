@@ -140,6 +140,13 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
                       invalidations: true,
                     },
                   },
+                  videoTracks: {
+                    include: {
+                      batches: { include: { versions: { include: { outputVersion: true } } } },
+                      adoptionEvents: true,
+                      invalidations: true,
+                    },
+                  },
                 },
               },
               provenance: true,
@@ -288,6 +295,39 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         })(),
         history: actionSheets.map((output) => ({ id: output.id, revisionId: output.revisionId, mediaId: output.mediaId ?? null, fingerprint: output.fingerprint, invalidated: Boolean(output.invalidatedAt) })),
       },
+      videoGeneration: (() => {
+        const videoTracks = ((current?.videoTracks as Row[] | undefined) ?? [])
+        const track = videoTracks[0]
+        if (!track) {
+          return { track: null }
+        }
+        const batches = ((track.batches as Row[] | undefined) ?? []).map((batch) => ({
+          id: batch.id,
+          operationKey: batch.operationKey,
+          versions: ((batch.versions as Row[] | undefined) ?? []).map((version) => {
+            const outputVersion = (version.outputVersion as Row | undefined)
+            return {
+              id: version.id,
+              ordinal: version.ordinal,
+              mediaUrl: mediaUrl(input.projectId, outputVersion?.mediaId),
+              status: outputVersion?.status ?? 'pending',
+              invalidated: Boolean(outputVersion?.invalidatedAt),
+              note: version.note ?? null,
+            }
+          }),
+        }))
+        const hasInvalidated = batches.some((batch) =>
+          batch.versions.some((version) => version.invalidated),
+        )
+        return {
+          track: {
+            id: track.id,
+            adoptedVersionId: track.adoptedVersionId ?? null,
+            hasInvalidated,
+            batches,
+          },
+        }
+      })(),
       promptTracks: ((shot.promptTracks as Row[] | undefined) ?? []).map((track) => {
         const versions = (track.versions as Row[] | undefined) ?? []
         const latest = versions[0]

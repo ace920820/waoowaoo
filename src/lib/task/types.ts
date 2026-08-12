@@ -87,6 +87,7 @@ export const TASK_TYPE = {
   REMAKE_VIDEO_PROMPT_ANALYZE: 'remake_video_prompt_analyze',
   REMAKE_KEYFRAME_IMAGE_GENERATE: 'remake_keyframe_image_generate',
   REMAKE_KEYFRAME_ACTION_SHEET: 'remake_keyframe_action_sheet',
+  REMAKE_VIDEO_GENERATE: 'remake_video_generate',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

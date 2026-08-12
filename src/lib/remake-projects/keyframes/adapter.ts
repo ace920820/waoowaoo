@@ -65,6 +65,26 @@ export type RemakeShotView = {
   imagePromptStatus: Record<'start' | 'middle' | 'end', 'approved' | 'missing' | 'needs_review'>
   imagePrompts: Record<'start' | 'middle' | 'end', { trackId: string | null; coreText: string | null; negativeConstraints: string[] }>
   videoPrompt: { trackId: string | null; coreText: string | null }
+  durationSeconds: number
+  videoGeneration: {
+    track: {
+      id: string | null
+      adoptedVersionId: string | null
+      hasInvalidated: boolean
+      batches: Array<{
+        id: string
+        operationKey: string
+        versions: Array<{
+          id: string
+          ordinal: number
+          mediaUrl: string | null
+          status: string
+          invalidated: boolean
+          note: string | null
+        }>
+      }>
+    } | null
+  }
 }
 
 function asCandidate(candidate: Record<string, unknown>): RemakeKeyframeCandidate {
@@ -170,6 +190,39 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
       trackId: videoTrack?.id ?? null,
       coreText: (videoTrack?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,
     },
+    durationSeconds: typeof shot.timeRange?.start === 'number' && typeof shot.timeRange?.end === 'number'
+      ? Math.max(0.1, shot.timeRange.end - shot.timeRange.start)
+      : 3,
+    videoGeneration: (() => {
+      const vg = shot.videoGeneration as { track?: { id?: string; adoptedVersionId?: string; hasInvalidated?: boolean; batches?: unknown[] } } | undefined
+      const track = vg?.track
+      const batches = (track?.batches ?? []) as Array<{
+        id?: string
+        operationKey?: string
+        versions?: Array<{ id?: string; ordinal?: number; mediaUrl?: string | null; status?: string; invalidated?: boolean; note?: string | null }>
+      }>
+      return {
+        track: track
+          ? {
+              id: track.id ?? null,
+              adoptedVersionId: track.adoptedVersionId ?? null,
+              hasInvalidated: Boolean(track.hasInvalidated),
+              batches: batches.map((batch) => ({
+                id: batch.id ?? '',
+                operationKey: batch.operationKey ?? batch.id ?? '',
+                versions: (batch.versions ?? []).map((v) => ({
+                  id: v.id ?? '',
+                  ordinal: Number(v.ordinal ?? 0),
+                  mediaUrl: v.mediaUrl ?? null,
+                  status: v.status ?? 'pending',
+                  invalidated: Boolean(v.invalidated),
+                  note: v.note ?? null,
+                })),
+              })),
+            }
+          : null,
+      }
+    })(),
   }
 }
 

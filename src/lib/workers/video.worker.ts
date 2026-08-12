@@ -28,6 +28,7 @@ import {
 } from '@/lib/novel-promotion/panel-speech-plan'
 import { buildShotGroupVideoPrompt } from '@/lib/shot-group/prompt'
 import { parseShotGroupDraftMetadata, type ShotGroupAssetBindingReference } from '@/lib/shot-group/draft-metadata'
+import { handleRemakeVideoTask } from './handlers/remake-video'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import {
   deriveShotGroupModeFlags,
@@ -845,6 +846,8 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handleShotGroupVideoTask(job)
     case TASK_TYPE.LIP_SYNC:
       return await handleLipSyncTask(job)
+    case TASK_TYPE.REMAKE_VIDEO_GENERATE:
+      return await handleRemakeVideoTask(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }

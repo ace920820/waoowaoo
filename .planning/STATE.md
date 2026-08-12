@@ -6,13 +6,13 @@ current_phase: 08
 current_phase_name: keyframe-generation
 status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-08-12T11:21:13.209Z"
+last_updated: "2026-08-12T13:35:02.579Z"
 last_activity: 2026-08-11
 last_activity_desc: Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 26
+  total_plans: 30
   completed_plans: 23
   percent: 40
 ---
@@ -141,7 +141,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 
 Phase: 08 (keyframe-generation) — EXECUTING
 Plan: 8 of 8
-Status: Executing Phase 08
+Status: Ready to execute
 Last activity: 2026-08-11 — Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
 
 Progress: [██████████] 100%

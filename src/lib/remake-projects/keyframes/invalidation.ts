@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { invalidateRemakeVideoVersions } from '../video/invalidation'
 import type { Prisma } from '@prisma/client'
 
 
@@ -56,6 +57,14 @@ export async function invalidateKeyframeOutputsForRevision(input: {
       })
       created += 1
     }
+    // Also propagate invalidation to video versions that reference these outputs (D-17)
+    await invalidateRemakeVideoVersions({
+      tx,
+      shotId: input.shotId,
+      revisionId: input.revisionId,
+      reason: input.reason,
+    })
+
     return { invalidated: created }
   }
 
