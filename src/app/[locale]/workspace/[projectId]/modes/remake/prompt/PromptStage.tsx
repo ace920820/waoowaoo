@@ -49,9 +49,6 @@ export function PromptStage({ projectId, snapshot, onEnterStoryboard, selectedSh
   const analyzedKeyframes = snapshot.shots.flatMap((shot) => slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))).filter((track) => Boolean(track?.latestVersion)).length
   const approvedPrompts = allTracks.filter((track) => Boolean(track.adoptedVersion)).length
   const pendingReview = allTracks.filter((track) => stateFor(track) === 'pending_review').length
-  // 进入分镜的前提是原始镜头已通过审核门（关键帧完整且 revision 有效）。
-  // 单槽位 Prompt 是否已批准只影响该槽位的「用于生成」选择，不阻塞进入分镜。
-  const eligibleShots = snapshot.shots.filter((shot) => Boolean(shot.review?.promptEligible)).length
   const running = snapshot.tasks.filter((task) => ['queued', 'processing', 'running'].includes(task.status) && task.type.includes('prompt')).length
   const filteredShots = useMemo(() => snapshot.shots.filter((shot) => {
     const matches = `${shot.sequence ?? ''} ${shot.stableKey}`.toLowerCase().includes(query.toLowerCase())
@@ -68,19 +65,17 @@ export function PromptStage({ projectId, snapshot, onEnterStoryboard, selectedSh
   if (!selectedShot) return <section className="py-20 text-center text-slate-400">{t('noPromptEligibleShot')}</section>
 
   return <section className="space-y-6 pb-12" data-testid="remake-prompt-stage">
-    <div className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
-      <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-        <div className="space-y-1.5"><div className="flex items-center gap-2"><span className="rounded-lg bg-indigo-600 p-1.5 text-white"><AppIcon name="sparkles" size={20} /></span><h2 className="text-xl font-bold text-slate-900">{t('promptTitle')}</h2></div><p className="max-w-2xl text-xs leading-relaxed text-slate-500">{t('promptSubtitle')}</p></div>
-        <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3 py-1.5 text-xs text-slate-700"><span className={`h-2 w-2 rounded-full ${running ? 'bg-blue-500' : 'bg-slate-400'}`} />{t('tasks')}: {running} {t('running')}</div><button type="button" onClick={onEnterStoryboard} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white" data-testid="remake-enter-storyboard">进入分镜 <AppIcon name="arrowRight" size={14} /></button></div>
+    <div className="rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div className="space-y-1"><div className="flex items-center gap-2"><span className="rounded-lg bg-indigo-600 p-1.5 text-white"><AppIcon name="sparkles" size={20} /></span><h2 className="text-xl font-bold text-slate-900">{t('promptTitle')}</h2></div><p className="max-w-2xl text-xs leading-relaxed text-slate-500">{t('promptSubtitle')}</p></div>
+        <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3 py-1.5 text-xs text-slate-700"><span className={`h-2 w-2 rounded-full ${running ? 'bg-blue-500' : 'bg-slate-400'}`} />{t('tasks')}: {running} {t('running')}</div></div>
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-4">
         <Metric label={t('shots')} value={`${snapshot.shots.length}`} detail={t('shot')} />
         <Metric label={`${t('imagePrompt')} ${t('running')}`} value={`${analyzedKeyframes} / ${totalKeyframes}`} detail={`(${Math.round(analyzedKeyframes / Math.max(totalKeyframes, 1) * 100)}%)`} />
         <Metric label={`${t('prompt')} ${t('approved')}`} value={`${approvedPrompts} / ${allTracks.length}`} detail={`(${Math.round(approvedPrompts / Math.max(allTracks.length, 1) * 100)}%)`} />
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3"><div className="flex items-center gap-1 text-[11px] font-medium text-indigo-700"><AppIcon name="bolt" size={12} />{t('pendingReview')}: {pendingReview}</div><div className="mt-1 text-xs text-indigo-900/80">{t('videoProjectActionHint')}</div></div>
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3"><div className="flex items-center gap-1 text-[11px] font-medium text-indigo-700"><AppIcon name="bolt" size={12} />{t('pendingReview')}: {pendingReview}</div></div>
       </div>
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5 text-xs text-amber-900"><AppIcon name="info" size={16} className="shrink-0 text-amber-600" />{t('videoProjectActionHint')}</div>
-      <p className="text-xs text-slate-500" data-testid="remake-storyboard-eligibility">可生成 {eligibleShots} / {snapshot.shots.length} 个 Shot</p>
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -93,6 +88,9 @@ export function PromptStage({ projectId, snapshot, onEnterStoryboard, selectedSh
         <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-r from-white via-indigo-50/20 to-white p-4 shadow-sm"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">Shot #{selectedShot.sequence ?? '-'}</span><h3 className="text-base font-bold text-slate-900">{selectedShot.stableKey}</h3></div><p className="mt-1 text-xs text-slate-500">{String(selectedShot.timeRange?.start ?? '-')} - {String(selectedShot.timeRange?.end ?? '-')}</p></div><button type="button" disabled={analyze.isPending || !selectedShot.review?.promptEligible} onClick={analyzeVideo} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><AppIcon name="bolt" size={16} className="text-amber-300" />{t('analyzeVideo')}</button></div></div>
         <div><div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><AppIcon name="layers" size={16} className="text-indigo-600" />{t('imagePrompt')} (Start / Middle / End)</h4><span className="text-xs text-slate-400">{t('imageProgress', { count: analyzedKeyframes })}</span></div><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><PromptImageTab projectId={projectId} shot={selectedShot} tasks={snapshot.tasks} /></div></div>
         <PromptVideoTab projectId={projectId} shot={selectedShot} task={snapshot.tasks.find((task) => task.type === 'remake_video_prompt_analyze' && ['queued', 'processing', 'running', 'failed'].includes(task.status)) ?? null} onAnalyzeVideo={analyzeVideo} isAnalyzing={analyze.isPending} />
+        <div className="flex justify-end">
+          <button type="button" onClick={onEnterStoryboard} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white" data-testid="remake-enter-storyboard">进入分镜 <AppIcon name="arrowRight" size={14} /></button>
+        </div>
       </div>
     </div>
   </section>

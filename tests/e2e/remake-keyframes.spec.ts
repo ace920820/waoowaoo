@@ -38,7 +38,7 @@ test.describe('Remake keyframe real-route acceptance', () => {
   test('keeps Prompt, Storyboard, and Video freely reachable; Prompt handoff navigates only', async ({ page }) => {
     const fixture = await openStage(page, 'prompt')
     await expect(page.getByTestId('remake-prompt-stage')).toBeVisible()
-    await expect(page.getByTestId('remake-storyboard-eligibility')).toContainText(/可生成\s+1\s*\/\s*1/)
+    await expect(page.getByTestId('remake-enter-storyboard')).toBeVisible()
     await page.getByRole('button', { name: /进入分镜/i }).click()
     await expect(page.getByTestId('remake-storyboard-stage')).toBeVisible()
     await page.goto(`${baseUrl}/en/workspace/${fixture.projectId}?stage=video`)
