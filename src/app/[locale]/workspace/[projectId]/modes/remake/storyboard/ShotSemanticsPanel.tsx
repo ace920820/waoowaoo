@@ -69,7 +69,10 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
     localMoodPresetId !== (semantics.moodPresetId ?? '') ||
     localCustomMood !== (semantics.customMood ?? '') ||
     localSceneTag !== (semantics.sceneTag ?? '') ||
-    localCharacterTags !== semantics.characterTags.join(', ')
+    localCharacterTags !== semantics.characterTags.join(', ') ||
+    localSceneAssetId !== (semantics.sceneAssetId ?? null) ||
+    JSON.stringify(localCharacterAssetIds) !== JSON.stringify(semantics.characterAssetIds ?? []) ||
+    JSON.stringify(localPropAssetIds) !== JSON.stringify(semantics.propAssetIds ?? [])
   )
 
   const handleSave = () => {
@@ -89,6 +92,11 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
         .filter(Boolean),
     }
     void update.mutateAsync({ shotId: shot.id, patch }).then(() => setEditing(false))
+  }
+
+  // 资产选择确认后立即持久化，避免“确认后未保存、仍显示未选择”。
+  const persistAssetPatch = (patch: Record<string, unknown>) => {
+    void update.mutateAsync({ shotId: shot.id, patch })
   }
 
   const handlePromptSave = async () => {
@@ -357,11 +365,13 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
               if (!editing) return
               setLocalSceneAssetId(assetId)
               setLocalSceneTag(label)
+              persistAssetPatch({ sceneAssetId: assetId, sceneTag: label })
             }}
             onClear={() => {
               if (!editing) return
               setLocalSceneAssetId(null)
               setLocalSceneTag(null as unknown as string)
+              persistAssetPatch({ sceneAssetId: null, sceneTag: null })
             }}
           />
         </Field>
@@ -375,14 +385,24 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
             editing={editing}
             onAddCharacter={(assetId, name) => {
               if (!editing) return
-              setLocalCharacterAssetIds([...localCharacterAssetIds, assetId])
-              if (!localCharacterTags.includes(name)) {
-                setLocalCharacterTags(localCharacterTags ? `${localCharacterTags}, ${name}` : name)
-              }
+              const next = [...localCharacterAssetIds, assetId]
+              const nextTags = localCharacterTags.includes(name) ? localCharacterTags : (localCharacterTags ? `${localCharacterTags}, ${name}` : name)
+              setLocalCharacterAssetIds(next)
+              setLocalCharacterTags(nextTags)
+              persistAssetPatch({
+                characterAssetIds: next.length ? next : null,
+                characterTags: nextTags.split(',').map((item) => item.trim()).filter(Boolean),
+              })
             }}
             onRemoveCharacter={(assetId) => {
               if (!editing) return
-              setLocalCharacterAssetIds(localCharacterAssetIds.filter((id) => id !== assetId))
+              const index = localCharacterAssetIds.indexOf(assetId)
+              const next = localCharacterAssetIds.filter((id) => id !== assetId)
+              const tags = localCharacterTags.split(',').map((item) => item.trim()).filter(Boolean)
+              if (index >= 0) tags.splice(index, 1)
+              setLocalCharacterAssetIds(next)
+              setLocalCharacterTags(tags.join(', '))
+              persistAssetPatch({ characterAssetIds: next.length ? next : null, characterTags: tags })
             }}
           />
         </Field>
@@ -395,11 +415,15 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
             editing={editing}
             onAddProp={(assetId) => {
               if (!editing) return
-              setLocalPropAssetIds([...localPropAssetIds, assetId])
+              const next = [...localPropAssetIds, assetId]
+              setLocalPropAssetIds(next)
+              persistAssetPatch({ propAssetIds: next.length ? next : null })
             }}
             onRemoveProp={(assetId) => {
               if (!editing) return
-              setLocalPropAssetIds(localPropAssetIds.filter((id) => id !== assetId))
+              const next = localPropAssetIds.filter((id) => id !== assetId)
+              setLocalPropAssetIds(next)
+              persistAssetPatch({ propAssetIds: next.length ? next : null })
             }}
           />
         </Field>

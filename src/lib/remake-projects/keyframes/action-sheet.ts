@@ -65,7 +65,7 @@ export async function renderActionSheet(sources: ActionSheetSource[]) {
     const svg = labelSvg(width, labelHeight, panel.label)
     return sharp(panel.input).extend({ top: labelHeight, background: '#111' }).composite([{ input: svg, top: 0, left: 0 }]).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
   }))
-  return sharp({ create: { width: width * labeled.length, height: height + labelHeight, channels: 3, background: '#111' } }).composite(labeled.map((input, index) => ({ input, left: width * index, top: 0 }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+  return sharp({ create: { width, height: (height + labelHeight) * labeled.length, channels: 3, background: '#111' } }).composite(labeled.map((input, index) => ({ input, left: 0, top: (height + labelHeight) * index }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
 }
 
 export async function persistActionSheet(input: {
@@ -74,6 +74,7 @@ export async function persistActionSheet(input: {
   revisionId: string
   confirmed: boolean
   sources: ActionSheetSource[]
+  mediaId?: string | null
   taskId?: string | null
   tx?: unknown
 }) {
@@ -81,8 +82,12 @@ export async function persistActionSheet(input: {
   if (prepared.status !== 'ready') return prepared
   const write = async (tx: Prisma.TransactionClient) => {
     const existing = await tx.remakeOutputVersion.findUnique({ where: { revisionId_kind_fingerprint: { revisionId: input.revisionId, kind: 'action_sheet', fingerprint: prepared.fingerprint } } })
-    if (existing) return { ...prepared, outputVersion: existing, reused: true }
-    const outputVersion = await tx.remakeOutputVersion.create({ data: { shotId: input.shotId, revisionId: input.revisionId, kind: 'action_sheet', fingerprint: prepared.fingerprint, taskId: input.taskId ?? null, status: 'completed', inputSnapshot: prepared.output } })
+    if (existing) {
+      if (existing.mediaId || !input.mediaId) return { ...prepared, outputVersion: existing, reused: true }
+      const backfilled = await tx.remakeOutputVersion.update({ where: { id: existing.id }, data: { mediaId: input.mediaId } })
+      return { ...prepared, outputVersion: backfilled, reused: true }
+    }
+    const outputVersion = await tx.remakeOutputVersion.create({ data: { shotId: input.shotId, revisionId: input.revisionId, kind: 'action_sheet', fingerprint: prepared.fingerprint, taskId: input.taskId ?? null, mediaId: input.mediaId ?? null, status: 'completed', inputSnapshot: prepared.output } })
     await tx.remakeProvenanceRecord.create({ data: { shotId: input.shotId, outputVersionId: outputVersion.id, schema: ACTION_SHEET_RENDERER_VERSION, executor: 'deterministic-sharp', capability: 'remake.keyframe.action_sheet', payload: JSON.stringify(prepared.output) } })
     return { ...prepared, outputVersion, reused: false }
   }

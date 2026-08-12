@@ -1,48 +1,59 @@
-import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-describe('Keyframe generation model resolution (service contract)', () => {
-  const servicePath = resolve(process.cwd(), 'src/lib/remake-projects/keyframes/service.ts')
-  const source = readFileSync(servicePath, 'utf8')
-
-  it('buildKeyframeGenerationSubmission 的 model 参数可选', () => {
-    const match = source.match(
-      /export async function buildKeyframeGenerationSubmission\(input:\s*\{([^}]+)\}/,
-    )
-    expect(match).toBeTruthy()
-    const params = match![1]
-    // model 不是必填（没有单独的 model: string 行，而是可选或有默认值）
-    // 检查是否有 model 相关的解析逻辑
-    expect(params).toContain('model')
-  })
-
-  it('当 model 为空时回退到项目 storyboardModel', () => {
-    // service 应该调用 getRemakeProjectModelConfig 或类似函数获取项目默认模型
-    expect(source).toMatch(/storyboardModel|getProjectModelConfig|getRemake.*Model/)
-  })
-
-  it('没有可用 model 时抛出明确错误', () => {
-    expect(source).toMatch(/MODEL_NOT_CONFIGURED|MODEL_REQUIRED|storyboard model|分镜模型/)
-  })
+const mocks = vi.hoisted(() => {
+  const resolveProjectModelCapabilityGenerationOptions = vi.fn(async () => ({ resolution: '1024x1024' }))
+  const getProjectModelConfig = vi.fn(async () => ({ storyboardModel: 'project::storyboard-model' }))
+  const getUserModelConfig = vi.fn(async () => ({ storyboardModel: 'user::storyboard-model' }))
+  return {
+    resolveProjectModelCapabilityGenerationOptions,
+    getProjectModelConfig,
+    getUserModelConfig,
+    getAdoptedPromptForGeneration: vi.fn(async () => ({ id: '55555555-5555-4555-8555-555555555555', integratedGenerationPrompt: 'a prompt' })),
+    projectFindFirst: vi.fn(async () => ({ id: '11111111-1111-4111-8111-111111111111' })),
+    shotFindFirst: vi.fn(async () => ({
+      id: '33333333-3333-4333-8333-333333333333', currentRevision: 1, stableKey: 'shot-1', remakeProjectId: '22222222-2222-4222-8222-222222222222',
+      remakeProject: { currentSource: { sourceRevision: 1 } },
+      revisions: [{ id: '44444444-4444-4444-8444-444444444444', revision: 1, sourceRevision: 1, lifecycleState: 'active' }],
+    })),
+    trackFindUnique: vi.fn(async () => ({ id: 'track-1', selectedForGeneration: true })),
+  }
 })
 
-describe('Keyframe generation API route (model optional)', () => {
-  const routePath = resolve(
-    process.cwd(),
-    'src/app/api/remake-projects/[projectId]/keyframes/route.ts',
-  )
-  const source = readFileSync(routePath, 'utf8')
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    project: { findFirst: mocks.projectFindFirst },
+    remakeShot: { findFirst: mocks.shotFindFirst },
+    remakeKeyframeTrack: { findUnique: mocks.trackFindUnique },
+  },
+}))
+vi.mock('@/lib/config-service', () => ({
+  getProjectModelConfig: mocks.getProjectModelConfig,
+  getUserModelConfig: mocks.getUserModelConfig,
+  resolveProjectModelCapabilityGenerationOptions: mocks.resolveProjectModelCapabilityGenerationOptions,
+}))
+vi.mock('@/lib/remake-projects/prompt/service', () => ({ getAdoptedPromptForGeneration: mocks.getAdoptedPromptForGeneration }))
+vi.mock('@/lib/storage', () => ({ getSignedUrl: vi.fn(() => '/signed') }))
+vi.mock('@/lib/media/service', () => ({ resolveMediaRef: vi.fn() }))
 
-  it('generateSchema 的 model 字段可选', () => {
-    // 从 z.string().trim().min(1) 改为 z.string().trim().min(1).optional()
-    // 或 z.string().trim().min(1).nullable() 或从 schema 中移除
-    const match = source.match(/model:\s*z\.string\(\)\.trim\(\)\.min\(1\)(\s*\)?)/)
-    // 如果有 .optional() 或 .nullable() 或完全没有 model 字段，都算通过
-    const hasOptional = source.match(/model:.*\.optional\(\)/)
-    const hasNullable = source.match(/model:.*\.nullable\(\)/)
-    const isOptional = hasOptional || hasNullable
-    // 也可能已经改了默认值处理
-    expect(Boolean(isOptional || source.includes('model?.trim') || source.includes('model ||'))).toBe(true)
+describe('keyframe model resolution', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const base = {
+    projectId: '11111111-1111-4111-8111-111111111111', userId: 'user-1', shotId: '33333333-3333-4333-8333-333333333333', slot: 'start',
+    operationKey: 'generate-1', count: 1, options: {},
+    referenceMediaIds: [],
+  }
+
+  it('uses the project storyboardModel over the user model', async () => {
+    const { buildKeyframeGenerationSubmission } = await import('@/lib/remake-projects/keyframes/service')
+    await buildKeyframeGenerationSubmission({ ...base, model: '' })
+    expect(mocks.getProjectModelConfig).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'user-1')
+    expect(mocks.resolveProjectModelCapabilityGenerationOptions).toHaveBeenCalledWith(expect.objectContaining({ modelKey: 'project::storyboard-model' }))
+  })
+
+  it('explicit model takes precedence over project config', async () => {
+    const { buildKeyframeGenerationSubmission } = await import('@/lib/remake-projects/keyframes/service')
+    await buildKeyframeGenerationSubmission({ ...base, model: 'explicit::model' })
+    expect(mocks.resolveProjectModelCapabilityGenerationOptions).toHaveBeenCalledWith(expect.objectContaining({ modelKey: 'explicit::model' }))
   })
 })

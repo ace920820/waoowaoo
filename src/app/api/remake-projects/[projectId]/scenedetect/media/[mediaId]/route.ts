@@ -30,8 +30,8 @@ function resolveRange(raw: string | null, size: number): { start: number; end: n
 async function locate(projectId: string, mediaId: string): Promise<MediaRef | null> {
   const remake = await prisma.remakeProject.findUnique({
     where: { projectId },
-    include: { currentSource: true, shots: { include: { revisions: { orderBy: { revision: 'desc' } } } } },
-  }) as unknown as { currentSource?: Record<string, unknown> | null; shots?: Array<{ revisions?: Array<Record<string, unknown>> }> } | null
+    include: { currentSource: true, shots: { include: { revisions: { orderBy: { revision: 'desc' } }, outputs: true } } },
+  }) as unknown as { currentSource?: Record<string, unknown> | null; shots?: Array<{ revisions?: Array<Record<string, unknown>>; outputs?: Array<Record<string, unknown>> }> } | null
   if (!remake) return null
   const source = remake.currentSource
   if (source && source.status !== 'retired' && (source.mediaId === mediaId || source.id === mediaId) && typeof source.storageKey === 'string') {
@@ -51,6 +51,15 @@ async function locate(projectId: string, mediaId: string): Promise<MediaRef | nu
     const mediaIds = parseRefs(payload.mediaIds)
     const mediaRole = Object.entries(mediaIds).find(([, id]) => id === mediaId)?.[0]
     if (mediaRole && refs[mediaRole]) return { key: refs[mediaRole], contentType: 'image/jpeg' }
+    // Output versions (e.g. action-sheet composites / generated keyframe candidates) store
+    // a registered MediaObject id in `mediaId`. Resolve it to its storage key.
+    for (const output of shot.outputs || []) {
+      if (output.mediaId === mediaId) {
+        const media = await getMediaObjectById(mediaId)
+        if (media?.storageKey) return { key: media.storageKey, contentType: media.mimeType || 'image/jpeg' }
+        return null
+      }
+    }
   }
   return null
 }
