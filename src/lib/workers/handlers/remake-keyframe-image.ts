@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq'
 import { normalizeReferenceImagesForGeneration } from '@/lib/media/outbound-image'
+import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { parseRemakeKeyframeTaskPayload } from '@/lib/remake-projects/keyframes/task-contract'
 import {
   appendKeyframeGenerationBatch,
@@ -18,7 +19,7 @@ export async function handleRemakeKeyframeImageTask(job: Job<TaskJobData>) {
 
   const references = await resolveKeyframeReferenceStorageKeys(snapshot)
   const normalizedReferences = await normalizeReferenceImagesForGeneration(references)
-  const storageKeys: string[] = []
+  const mediaIds: string[] = []
   for (let ordinal = 1; ordinal <= snapshot.requestedCandidateCount; ordinal++) {
     await reportTaskProgress(job, 15 + Math.floor(((ordinal - 1) / snapshot.requestedCandidateCount) * 70), {
       stage: 'generate_remake_keyframe_candidate',
@@ -30,10 +31,11 @@ export async function handleRemakeKeyframeImageTask(job: Job<TaskJobData>) {
       prompt: snapshot.promptText,
       options: { ...snapshot.options, referenceImages: normalizedReferences },
     })
-    storageKeys.push(await uploadImageSourceToCos(source, `remake/${snapshot.remakeProjectId}/keyframes`, `${job.data.taskId}-${ordinal}`))
+    const storageKey = await uploadImageSourceToCos(source, `remake/${snapshot.remakeProjectId}/keyframes`, `${job.data.taskId}-${ordinal}`)
+    mediaIds.push((await ensureMediaObjectFromStorageKey(storageKey, { mimeType: 'image/jpeg' })).id)
   }
 
   await assertTaskActive(job, 'remake_keyframe_persist')
   await reportTaskProgress(job, 90, { stage: 'persist_remake_keyframe_candidates' })
-  return await appendKeyframeGenerationBatch({ taskId: job.data.taskId, operationKey: payload.operationKey, inputSnapshot: snapshot, inputFingerprint: payload.inputFingerprint, storageKeys })
+  return await appendKeyframeGenerationBatch({ taskId: job.data.taskId, operationKey: payload.operationKey, inputSnapshot: snapshot, inputFingerprint: payload.inputFingerprint, mediaIds })
 }

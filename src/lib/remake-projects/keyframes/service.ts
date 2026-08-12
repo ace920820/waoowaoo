@@ -182,11 +182,11 @@ export async function appendKeyframeGenerationBatch(input: {
   operationKey: string
   inputSnapshot: KeyframeInputSnapshot
   inputFingerprint: string
-  storageKeys: string[]
+  mediaIds: string[]
 }) {
   const snapshot = keyframeInputSnapshotSchema.parse(input.inputSnapshot)
   if (input.inputFingerprint !== keyframeInputFingerprint(snapshot)) throw new Error('REMAKE_KEYFRAME_FINGERPRINT_INVALID')
-  if (input.storageKeys.length !== snapshot.requestedCandidateCount) throw new Error('REMAKE_KEYFRAME_CANDIDATE_COUNT_MISMATCH')
+  if (input.mediaIds.length !== snapshot.requestedCandidateCount) throw new Error('REMAKE_KEYFRAME_CANDIDATE_COUNT_MISMATCH')
   return await prisma.$transaction(async (tx) => {
     await assertKeyframeSubmissionCurrent(snapshot, tx as Client)
     const track = await tx.remakeKeyframeTrack.findUnique({ where: { shotRevisionId_slot: { shotRevisionId: snapshot.shotRevisionId, slot: snapshot.slot } } })
@@ -206,7 +206,7 @@ export async function appendKeyframeGenerationBatch(input: {
         referenceMediaIds: JSON.parse(JSON.stringify(snapshot.referenceMediaIds)),
         requestedCandidateCount: snapshot.requestedCandidateCount,
         candidates: {
-          create: input.storageKeys.map((mediaId, index) => ({
+          create: input.mediaIds.map((mediaId, index) => ({
             ordinal: index + 1,
             outputVersion: {
               create: {

@@ -51,13 +51,13 @@ async function locate(projectId: string, mediaId: string): Promise<MediaRef | nu
     const mediaIds = parseRefs(payload.mediaIds)
     const mediaRole = Object.entries(mediaIds).find(([, id]) => id === mediaId)?.[0]
     if (mediaRole && refs[mediaRole]) return { key: refs[mediaRole], contentType: 'image/jpeg' }
-    // Output versions (e.g. action-sheet composites / generated keyframe candidates) store
-    // a registered MediaObject id in `mediaId`. Resolve it to its storage key.
+    // New output versions store a registered MediaObject id. Older generated
+    // keyframes stored the storage key directly, so keep those records readable.
     for (const output of shot.outputs || []) {
       if (output.mediaId === mediaId) {
         const media = await getMediaObjectById(mediaId)
         if (media?.storageKey) return { key: media.storageKey, contentType: media.mimeType || 'image/jpeg' }
-        return null
+        return { key: mediaId, contentType: 'image/jpeg' }
       }
     }
   }
@@ -68,7 +68,7 @@ async function handler(request: NextRequest, context: { params: Promise<{ projec
   const { projectId, mediaId } = await context.params
   const auth = await requireProjectAuthLight(projectId)
   if (isErrorResponse(auth)) return auth
-  if (!mediaId || mediaId.includes('/') || mediaId.length > 200) throw new ApiError('NOT_FOUND')
+  if (!mediaId || mediaId.length > 512) throw new ApiError('NOT_FOUND')
   const ref = await locate(projectId, mediaId)
   if (!ref) throw new ApiError('NOT_FOUND')
   const bytes = await getObjectBuffer(ref.key)

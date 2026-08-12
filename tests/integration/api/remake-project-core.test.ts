@@ -125,6 +125,39 @@ describe('remake project core', () => {
     expect(JSON.stringify(task)).not.toContain('must-not-leak')
   })
 
+  it('projects keyframe candidate media IDs and opaque media URLs', async () => {
+    prismaMock.project.findUnique.mockResolvedValueOnce({
+      id: 'remake-project-1', name: 'Remake project', description: null, userId: 'user-1', type: 'remake',
+      remakeProject: {
+        importStatus: 'analyzed', currentSource: { sourceRevision: 1 },
+        shots: [{
+          id: 'shot-1', stableKey: 'shot-04', sequence: 4, reviewStatus: 'approved', needsReview: false, currentRevision: 1,
+          outputs: [], provenance: [], promptTracks: [],
+          revisions: [{
+            id: 'revision-1', revision: 1, lifecycleState: 'active', sourceRevision: 1,
+            payload: JSON.stringify({ status: 'keep' }), keyframeMediaRefs: JSON.stringify({ first: 'first', middle: 'middle', last: 'last' }),
+            keyframeTracks: [{
+              id: 'track-middle', slot: 'middle', selectedForGeneration: true, adoptedCandidateId: null, invalidations: [], adoptionEvents: [],
+              batches: [{
+                id: 'batch-middle', operationKey: 'generate-middle', inputFingerprint: 'fingerprint', createdAt: new Date('2026-08-12T00:00:00Z'),
+                candidates: [{ id: 'candidate-middle', ordinal: 1, outputVersionId: 'output-middle', outputVersion: { mediaId: 'media-middle', status: 'completed', invalidatedAt: null } }],
+              }],
+            }],
+          }],
+        }],
+      },
+    } as never)
+    const { getRemakeProjectSnapshot } = await import('@/lib/remake-projects/service')
+
+    const snapshot = await getRemakeProjectSnapshot({ projectId: 'remake-project-1', userId: 'user-1' })
+
+    expect(snapshot?.shots[0]?.keyframeGeneration?.tracks[0]?.batches[0]?.candidates[0]).toMatchObject({
+      mediaId: 'media-middle',
+      mediaUrl: '/api/remake-projects/remake-project-1/scenedetect/media/media-middle',
+      status: 'completed',
+    })
+  })
+
   it('records a new revision and marks affected outputs for review without auto-approval', async () => {
     const { createRemakeShotRevision } = await import('@/lib/remake-projects/service')
 

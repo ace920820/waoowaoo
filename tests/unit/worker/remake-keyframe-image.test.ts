@@ -15,6 +15,9 @@ const service = vi.hoisted(() => ({
   appendKeyframeGenerationBatch: vi.fn(async () => ({ batchId: 'batch-1', candidateIds: ['candidate-1'] })),
   resolveKeyframeReferenceStorageKeys: vi.fn(async () => ['refs/start.png']),
 }))
+const media = vi.hoisted(() => ({
+  ensureMediaObjectFromStorageKey: vi.fn(async (storageKey: string) => ({ id: `media:${storageKey}` })),
+}))
 const progress = vi.hoisted(() => vi.fn(async () => undefined))
 
 vi.mock('@/lib/media/outbound-image', () => ({ normalizeReferenceImagesForGeneration: generation.normalizeReferenceImagesForGeneration }))
@@ -25,6 +28,7 @@ vi.mock('@/lib/workers/utils', () => ({
 }))
 vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: progress }))
 vi.mock('@/lib/remake-projects/keyframes/service', () => service)
+vi.mock('@/lib/media/service', () => media)
 
 const snapshot = {
   projectId: '11111111-1111-4111-8111-111111111111',
@@ -57,14 +61,15 @@ describe('remake keyframe image task', () => {
     expect(descriptor.payload.inputFingerprint).toHaveLength(64)
   })
 
-  it('generates, uploads, and appends one candidate without adopting it', async () => {
+  it('registers uploaded candidates as media objects before appending without adopting', async () => {
     const descriptor = buildRemakeKeyframeTaskDescriptor({ projectId: snapshot.projectId, operationKey: 'generate-1', inputSnapshot: snapshot })
     const { handleRemakeKeyframeImageTask } = await import('@/lib/workers/handlers/remake-keyframe-image')
 
     await expect(handleRemakeKeyframeImageTask(job(descriptor.payload))).resolves.toEqual({ batchId: 'batch-1', candidateIds: ['candidate-1'] })
     expect(service.assertKeyframeSubmissionCurrent).toHaveBeenCalledWith(snapshot)
     expect(generation.resolveImageSourceFromGeneration).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ modelId: snapshot.model.id, prompt: snapshot.promptText }))
-    expect(service.appendKeyframeGenerationBatch).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1', storageKeys: ['generated/task-1-1.png'] }))
+    expect(media.ensureMediaObjectFromStorageKey).toHaveBeenCalledWith('generated/task-1-1.png', { mimeType: 'image/jpeg' })
+    expect(service.appendKeyframeGenerationBatch).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1', mediaIds: ['media:generated/task-1-1.png'] }))
     expect(service.appendKeyframeGenerationBatch).not.toHaveBeenCalledWith(expect.objectContaining({ adopted: true }))
   })
 
