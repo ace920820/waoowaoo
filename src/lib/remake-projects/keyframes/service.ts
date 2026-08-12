@@ -214,7 +214,7 @@ export async function appendKeyframeGenerationBatch(input: {
                 revisionId: snapshot.shotRevisionId,
                 mediaId,
                 kind: 'keyframe_candidate',
-                fingerprint: `${input.inputFingerprint}:${index + 1}`,
+                fingerprint: `${input.operationKey}:${input.inputFingerprint}:${index + 1}`,
                 taskId: input.taskId,
                 inputSnapshot: JSON.parse(JSON.stringify(snapshot)),
                 status: 'completed',

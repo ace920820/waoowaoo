@@ -102,3 +102,8 @@ blocked: 0
   missing: []
   debug_session: ""
 
+
+## Fix note (generation)
+- 分镜页生成失败：开发 Redis(16379) 未运行导致任务无法入队；已启动 Redis 并重启 dev 栈。
+- 二次生成同一槽位撞唯一约束：候选指纹纳入 operationKey 后修复。
+- 详见 .planning/debug/remake-keyframe-debug-fixes.md

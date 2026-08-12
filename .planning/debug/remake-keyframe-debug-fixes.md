@@ -71,3 +71,28 @@ updated: 2026-08-12
 - 用 dev 库实拍：修复前字符保存返回 null（恒失败）；修复后成功写库并回读 `characterAssetIds`/`characterTags`。
 - 新增回归测试 `tests/unit/remake-projects/remake-shot-semantics-save.test.ts`（项目 id 匹配时持久化、不匹配返回 null）。
 - `tsc --noEmit`、ESLint 通过；`tests/unit/remake-projects` + `tests/unit/worker` 共 81 文件 / 333 用例全部通过。
+
+
+---
+
+## Follow-up: 分镜页生成图片失败（点击后“生成中”几秒恢复原样、无图片、console 无报错）
+
+### Symptom
+- 点击“生成图片”后短暂显示“生成中…”，几秒后恢复原样，无任何图片；console 无报错。
+
+### Root Cause #1（主因，环境）
+- 开发 Redis（`REDIS_HOST=127.0.0.1:16379`）**未运行**（`waoowaoo-redis` 容器不存在/未启动）。
+- 于是 `submitTask` 无法把 BullMQ job 入队（`ECONNREFUSED 127.0.0.1:16379`）→ POST `/keyframes` 抛错 → 前端 `generate.isPending` 结束后恢复原样；因为 UI 只在 POST 在途时显示“生成中”，失败被 catch 吞掉，console 无报错。
+- 修复：`docker compose up -d redis` 启动 `waoowaoo-redis`（16379）；重启 dev worker/整个 dev 栈使 worker 连上新 Redis。
+
+### Root Cause #2（二次生成同类槽位撞唯一约束）
+- Redis 恢复后首次生成可成功，但**再次生成同一槽位**（同 shot/slot/模型/数量）会报：
+  `Unique constraint failed ... remake_output_versions_revisionId_kind_fingerprint_key`
+- 原因：候选 output version 的 `fingerprint = ${inputFingerprint}:${index+1}`，而 `inputFingerprint` 是输入内容的哈希（不含 operationKey），同一槽位再生成会产生相同 fingerprint，触发唯一约束。
+- 修复：`src/lib/remake-projects/keyframes/service.ts` 的 `appendKeyframeGenerationBatch` 中候选指纹改为
+  `fingerprint = ${operationKey}:${inputFingerprint}:${index+1}`（operationKey 每次生成唯一，且同 operationKey 重试会复用已有 batch，不影响幂等）。
+
+### Verification
+- 恢复 Redis 后，提交生成任务 → 任务进入 `processing` → `completed`，并生成 output version。
+- 修复前二次生成报唯一约束；修复后二次生成成功 `completed`。
+- `tsc --noEmit`、ESLint 通过；`tests/unit/remake-projects` + `tests/unit/worker` 共 81 文件 / 333 用例全部通过。
