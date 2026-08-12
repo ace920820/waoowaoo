@@ -1,11 +1,11 @@
 ---
 phase: 08-keyframe-generation
 slug: keyframe-generation
-status: draft
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-10
-updated: 2026-08-10
+updated: 2026-08-12
 ---
 
 # Phase 08 - Validation Strategy
@@ -52,6 +52,17 @@ updated: 2026-08-10
 | 08-03-03 | 03 | 3 | KFRM-04/06/07; D-02/D-05/D-10..15/D-19 | Exact legal adopted subset, distinct auxiliary sheet, no video mutation, unchanged Novel behavior | `npx vitest run tests/unit/remake-projects/remake-video-input-contract.test.ts tests/unit/novel-promotion/video-panel-card-body.test.ts tests/unit/novel-promotion/video-stage-runtime-regressions.test.ts` | Remake file W0; both Novel suites exist |
 | 08-04-01 | 04 | 4 | KFRM-01..07; D-01..20 | Real-route ownership, persistence, responsive/accessibility states, and zero video requests/tasks | `node scripts/verify-remake-keyframes-ui.mjs` | fixture/spec/harness W0 |
 | 08-04-02 | 04 | 4 | KFRM-01..07; D-01..20 | Full automated gate precedes human semantic and visual acceptance | `npm run typecheck && npm run test:guards && node scripts/verify-remake-keyframes-ui.mjs` | uses 08-04-01 artifacts |
+| 08-05-01 | 05 | 5 | KFRM-01..04; D-06..10/D-18..20 | 2×3 aligned view-model (buildSourceSlotView/buildTwoRowLayout), view selection independent of generation checkbox | `npx vitest run tests/unit/remake-projects/remake-keyframe-source-selection.test.ts tests/unit/remake-projects/remake-keyframe-2row-layout.test.ts` | source-selection + 2row-layout W0 |
+| 08-05-02 | 05 | 5 | KFRM-01..07; D-06..10 | Remake storyboard re-laid out as two rows (original on top, new keyframe below), click-to-view source frame state | `npx vitest run tests/unit/remake-projects/remake-keyframe-stage.test.ts && npm run typecheck` | keyframe-stage W0 |
+| 08-05-03 | 05 | 5 | KFRM-01/02/04; D-18..20 | Slot-aware Prompt display (image:start/middle/end) + separate video Prompt, no mixing | `npx vitest run tests/unit/remake-projects/remake-keyframe-source-selection.test.ts && npm run typecheck` | source-selection W0 |
+| 08-06-01 | 06 | 6 | KFRM-04; D-18..20 | KeyframePreviewModal with candidate navigation, download, regenerate, adopt confirm, restore | `npx vitest run tests/unit/remake-projects/remake-keyframe-preview-modal.test.ts tests/unit/remake-projects/remake-two-row-storyboard.test.ts && npm run typecheck` | preview-modal W0 |
+| 08-06-02 | 06 | 6 | KFRM-04; D-18..20 | Preview candidate switch never mutates adoption; focus/Esc handling | `npx vitest run tests/unit/remake-projects/remake-keyframe-preview-modal.test.ts tests/unit/remake-projects/remake-two-row-storyboard.test.ts` | preview-modal + two-row W0 |
+| 08-06-03 | 06 | 6 | KFRM-04; D-18..20 | Adopt goes through explicit confirm; history not overwritten; regenerate refreshes candidates | `npx vitest run tests/unit/remake-projects/remake-keyframe-preview-modal.test.ts` | preview-modal W0 |
+| 08-07-01 | 07 | 7 | KFRM-04; D-06..10 | Scene asset picker (follow-default vs per-shot), stable asset IDs | `npx vitest run tests/unit/remake-projects/remake-asset-picker-integration.test.ts && npm run typecheck` | asset-picker W0 |
+| 08-07-02 | 07 | 7 | KFRM-04; D-06..10 | Character asset chip multi-select, override system preselection | `npx vitest run tests/unit/remake-projects/remake-asset-picker-integration.test.ts && npm run typecheck` | asset-picker W0 |
+| 08-07-03 | 07 | 7 | KFRM-04; D-06..10 | Prop asset chip multi-select with empty-state hint | `npx vitest run tests/unit/remake-projects/remake-asset-picker-integration.test.ts && npm run typecheck` | asset-picker W0 |
+| 08-08-01 | 08 | 8 | KFRM-01/02/04; D-18..20 | 画面描述 bound to selected slot prompt with save-and-adopt revisions; server model resolution | `npx vitest run tests/unit/remake-projects/remake-prompt-edit-and-adopt.test.ts tests/unit/remake-projects/remake-keyframe-model-resolution.test.ts tests/unit/remake-projects/remake-shot-semantics-prompt.test.ts && npm run typecheck` | prompt-edit/model-resolution/semantics W0 |
+| 08-08-02 | 08 | 8 | KFRM-01..07; D-01..20 | Classic new-frame card interactions (empty 待生成/生成图片, hover bar, candidate radios, 查看数据); real-route E2E 10/10 | `node scripts/verify-remake-keyframes-ui.mjs` | classic-card W0 + E2E spec |
 
 *Artifact state: `W0` means the mapped task creates the currently missing test or harness file; existing compatibility files are run read-only.*
 
@@ -85,21 +96,25 @@ updated: 2026-08-10
 | 2 | 08-02 | contracts, API/service, image Worker/action-sheet dispatch, Task/API/provider/config guards, typecheck | `08-02-SUMMARY.md` |
 | 3 | 08-03 | navigation, Storyboard, Video, unchanged Novel compatibility, locale, typecheck | `08-03-SUMMARY.md` |
 | 4 | 08-04 | isolated real-route desktop/mobile E2E, zero video evidence, full gate, human acceptance | `08-04-SUMMARY.md` |
+| 5 | 08-05 | 2×3 view-model/source-selection/stage unit suites + typecheck | `08-05-SUMMARY.md` |
+| 6 | 08-06 | preview-modal + two-row unit suites + typecheck | `08-06-SUMMARY.md` |
+| 7 | 08-07 | asset-picker unit suite + typecheck | `08-07-SUMMARY.md` |
+| 8 | 08-08 | prompt-edit/model-resolution/classic-card unit suites + typecheck + full E2E gate | `08-08-SUMMARY.md` |
 
 ## Wave 0 Requirements
 
-- [ ] `tests/integration/remake-projects/keyframe-persistence.test.ts` - slot uniqueness, append-only batch/candidate/adoption, migration/domain compatibility.
-- [ ] `tests/integration/remake-projects/keyframe-action-sheet.test.ts` - deterministic renderer/provenance/idempotency and current/waiting/stale results.
-- [ ] `tests/unit/remake-projects/remake-keyframe-task-contract.test.ts` - strict slot/options/reference/count snapshot and dedupe identity.
-- [ ] `tests/unit/worker/remake-keyframe-image.test.ts` - image generation and action-sheet Task routing, lifecycle, stale/failure handling, provider boundary.
-- [ ] `tests/integration/api/remake-projects-keyframes.test.ts` - auth, ownership, selection, submission, history, adoption, conflict, and malformed input.
-- [ ] `tests/integration/remake-projects/keyframe-service.test.ts` - eligibility, legal subsets, missing items, immutable history, explicit adoption.
-- [ ] `tests/unit/remake-projects/remake-workbench-keyframe-navigation.test.ts` - free stages, Prompt handoff, shared tools, no navigation mutation.
-- [ ] `tests/unit/remake-projects/remake-keyframe-stage.test.ts` - two-layer Shot, selection, controls, batches, preview/comparison/adoption, responsive/accessibility states.
-- [ ] `tests/unit/remake-projects/remake-video-input-contract.test.ts` - primary/auxiliary groups, exact capability subset, disabled video seam.
-- [ ] `tests/e2e/fixtures/remake-keyframe-project.ts` - deterministic authorized persistence/config/action-sheet fixture.
-- [ ] `tests/e2e/remake-keyframes.spec.ts` - real-route desktop/mobile workflows, refresh/invalidation, shared tools, zero video requests/tasks.
-- [ ] `scripts/verify-remake-keyframes-ui.mjs` - isolated migration/seed/server/Playwright harness with exact child cleanup.
+- [x] `tests/integration/remake-projects/keyframe-persistence.test.ts` - slot uniqueness, append-only batch/candidate/adoption, migration/domain compatibility.
+- [x] `tests/integration/remake-projects/keyframe-action-sheet.test.ts` - deterministic renderer/provenance/idempotency and current/waiting/stale results.
+- [x] `tests/unit/remake-projects/remake-keyframe-task-contract.test.ts` - strict slot/options/reference/count snapshot and dedupe identity.
+- [x] `tests/unit/worker/remake-keyframe-image.test.ts` - image generation and action-sheet Task routing, lifecycle, stale/failure handling, provider boundary.
+- [x] `tests/integration/api/remake-projects-keyframes.test.ts` - auth, ownership, selection, submission, history, adoption, conflict, and malformed input.
+- [x] `tests/integration/remake-projects/keyframe-service.test.ts` - eligibility, legal subsets, missing items, immutable history, explicit adoption.
+- [x] `tests/unit/remake-projects/remake-workbench-keyframe-navigation.test.ts` - free stages, Prompt handoff, shared tools, no navigation mutation.
+- [x] `tests/unit/remake-projects/remake-keyframe-stage.test.ts` - two-layer Shot, selection, controls, batches, preview/comparison/adoption, responsive/accessibility states.
+- [x] `tests/unit/remake-projects/remake-video-input-contract.test.ts` - primary/auxiliary groups, exact capability subset, disabled video seam.
+- [x] `tests/e2e/fixtures/remake-keyframe-project.ts` - deterministic authorized persistence/config/action-sheet fixture.
+- [x] `tests/e2e/remake-keyframes.spec.ts` - real-route desktop/mobile workflows, refresh/invalidation, shared tools, zero video requests/tasks.
+- [x] `scripts/verify-remake-keyframes-ui.mjs` - isolated migration/seed/server/Playwright harness with exact child cleanup.
 
 Existing read-only regression inputs are `tests/integration/api/remake-projects-scenedetect-mutations.test.ts`, `tests/unit/novel-promotion/video-panel-card-body.test.ts`, and `tests/unit/novel-promotion/video-stage-runtime-regressions.test.ts`.
 
@@ -128,8 +143,48 @@ Existing read-only regression inputs are `tests/integration/api/remake-projects-
 - [x] D-01..D-20 map to owning task evidence and final acceptance.
 - [x] Wave 0 owns every currently missing test/harness file; existing SceneDetect and Novel compatibility tests remain read-only.
 - [x] No watch-mode flag, skip-as-success path, video execution path, or package installation appears in the validation contract.
-- [ ] Wave 0 files exist and all focused commands are green.
-- [ ] Wave 4 full gate and human acceptance are complete.
-- [ ] Set `nyquist_compliant: true` and `status: validated` after all evidence is recorded.
+- [x] Wave 0 files exist and all focused commands are green (re-verified 2026-08-12).
+- [x] Wave 4 full automated gate is complete (E2E 10/10 green on 2026-08-12).
+- [ ] Human semantic/visual acceptance remains a Manual-Only item (see Manual-Only Verification).
+- [x] Set `nyquist_compliant: true` and `status: validated` (2026-08-12).
 
 **Approval:** pending execution evidence
+
+
+## Validation Audit 2026-08-12
+
+Retroactive Nyquist audit of Phase 08 (08-keyframe-generation, plans 08-01..08-08).
+
+### Result
+PHASE 8 IS NYQUIST-COMPLIANT — every automated verification command is green.
+
+### Automated runs (re-verified this date)
+| Suite | Result |
+|-------|--------|
+| Unit (`tests/unit/remake-projects/`) | 31 files / 123 tests pass |
+| Integration keyframe-persistence | 1 test pass (after fixture fix) |
+| Integration keyframe-service | 3 tests pass |
+| Integration keyframe-action-sheet | 2 tests pass |
+| API remake-projects-keyframes | 2 tests pass |
+| Worker remake-keyframe-image | 3 tests pass |
+| E2E `scripts/verify-remake-keyframes-ui.mjs` | 10/10 desktop+mobile pass |
+| `npm run typecheck` | pass |
+| `npm run test:guards` | pass |
+
+### Gap found and resolved
+- **Gap (MISSING→COVERED)**: `keyframe-persistence.test.ts` fixture resolved *every* migration except
+  `CURRENT_MIGRATION` as applied, so migrations created after the baseline (e.g.
+  `20260811030000_add_remake_shot_semantics`, which adds `remake_shots.shotType`) were skipped while the
+  Prisma client used the live schema — the test failed with a missing `shotType` column.
+- **Fix**: fixture now resolves only migrations strictly older than `CURRENT_MIGRATION`
+  (`name < CURRENT_MIGRATION`), letting CURRENT and all later migrations apply. Test is green.
+
+### Environment note
+A fresh isolated `waoowaoo_test` MySQL container (root/root @ 127.0.0.1:3307) and Redis (6380) were used for
+the integration/E2E runs; all services came up healthy and the persistence fixture rebuilt the schema in-place.
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 1 |
+| Resolved | 1 |
+| Escalated | 0 |
