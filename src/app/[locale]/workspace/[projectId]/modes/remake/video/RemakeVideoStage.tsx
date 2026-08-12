@@ -20,7 +20,7 @@ import {
 } from '@/lib/model-capabilities/video-effective'
 import type { CapabilityValue, VideoCapabilities } from '@/lib/model-config-contract'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
-import { deriveDefaultVideoDuration } from '@/lib/remake-projects/video/service'
+import { deriveDefaultVideoDuration } from '@/lib/remake-projects/video/duration'
 import {
   readShotGroupCapabilitySelection,
 } from '@/lib/shot-group/video-config'
