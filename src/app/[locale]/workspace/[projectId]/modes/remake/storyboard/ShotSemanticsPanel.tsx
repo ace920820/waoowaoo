@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import GlobalAssetPicker from '@/components/shared/assets/GlobalAssetPicker'
-import type { AssetSummary, LocationAssetSummary, CharacterAssetSummary, PropAssetSummary } from '@/lib/assets/contracts' 
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeShotView } from '@/lib/remake-projects/keyframes/adapter'
 import { REMAKE_KEYFRAME_SLOTS } from '@/lib/remake-projects/keyframes/adapter'
@@ -351,6 +350,7 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
         {/* 场景 */}
         <Field label="场景" fullWidth>
           <SceneAssetSelector
+            projectId={projectId}
             sceneAssetId={semantics.sceneAssetId}
             sceneTag={semantics.sceneTag}
             editing={editing}
@@ -370,6 +370,7 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
         {/* 角色 */}
         <Field label="角色" fullWidth>
           <CharacterChipSelector
+            projectId={projectId}
             characterAssetIds={semantics.characterAssetIds}
             characterTags={semantics.characterTags}
             editing={editing}
@@ -390,6 +391,7 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
         {/* 物品 */}
         <Field label="物品" fullWidth>
           <PropChipSelector
+            projectId={projectId}
             propAssetIds={semantics.propAssetIds}
             editing={editing}
             onAddProp={(assetId) => {
@@ -505,12 +507,14 @@ function StatusBadge({ status }: { status: 'approved' | 'missing' | 'needs_revie
 // ── Asset selection sub-components ──────────────────────────────────────────
 
 function SceneAssetSelector({
+  projectId,
   sceneAssetId,
   sceneTag,
   editing,
   onSelect,
   onClear,
 }: {
+  projectId: string
   sceneAssetId: string | null
   sceneTag: string | null
   editing: boolean
@@ -554,11 +558,13 @@ function SceneAssetSelector({
           <GlobalAssetPicker
             isOpen={pickerOpen}
             onClose={() => setPickerOpen(false)}
-            onSelect={(globalAssetId) => {
-              onSelect(globalAssetId, '场景')
+            onSelect={(assetId, name) => {
+              onSelect(assetId, name || '场景')
               setPickerOpen(false)
             }}
             type="location"
+            scope="project"
+            projectId={projectId}
           />
         </>
       ) : (
@@ -578,12 +584,14 @@ function SceneAssetSelector({
 }
 
 function CharacterChipSelector({
+  projectId,
   characterAssetIds,
   characterTags,
   editing,
   onAddCharacter,
   onRemoveCharacter,
 }: {
+  projectId: string
   characterAssetIds: string[]
   characterTags: string[]
   editing: boolean
@@ -643,22 +651,26 @@ function CharacterChipSelector({
       <GlobalAssetPicker
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onSelect={(globalAssetId) => {
-          onAddCharacter(globalAssetId, '角色')
+        onSelect={(assetId, name) => {
+          onAddCharacter(assetId, name || '角色')
           setPickerOpen(false)
         }}
         type="character"
+        scope="project"
+        projectId={projectId}
       />
     </div>
   )
 }
 
 function PropChipSelector({
+  projectId,
   propAssetIds,
   editing,
   onAddProp,
   onRemoveProp,
 }: {
+  projectId: string
   propAssetIds: string[]
   editing: boolean
   onAddProp: (assetId: string) => void
@@ -706,11 +718,13 @@ function PropChipSelector({
       <GlobalAssetPicker
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onSelect={(globalAssetId) => {
-          onAddProp(globalAssetId)
+        onSelect={(assetId) => {
+          onAddProp(assetId)
           setPickerOpen(false)
         }}
         type="prop"
+        scope="project"
+        projectId={projectId}
       />
     </div>
   )

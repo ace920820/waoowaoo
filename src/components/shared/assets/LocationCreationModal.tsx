@@ -15,11 +15,14 @@ import {
     useGenerateLocationImage,
     useCreateProjectLocation,
     useGenerateProjectLocationImage,
+    useCopyProjectAssetFromGlobal,
 } from '@/lib/query/hooks'
 import { useImageGenerationCount } from '@/lib/image-generation/use-image-generation-count'
 import ImageGenerationInlineCountButton from '@/components/image-generation/ImageGenerationInlineCountButton'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
 import type { LocationAvailableSlot } from '@/lib/location-available-slots'
+import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import GlobalAssetPicker from '@/components/shared/assets/GlobalAssetPicker'
 
 export interface LocationCreationModalProps {
     mode: 'asset-hub' | 'project'
@@ -54,6 +57,7 @@ export function LocationCreationModal({
     const aiCreateProjectLocation = useAiCreateProjectLocation(projectId || '')
     const createProjectLocation = useCreateProjectLocation(projectId || '')
     const generateProjectLocation = useGenerateProjectLocationImage(projectId || '')
+    const copyFromGlobal = useCopyProjectAssetFromGlobal(projectId || '')
     const {
         count: locationGenerationCount,
         setCount: setLocationGenerationCount,
@@ -61,6 +65,11 @@ export function LocationCreationModal({
 
     // 表单字段
     const [name, setName] = useState('')
+    // Import from asset hub mode (project mode only)
+    const [createSource, setCreateSource] = useState<'manual' | 'from-hub'>('manual')
+    const [hubPickerOpen, setHubPickerOpen] = useState(false)
+    const [selectedHubAssetId, setSelectedHubAssetId] = useState<string | null>(null)
+    const [selectedHubAssetName, setSelectedHubAssetName] = useState<string>('')
     const [description, setDescription] = useState('')
     const [aiInstruction, setAiInstruction] = useState('')
     const [artStyle, setArtStyle] = useState('american-comic')
@@ -290,88 +299,154 @@ export function LocationCreationModal({
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder={t('location.namePlaceholder')}
                                 className="glass-input-base w-full px-3 py-2 text-sm"
-                            />
-                        </div>
-
-                        {mode === 'asset-hub' && (
-                            <div className="space-y-2">
-                                <label className="glass-field-label block">
-                                    {t('artStyle.title')}
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {ART_STYLES.map((style) => (
-                                        <button
-                                            key={style.value}
-                                            type="button"
-                                            onClick={() => setArtStyle(style.value)}
-                                            className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all justify-start ${artStyle === style.value
-                                                ? 'glass-btn-tone-info border-[var(--glass-stroke-focus)]'
-                                                : 'glass-btn-soft border-[var(--glass-stroke-base)] text-[var(--glass-text-secondary)]'
-                                                }`}
-                                        >
-                                            <span>{style.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* AI 设计区域 */}
-                        <div className="glass-surface-soft rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-base)]">
-                            <div className="flex items-center gap-2 text-sm font-medium text-[var(--glass-tone-info-fg)]">
-                                <SparklesIcon className="w-4 h-4" />
-                                <span>{t('aiDesign.title')} {t('common.optional')}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={aiInstruction}
-                                    onChange={(e) => setAiInstruction(e.target.value)}
-                                    placeholder={t('aiDesign.placeholderLocation')}
-                                    className="glass-input-base flex-1 px-3 py-2 text-sm"
-                                    disabled={isAiDesigning}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault()
-                                            handleAiDesign()
-                                        }
-                                    }}
-                                />
-                                <button
-                                    onClick={handleAiDesign}
-                                    disabled={isAiDesigning || !aiInstruction.trim()}
-                                    className="glass-btn-base glass-btn-tone-info px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm whitespace-nowrap"
-                                >
-                                    {isAiDesigning ? (
-                                        <TaskStatusInline state={aiDesigningState} className="text-white [&>span]:text-white [&_svg]:text-white" />
-                                    ) : (
-                                        <>
-                                            <SparklesIcon className="w-4 h-4" />
-                                            <span>{t('aiDesign.generate')}</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                            <p className="glass-field-hint">
-                                {t('aiDesign.tip')}
-                            </p>
-                        </div>
-
-                        {/* 场景描述 */}
-                        <div className="space-y-2">
-                            <label className="glass-field-label block">
-                                {t('location.description')} <span className="text-[var(--glass-tone-danger-fg)]">*</span>
-                            </label>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder={t('location.descPlaceholder')}
-                                className="glass-textarea-base w-full h-36 px-3 py-2 text-sm resize-none"
                                 disabled={isAiDesigning}
                             />
                         </div>
+
+                        {mode === 'project' && (
+                            <div className="space-y-2">
+                                <label className="glass-field-label block">创建方式</label>
+                                <SegmentedControl
+                                    value={createSource}
+                                    onChange={(value) => setCreateSource(value as 'manual' | 'from-hub')}
+                                    options={[
+                                        { value: 'manual', label: '手动创建' },
+                                        { value: 'from-hub', label: '从资产中心导入' },
+                                    ]}
+                                />
+                            </div>
+                        )}
+
+                        {createSource === 'from-hub' && mode === 'project' ? (
+                            <div className="space-y-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setHubPickerOpen(true)}
+                                    disabled={!name.trim() || isSubmitting || isAiDesigning}
+                                    className="w-full rounded-lg border border-dashed border-[var(--glass-stroke-base)] p-4 text-left transition hover:border-[var(--glass-tone-info-stroke)] hover:bg-[var(--glass-tone-info-bg)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {selectedHubAssetId ? (
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium text-[var(--glass-text-primary)]">{selectedHubAssetName}</p>
+                                                <p className="text-xs text-[var(--glass-text-tertiary)] mt-0.5">已选择资产中心场景，点击重新选择</p>
+                                            </div>
+                                            <AppIcon name="check" className="w-5 h-5 text-[var(--glass-tone-success-fg)]" />
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-[var(--glass-bg-muted)] flex items-center justify-center">
+                                                <AppIcon name="image" className="w-5 h-5 text-[var(--glass-text-tertiary)]" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-[var(--glass-text-primary)]">选择资产中心场景</p>
+                                                <p className="text-xs text-[var(--glass-text-tertiary)] mt-0.5">导入场景描述与图片，使用你输入的名称</p>
+                                            </div>
+                                            <AppIcon name="chevronRight" className="w-4 h-4 text-[var(--glass-text-tertiary)] ml-auto" />
+                                        </div>
+                                    )}
+                                </button>
+                                {!name.trim() && (
+                                    <p className="text-xs text-[var(--glass-text-tertiary)]">请先输入场景名称</p>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                {mode === 'asset-hub' && (
+                                    <div className="space-y-2">
+                                        <label className="glass-field-label block">
+                                            {t('artStyle.title')}
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {ART_STYLES.map((style) => (
+                                                <button
+                                                    key={style.value}
+                                                    type="button"
+                                                    onClick={() => setArtStyle(style.value)}
+                                                    className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all justify-start ${artStyle === style.value
+                                                        ? 'glass-btn-tone-info border-[var(--glass-stroke-focus)]'
+                                                        : 'glass-btn-soft border-[var(--glass-stroke-base)] text-[var(--glass-text-secondary)]'
+                                                        }`}
+                                                >
+                                                    <span>{style.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* AI 设计区域 */}
+                                <div className="glass-surface-soft rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-base)]">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--glass-tone-info-fg)]">
+                                        <SparklesIcon className="w-4 h-4" />
+                                        <span>{t('aiDesign.title')} {t('common.optional')}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={aiInstruction}
+                                            onChange={(e) => setAiInstruction(e.target.value)}
+                                            placeholder={t('aiDesign.placeholderLocation')}
+                                            className="glass-input-base flex-1 px-3 py-2 text-sm"
+                                            disabled={isAiDesigning}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault()
+                                                    handleAiDesign()
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={handleAiDesign}
+                                            disabled={isAiDesigning || !aiInstruction.trim()}
+                                            className="glass-btn-base glass-btn-tone-info px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm whitespace-nowrap"
+                                        >
+                                            {isAiDesigning ? (
+                                                <TaskStatusInline state={aiDesigningState} className="text-white [&>span]:text-white [&_svg]:text-white" />
+                                            ) : (
+                                                <>
+                                                    <SparklesIcon className="w-4 h-4" />
+                                                    <span>{t('aiDesign.generate')}</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                    <p className="glass-field-hint">
+                                        {t('aiDesign.tip')}
+                                    </p>
+                                </div>
+
+                                {/* 场景描述 */}
+                                <div className="space-y-2">
+                                    <label className="glass-field-label block">
+                                        {t('location.description')} <span className="text-[var(--glass-tone-danger-fg)]">*</span>
+                                    </label>
+                                    <textarea
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder={t('location.descPlaceholder')}
+                                        className="glass-textarea-base w-full h-36 px-3 py-2 text-sm resize-none"
+                                        disabled={isAiDesigning}
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
+
+                <GlobalAssetPicker
+                    isOpen={hubPickerOpen}
+                    onClose={() => setHubPickerOpen(false)}
+                    onSelect={(assetId, assetName) => {
+                        setSelectedHubAssetId(assetId)
+                        setSelectedHubAssetName(assetName || '')
+                        setHubPickerOpen(false)
+                    }}
+                    type="location"
+                    scope="global"
+                    title="从资产中心选择场景"
+                    confirmText="选择"
+                />
 
                 {/* 固定底部按钮区 */}
                 <div className="flex gap-3 justify-end p-4 border-t border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface-strong)] rounded-b-xl flex-shrink-0">
@@ -382,6 +457,20 @@ export function LocationCreationModal({
                     >
                         {t('common.cancel')}
                     </button>
+                    {createSource === 'from-hub' && mode === 'project' ? (
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || !name.trim() || !selectedHubAssetId}
+                            className="glass-btn-base glass-btn-primary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
+                        >
+                            {isSubmitting ? (
+                                <TaskStatusInline state={submittingState} className="text-white [&>span]:text-white [&_svg]:text-white" />
+                            ) : (
+                                <span>添加场景</span>
+                            )}
+                        </button>
+                    ) : (
+                        <>
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting || !name.trim() || !description.trim()}
@@ -400,12 +489,14 @@ export function LocationCreationModal({
                         options={getImageGenerationCountOptions('location')}
                         onValueChange={setLocationGenerationCount}
                         onClick={handleSubmitAndGenerate}
-                        actionDisabled={!name.trim() || !description.trim()}
+                        actionDisabled={!name.trim() || (createSource === 'manual' && !description.trim()) || (createSource === 'from-hub' && !selectedHubAssetId)}
                         selectDisabled={isSubmitting}
                         ariaLabel={t('common.selectGenerateCount')}
                         className="glass-btn-base glass-btn-primary flex items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         selectClassName="appearance-none bg-transparent border-0 pl-0 pr-3 text-sm font-semibold text-current outline-none cursor-pointer leading-none transition-colors"
                     />
+                        </>
+                    )}
                 </div>
             </div>
         </div>

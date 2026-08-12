@@ -10,6 +10,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { withPrismaRetry } from '@/lib/prisma-retry'
 import { extractModelKey } from '@/lib/config-service'
+import { isArtStyleValue } from '@/lib/constants'
+import { serializeStoryboardMoodPresets, DEFAULT_STORYBOARD_MOOD_PRESETS } from '@/lib/storyboard-mood-presets'
 import { getErrorSpec, type UnifiedErrorCode } from '@/lib/errors/codes'
 import { getLogContext, setLogContext } from '@/lib/logging/context'
 
@@ -236,7 +238,7 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
 
     // 3. 获取项目（包含 novelPromotionData 及其可选关联）
     const hasIncludes = Object.keys(novelPromotionIncludes).length > 0
-    const project = await withPrismaRetry(() =>
+    let project = await withPrismaRetry(() =>
         prisma.project.findUnique({
             where: { id: projectId },
             include: {
@@ -258,8 +260,55 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
     }
 
     // 6. NovelPromotionData 检查
+    // For remake projects, lazily create the asset container if it doesn't exist yet.
+    // This ensures backwards compatibility with remake projects created before the
+    // project asset library was added to remake mode.
     if (!project.novelPromotionData) {
-        return notFound('Novel promotion data')
+        if (project.type === 'remake') {
+            const userPreference = await prisma.userPreference.findUnique({
+                where: { userId: session.user.id },
+            })
+            const prefArtStyle = userPreference && typeof userPreference.artStyle === 'string'
+                ? userPreference.artStyle
+                : 'american-comic'
+            const created = await prisma.novelPromotionProject.create({
+                data: {
+                    projectId: project.id,
+                    ...(userPreference ? {
+                        analysisModel: userPreference.analysisModel as string | undefined,
+                        characterModel: userPreference.characterModel as string | undefined,
+                        locationModel: userPreference.locationModel as string | undefined,
+                        storyboardModel: userPreference.storyboardModel as string | undefined,
+                        editModel: userPreference.editModel as string | undefined,
+                        videoModel: userPreference.videoModel as string | undefined,
+                        audioModel: userPreference.audioModel as string | undefined,
+                        videoRatio: userPreference.videoRatio as string | undefined,
+                        artStyle: isArtStyleValue(prefArtStyle) ? prefArtStyle : 'american-comic',
+                        ttsRate: userPreference.ttsRate as string | undefined,
+                    } : {
+                        artStyle: 'american-comic',
+                    }),
+                    storyboardMoodPresets: serializeStoryboardMoodPresets(DEFAULT_STORYBOARD_MOOD_PRESETS),
+                },
+            })
+            // Re-query to include any requested includes
+            const refreshedProject = await withPrismaRetry(() =>
+                prisma.project.findUnique({
+                    where: { id: projectId },
+                    include: {
+                        novelPromotionData: hasIncludes
+                            ? { include: novelPromotionIncludes }
+                            : true
+                    }
+                })
+            )
+            if (!refreshedProject?.novelPromotionData) {
+                return notFound('Novel promotion data')
+            }
+            project = refreshedProject
+        } else {
+            return notFound('Novel promotion data')
+        }
     }
 
     // 统一返回 modelKey（provider::modelId），禁止降级为纯 modelId

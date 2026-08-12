@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent, MouseEvent } from 'react'
 import { useTranslations } from 'next-intl'
-import { useProjectAssets } from '@/lib/query/hooks'
+import { useProjectAssets, useCopyProjectAssetFromGlobal, useCreateProjectCharacter } from '@/lib/query/hooks'
 import CharacterCreationForm from './character-creation/CharacterCreationForm'
 import { useCharacterCreationSubmit } from './character-creation/hooks/useCharacterCreationSubmit'
 import { AppIcon } from '@/components/ui/icons'
+import GlobalAssetPicker from '@/components/shared/assets/GlobalAssetPicker'
+import { shouldShowError } from '@/lib/error-utils'
 import ImageGenerationInlineCountButton from '@/components/image-generation/ImageGenerationInlineCountButton'
 import { getImageGenerationCountOptions } from '@/lib/image-generation/count'
 
@@ -32,6 +34,10 @@ export function CharacterCreationModal({
   const t = useTranslations('assetModal')
 
   const [createMode, setCreateMode] = useState<'reference' | 'description'>('description')
+  const [createSource, setCreateSource] = useState<'manual' | 'from-hub'>('manual')
+  const [selectedHubAssetId, setSelectedHubAssetId] = useState<string | null>(null)
+  const [selectedHubAssetName, setSelectedHubAssetName] = useState<string>('')
+  const [hubPickerOpen, setHubPickerOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
@@ -54,6 +60,9 @@ export function CharacterCreationModal({
       appearances: c.appearances || [],
     }))
   }, [mode, projectAssets.data?.characters])
+
+  const copyFromGlobal = useCopyProjectAssetFromGlobal(projectId ?? '')
+  const createProjectCharacterHook = useCreateProjectCharacter(projectId ?? '')
 
   const {
     isSubmitting,
@@ -159,6 +168,39 @@ export function CharacterCreationModal({
     setReferenceImagesBase64([])
   }
 
+  // Create from asset hub: create project character with user's name, then copy from global
+  const [isCreatingFromHub, setIsCreatingFromHub] = useState(false)
+  const handleCreateFromHub = async () => {
+    if (!name.trim() || !selectedHubAssetId || !projectId) return
+    try {
+      setIsCreatingFromHub(true)
+      // Create a basic character with the user's name
+      const result = await createProjectCharacterHook.mutateAsync({
+        name: name.trim(),
+        description: `${name.trim()} 的角色设定`,
+      }) as { character?: { id: string; appearances?: Array<{ id: string }> } }
+      const characterId = result.character?.id
+      if (!characterId) {
+        throw new Error(t('errors.createFailed'))
+      }
+      // Copy from global asset (this brings over appearances, images, description, voice)
+      await copyFromGlobal.mutateAsync({
+        type: 'character',
+        targetId: characterId,
+        globalAssetId: selectedHubAssetId,
+      })
+      onSuccess()
+      onClose()
+    } catch (error: unknown) {
+      if (shouldShowError(error)) {
+        const err = error as Error
+        alert(err.message || t('errors.createFailed'))
+      }
+    } finally {
+      setIsCreatingFromHub(false)
+    }
+  }
+
   const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget && !isSubmitting && !isAiDesigning) {
       onClose()
@@ -184,7 +226,83 @@ export function CharacterCreationModal({
             </button>
           </div>
 
-          <CharacterCreationForm
+          {mode === 'project' && (
+            <div className="mb-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateSource('manual')}
+                  className={`flex-1 py-2 text-sm rounded-lg transition ${
+                    createSource === 'manual'
+                      ? 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)] font-medium'
+                      : 'text-[var(--glass-text-tertiary)] hover:bg-[var(--glass-bg-muted)]'
+                  }`}
+                >
+                  手动创建
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateSource('from-hub')}
+                  className={`flex-1 py-2 text-sm rounded-lg transition ${
+                    createSource === 'from-hub'
+                      ? 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)] font-medium'
+                      : 'text-[var(--glass-text-tertiary)] hover:bg-[var(--glass-bg-muted)]'
+                  }`}
+                >
+                  从资产中心导入
+                </button>
+              </div>
+            </div>
+          )}
+
+          {createSource === 'from-hub' && mode === 'project' ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="glass-field-label block">
+                  {t('character.name')} <span className="text-[var(--glass-tone-danger-fg)]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t('character.namePlaceholder')}
+                  className="glass-input-base w-full px-3 py-2 text-sm"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setHubPickerOpen(true)}
+                disabled={!name.trim() || isSubmitting}
+                className="w-full rounded-lg border border-dashed border-[var(--glass-stroke-base)] p-4 text-left transition hover:border-[var(--glass-tone-info-stroke)] hover:bg-[var(--glass-tone-info-bg)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {selectedHubAssetId ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[var(--glass-text-primary)]">{selectedHubAssetName}</p>
+                      <p className="text-xs text-[var(--glass-text-tertiary)] mt-0.5">已选择资产中心角色，点击重新选择</p>
+                    </div>
+                    <AppIcon name="check" className="w-5 h-5 text-[var(--glass-tone-success-fg)]" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[var(--glass-bg-muted)] flex items-center justify-center">
+                      <AppIcon name="userAlt" className="w-5 h-5 text-[var(--glass-text-tertiary)]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--glass-text-primary)]">选择资产中心角色</p>
+                      <p className="text-xs text-[var(--glass-text-tertiary)] mt-0.5">导入角色形象、描述和图片，使用你输入的名称</p>
+                    </div>
+                    <AppIcon name="chevronRight" className="w-4 h-4 text-[var(--glass-text-tertiary)] ml-auto" />
+                  </div>
+                )}
+              </button>
+              {!name.trim() && (
+                <p className="text-xs text-[var(--glass-text-tertiary)]">请先输入角色名称</p>
+              )}
+            </div>
+          ) : (
+            <CharacterCreationForm
             mode={mode}
             createMode={createMode}
             setCreateMode={(value) => setCreateMode(value)}
@@ -215,8 +333,23 @@ export function CharacterCreationModal({
             isSubmitting={isSubmitting}
             isAiDesigning={isAiDesigning}
             isExtracting={isExtracting}
-          />
+            />
+          )}
         </div>
+
+        <GlobalAssetPicker
+          isOpen={hubPickerOpen}
+          onClose={() => setHubPickerOpen(false)}
+          onSelect={(assetId, assetName) => {
+            setSelectedHubAssetId(assetId)
+            setSelectedHubAssetName(assetName || '')
+            setHubPickerOpen(false)
+          }}
+          type="character"
+          scope="global"
+          title="从资产中心选择角色"
+          confirmText="选择"
+        />
 
         <div className="flex items-center justify-end gap-2 p-4 border-t border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface-strong)] rounded-b-xl flex-shrink-0">
           <button
@@ -226,7 +359,15 @@ export function CharacterCreationModal({
           >
             {t('common.cancel')}
           </button>
-          {createMode === 'reference' ? (
+          {createSource === 'from-hub' && mode === 'project' ? (
+            <button
+              onClick={() => { void handleCreateFromHub() }}
+              disabled={isSubmitting || !name.trim() || !selectedHubAssetId}
+              className="glass-btn-base glass-btn-primary px-4 py-2 rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isCreatingFromHub ? t('common.adding') : '添加角色'}
+            </button>
+          ) : createMode === 'reference' ? (
             <>
               <button
                 onClick={() => { void handleUploadTriptych() }}

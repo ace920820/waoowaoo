@@ -19,9 +19,17 @@ import type {
 interface GlobalAssetPickerProps {
     isOpen: boolean
     onClose: () => void
-    onSelect: (globalAssetId: string) => void
+    onSelect: (assetId: string, name?: string) => void
     type: 'character' | 'location' | 'prop' | 'voice'
     loading?: boolean
+    /** Asset scope: 'global' for asset center, 'project' for project asset library */
+    scope?: 'global' | 'project'
+    /** Required when scope === 'project' */
+    projectId?: string
+    /** Custom title (overrides default) */
+    title?: string
+    /** Custom confirm button text (overrides default "confirmCopy") */
+    confirmText?: string
 }
 
 /** 从 appearances 中提取预览图 URL */
@@ -81,50 +89,59 @@ export default function GlobalAssetPicker({
     onClose,
     onSelect,
     type,
-    loading: externalLoading
+    loading: externalLoading,
+    scope = 'global',
+    projectId,
+    title,
+    confirmText,
 }: GlobalAssetPickerProps) {
+    const isProjectScope = scope === 'project'
+    const scopeKey = isProjectScope ? 'project' : 'global'
+    const scopeQuerySuffix = isProjectScope
+        ? `scope=project&projectId=${encodeURIComponent(projectId || '')}`
+        : 'scope=global'
     const t = useTranslations('assetPicker')
 
     // 轻量级查询：只查询当前 type，不附带任务状态
     const charactersQuery = useQuery({
-        queryKey: ['global-assets', 'characters'],
+        queryKey: [scopeKey + '-assets', 'characters', projectId],
         queryFn: async () => {
-            const res = await apiFetch('/api/assets?scope=global&kind=character')
+            const res = await apiFetch(`/api/assets?${scopeQuerySuffix}&kind=character`)
             if (!res.ok) throw new Error('Failed to fetch characters')
             const data = await res.json()
             return data.assets as CharacterAssetSummary[]
         },
-        enabled: type === 'character',
+        enabled: type === 'character' && (!isProjectScope || Boolean(projectId)),
     })
     const locationsQuery = useQuery({
-        queryKey: ['global-assets', 'locations'],
+        queryKey: [scopeKey + '-assets', 'locations', projectId],
         queryFn: async () => {
-            const res = await apiFetch('/api/assets?scope=global&kind=location')
+            const res = await apiFetch(`/api/assets?${scopeQuerySuffix}&kind=location`)
             if (!res.ok) throw new Error('Failed to fetch locations')
             const data = await res.json()
             return data.assets as LocationAssetSummary[]
         },
-        enabled: type === 'location',
+        enabled: type === 'location' && (!isProjectScope || Boolean(projectId)),
     })
     const propsQuery = useQuery({
-        queryKey: ['global-assets', 'props'],
+        queryKey: [scopeKey + '-assets', 'props', projectId],
         queryFn: async () => {
-            const res = await apiFetch('/api/assets?scope=global&kind=prop')
+            const res = await apiFetch(`/api/assets?${scopeQuerySuffix}&kind=prop`)
             if (!res.ok) throw new Error('Failed to fetch props')
             const data = await res.json()
             return data.assets as PropAssetSummary[]
         },
-        enabled: type === 'prop',
+        enabled: type === 'prop' && (!isProjectScope || Boolean(projectId)),
     })
     const voicesQuery = useQuery({
-        queryKey: ['global-assets', 'voices'],
+        queryKey: [scopeKey + '-assets', 'voices', projectId],
         queryFn: async () => {
-            const res = await apiFetch('/api/assets?scope=global&kind=voice')
+            const res = await apiFetch(`/api/assets?${scopeQuerySuffix}&kind=voice`)
             if (!res.ok) throw new Error('Failed to fetch voices')
             const data = await res.json()
             return data.assets as VoiceAssetSummary[]
         },
-        enabled: type === 'voice',
+        enabled: type === 'voice' && (!isProjectScope || Boolean(projectId)),
     })
 
     const characters = (charactersQuery.data || []) as CharacterAssetSummary[]
@@ -200,8 +217,19 @@ export default function GlobalAssetPicker({
 
     const handleConfirm = () => {
         if (selectedId) {
-            stopAudio()  // 确认复制时停止音频播放
-            onSelect(selectedId)
+            stopAudio()  // 确认时停止音频播放
+            // Find the selected asset name to pass along
+            let selectedName: string | undefined
+            if (type === 'character') {
+                selectedName = characters.find((c) => c.id === selectedId)?.name
+            } else if (type === 'location') {
+                selectedName = locations.find((l) => l.id === selectedId)?.name
+            } else if (type === 'prop') {
+                selectedName = props.find((p) => p.id === selectedId)?.name
+            } else {
+                selectedName = voices.find((v) => v.id === selectedId)?.name
+            }
+            onSelect(selectedId, selectedName)
         }
     }
 
@@ -276,7 +304,13 @@ export default function GlobalAssetPicker({
                 {/* 头部 */}
                 <div className="flex items-center justify-between px-6 py-4">
                     <h2 className="text-lg font-semibold text-[var(--glass-text-primary)]">
-                        {type === 'character' ? t('selectCharacter') : type === 'location' ? t('selectLocation') : type === 'prop' ? t('selectProp') : t('selectVoice')}
+                        {title || (type === 'character'
+                            ? (isProjectScope ? t('selectProjectCharacter') : t('selectCharacter'))
+                            : type === 'location'
+                                ? (isProjectScope ? t('selectProjectLocation') : t('selectLocation'))
+                                : type === 'prop'
+                                    ? (isProjectScope ? t('selectProjectProp') : t('selectProp'))
+                                    : (isProjectScope ? t('selectProjectVoice') : t('selectVoice')))}
                     </h2>
                     <button onClick={onClose} className="glass-btn-base glass-btn-soft text-[var(--glass-text-tertiary)]">
                         <XMarkIcon className="w-5 h-5" />
@@ -312,8 +346,8 @@ export default function GlobalAssetPicker({
                             ) : (
                                 <MicrophoneIcon className="w-12 h-12 mb-2" />
                             )}
-                            <p>{t('noAssets')}</p>
-                            <p className="text-sm mt-1">{t('createInAssetHub')}</p>
+                            <p>{isProjectScope ? t('noProjectAssets') : t('noAssets')}</p>
+                            {!isProjectScope && <p className="text-sm mt-1">{t('createInAssetHub')}</p>}
                         </div>
                     ) : items.length === 0 ? (
                         <div className="flex items-center justify-center h-40 text-[var(--glass-text-tertiary)]">
@@ -539,7 +573,7 @@ export default function GlobalAssetPicker({
                         className="glass-btn-base glass-btn-primary px-4 py-2 text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {externalLoading && <TaskStatusInline state={copyingState} className="text-white [&>span]:sr-only [&_svg]:text-white" />}
-                        {t('confirmCopy')}
+                        {confirmText || (isProjectScope ? t('confirmSelect') : t('confirmCopy'))}
                     </button>
                 </div>
             </div>

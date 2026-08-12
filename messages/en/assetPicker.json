@@ -15,5 +15,11 @@
     "copySuccess": "Import successful",
     "copyFailed": "Import failed",
     "preview": "Preview",
-    "stop": "Stop"
+    "stop": "Stop",
+    "selectProjectCharacter": "Select character from project library",
+    "selectProjectLocation": "Select location from project library",
+    "selectProjectProp": "Select prop from project library",
+    "selectProjectVoice": "Select voice from project library",
+    "noProjectAssets": "No assets in project library",
+    "confirmSelect": "Confirm"
 }

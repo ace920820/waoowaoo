@@ -15,5 +15,11 @@
     "copySuccess": "导入成功",
     "copyFailed": "导入失败",
     "preview": "试听",
-    "stop": "停止"
+    "stop": "停止",
+    "selectProjectCharacter": "从项目资产库选择角色",
+    "selectProjectLocation": "从项目资产库选择场景",
+    "selectProjectProp": "从项目资产库选择道具",
+    "selectProjectVoice": "从项目资产库选择音色",
+    "noProjectAssets": "项目资产库暂无资产",
+    "confirmSelect": "确认选择"
 }

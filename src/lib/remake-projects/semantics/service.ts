@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { ApiError } from '@/lib/api-errors'
 
 export type RemakeShotSemantics = {
   shotType: string | null
@@ -30,12 +31,56 @@ export async function updateRemakeShotSemantics(input: {
 }): Promise<{ semantics: RemakeShotSemantics } | null> {
   const shot = await prisma.remakeShot.findUnique({
     where: { id: input.shotId },
-    include: { remakeProject: { select: { project: { select: { userId: true, type: true } } } } },
+    include: { remakeProject: { select: { project: { select: { id: true, userId: true, type: true } } } } },
   })
   if (!shot) return null
   const project = shot.remakeProject?.project
   if (!project || project.userId !== input.userId || project.type !== 'remake') return null
   if (shot.remakeProjectId !== input.projectId) return null
+
+  // Validate asset ownership: all referenced assets must belong to this project's asset library.
+  // This prevents global/asset-center assets or cross-project assets from being bound to remake shots.
+  const novelProject = await prisma.novelPromotionProject.findUnique({
+    where: { projectId: input.projectId },
+    select: { id: true },
+  })
+  if (!novelProject) {
+    // No asset container yet; any asset reference would be invalid.
+    if (input.sceneAssetId || (input.characterAssetIds?.length) || (input.propAssetIds?.length)) {
+      throw new ApiError('INVALID_PARAMS', { details: 'Project asset library not initialized' })
+    }
+  } else {
+    const novelProjectId = novelProject.id
+
+    // Validate scene asset
+    if (input.sceneAssetId) {
+      const scene = await prisma.novelPromotionLocation.findFirst({
+        where: { id: input.sceneAssetId, novelPromotionProjectId: novelProjectId, assetKind: 'location' },
+        select: { id: true },
+      })
+      if (!scene) throw new ApiError('INVALID_PARAMS', { details: 'Scene asset not found in project library' })
+    }
+
+    // Validate character assets
+    if (input.characterAssetIds?.length) {
+      const count = await prisma.novelPromotionCharacter.count({
+        where: { id: { in: input.characterAssetIds }, novelPromotionProjectId: novelProjectId },
+      })
+      if (count !== input.characterAssetIds.length) {
+        throw new ApiError('INVALID_PARAMS', { details: 'One or more character assets not found in project library' })
+      }
+    }
+
+    // Validate prop assets
+    if (input.propAssetIds?.length) {
+      const count = await prisma.novelPromotionLocation.count({
+        where: { id: { in: input.propAssetIds }, novelPromotionProjectId: novelProjectId, assetKind: 'prop' },
+      })
+      if (count !== input.propAssetIds.length) {
+        throw new ApiError('INVALID_PARAMS', { details: 'One or more prop assets not found in project library' })
+      }
+    }
+  }
 
   const data: Record<string, unknown> = {}
   if (Object.prototype.hasOwnProperty.call(input, 'shotType')) data.shotType = input.shotType

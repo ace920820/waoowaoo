@@ -1179,15 +1179,59 @@ export async function createAsset(input: AssetCreateInput) {
     return { success: true, assetId: created.id }
   }
 
-  const project = await prisma.novelPromotionProject.findUnique({
-    where: { projectId: requireProjectId(input.access) },
+  const accessProjectId = requireProjectId(input.access)
+  const existingProject = await prisma.novelPromotionProject.findUnique({
+    where: { projectId: accessProjectId },
     select: { id: true },
   })
-  if (!project) {
-    throw new ApiError('NOT_FOUND')
+  let novelPromotionProjectId: string
+  if (existingProject) {
+    novelPromotionProjectId = existingProject.id
+  } else {
+    // For remake projects, lazily create the asset container on first write.
+    const baseProject = await prisma.project.findUnique({
+      where: { id: accessProjectId },
+      select: { type: true, userId: true },
+    })
+    if (!baseProject || baseProject.type !== 'remake') {
+      throw new ApiError('NOT_FOUND')
+    }
+    if (baseProject.userId !== input.access.userId) {
+      throw new ApiError('FORBIDDEN')
+    }
+    const userPreference = await prisma.userPreference.findUnique({
+      where: { userId: input.access.userId },
+    })
+    const { isArtStyleValue: _isArtStyleValue } = await import('@/lib/constants')
+    const { serializeStoryboardMoodPresets: _serialize, DEFAULT_STORYBOARD_MOOD_PRESETS: _defaults } = await import('@/lib/storyboard-mood-presets')
+    const prefArtStyle = userPreference && typeof userPreference.artStyle === 'string'
+      ? userPreference.artStyle
+      : 'american-comic'
+    const created = await prisma.novelPromotionProject.create({
+      data: {
+        projectId: accessProjectId,
+        ...(userPreference ? {
+          analysisModel: userPreference.analysisModel ?? undefined,
+          characterModel: userPreference.characterModel ?? undefined,
+          locationModel: userPreference.locationModel ?? undefined,
+          storyboardModel: userPreference.storyboardModel ?? undefined,
+          editModel: userPreference.editModel ?? undefined,
+          videoModel: userPreference.videoModel ?? undefined,
+          audioModel: userPreference.audioModel ?? undefined,
+          videoRatio: userPreference.videoRatio ?? undefined,
+          artStyle: _isArtStyleValue(prefArtStyle) ? prefArtStyle : 'american-comic',
+          ttsRate: userPreference.ttsRate ?? undefined,
+        } : {
+          artStyle: 'american-comic',
+        }),
+        storyboardMoodPresets: _serialize(_defaults),
+      },
+      select: { id: true },
+    })
+    novelPromotionProjectId = created.id
   }
   const created = await createProjectLocationBackedAsset({
-    novelPromotionProjectId: project.id,
+    novelPromotionProjectId,
     name,
     summary,
     initialDescription: description,

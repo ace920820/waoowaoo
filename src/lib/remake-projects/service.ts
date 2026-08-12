@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { TASK_TYPE } from '@/lib/task/types'
+import { isArtStyleValue } from '@/lib/constants'
+import { serializeStoryboardMoodPresets, DEFAULT_STORYBOARD_MOOD_PRESETS } from '@/lib/storyboard-mood-presets'
 import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
 import { invalidateKeyframeOutputsForRevision } from './keyframes/invalidation'
 
@@ -32,6 +34,8 @@ type RemakeClient = {
     findUnique: (args: unknown) => Promise<Row | null>
     create: (args: unknown) => Promise<Row>
   }
+  userPreference: { findUnique: (args: unknown) => Promise<Row | null> }
+  novelPromotionProject: { create: (args: unknown) => Promise<Row>; findUnique: (args: unknown) => Promise<Row | null> }
   remakeProject: { create: (args: unknown) => Promise<Row> }
   remakeShot: { findUnique: (args: unknown) => Promise<Row | null>; update: (args: unknown) => Promise<Row> }
   remakeShotRevision: { create: (args: unknown) => Promise<Row> }
@@ -66,6 +70,35 @@ export async function createRemakeProject(input: {
     })
     const remakeProject = await tx.remakeProject.create({
         data: { projectId: String(project.id), creationRequestId: input.creationRequestId, importStatus: 'not_imported' },
+    })
+    // Create a NovelPromotionProject container to host project-scoped assets for the remake project.
+    // This reuses the existing asset CRUD, generation, and media pipeline without duplicating code.
+    const userPreference = await tx.userPreference.findUnique({
+      where: { userId: input.userId },
+    })
+    const prefRow = userPreference as Row | null
+    const prefArtStyle = prefRow && typeof (prefRow as Record<string, unknown>).artStyle === 'string'
+      ? (prefRow as Record<string, unknown>).artStyle as string
+      : 'american-comic'
+    await tx.novelPromotionProject.create({
+      data: {
+        projectId: String(project.id),
+        ...(prefRow ? {
+          analysisModel: (prefRow as Record<string, unknown>).analysisModel as string | undefined,
+          characterModel: (prefRow as Record<string, unknown>).characterModel as string | undefined,
+          locationModel: (prefRow as Record<string, unknown>).locationModel as string | undefined,
+          storyboardModel: (prefRow as Record<string, unknown>).storyboardModel as string | undefined,
+          editModel: (prefRow as Record<string, unknown>).editModel as string | undefined,
+          videoModel: (prefRow as Record<string, unknown>).videoModel as string | undefined,
+          audioModel: (prefRow as Record<string, unknown>).audioModel as string | undefined,
+          videoRatio: (prefRow as Record<string, unknown>).videoRatio as string | undefined,
+          artStyle: isArtStyleValue(prefArtStyle) ? prefArtStyle : 'american-comic',
+          ttsRate: (prefRow as Record<string, unknown>).ttsRate as string | undefined,
+        } : {
+          artStyle: 'american-comic',
+        }),
+        storyboardMoodPresets: serializeStoryboardMoodPresets(DEFAULT_STORYBOARD_MOOD_PRESETS),
+      },
     })
     await tx.task.create({
       data: {
@@ -269,6 +302,58 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       return { ...safeTask, promptSlot: promptSlotFromCreatedEvent(task) }
     }),
   }
+}
+
+
+/**
+ * Ensure the remake project has a NovelPromotionProject asset container.
+ * For projects created before the asset library was added to remake mode,
+ * this lazily creates the container on first asset access.
+ */
+export async function ensureRemakeAssetContainer(input: { projectId: string; userId: string }): Promise<Row | null> {
+  const client = remakeClient()
+  const project = await client.project.findUnique({
+    where: { id: input.projectId },
+    select: { id: true, userId: true, type: true },
+  })
+  if (!project) return null
+  const projectRow = project as Row
+  if (projectRow.userId !== input.userId || projectRow.type !== 'remake') return null
+
+  const existing = await client.novelPromotionProject.findUnique({
+    where: { projectId: input.projectId },
+    select: { id: true, projectId: true },
+  })
+  if (existing) return existing as Row
+
+  const userPreference = await client.userPreference.findUnique({
+    where: { userId: input.userId },
+  })
+  const prefRow = userPreference as Row | null
+  const prefArtStyle = prefRow && typeof (prefRow as Record<string, unknown>).artStyle === 'string'
+    ? (prefRow as Record<string, unknown>).artStyle as string
+    : 'american-comic'
+  const created = await client.novelPromotionProject.create({
+    data: {
+      projectId: input.projectId,
+      ...(prefRow ? {
+        analysisModel: (prefRow as Record<string, unknown>).analysisModel as string | undefined,
+        characterModel: (prefRow as Record<string, unknown>).characterModel as string | undefined,
+        locationModel: (prefRow as Record<string, unknown>).locationModel as string | undefined,
+        storyboardModel: (prefRow as Record<string, unknown>).storyboardModel as string | undefined,
+        editModel: (prefRow as Record<string, unknown>).editModel as string | undefined,
+        videoModel: (prefRow as Record<string, unknown>).videoModel as string | undefined,
+        audioModel: (prefRow as Record<string, unknown>).audioModel as string | undefined,
+        videoRatio: (prefRow as Record<string, unknown>).videoRatio as string | undefined,
+        artStyle: isArtStyleValue(prefArtStyle) ? prefArtStyle : 'american-comic',
+        ttsRate: (prefRow as Record<string, unknown>).ttsRate as string | undefined,
+      } : {
+        artStyle: 'american-comic',
+      }),
+      storyboardMoodPresets: serializeStoryboardMoodPresets(DEFAULT_STORYBOARD_MOOD_PRESETS),
+    },
+  })
+  return created as Row
 }
 
 export async function createRemakeShotRevision(input: { shotId: string; changeReason: string; userId: string }) {
