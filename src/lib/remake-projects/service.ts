@@ -35,7 +35,11 @@ type RemakeClient = {
     create: (args: unknown) => Promise<Row>
   }
   userPreference: { findUnique: (args: unknown) => Promise<Row | null> }
-  novelPromotionProject: { create: (args: unknown) => Promise<Row>; findUnique: (args: unknown) => Promise<Row | null> }
+  novelPromotionProject: {
+    create: (args: unknown) => Promise<Row>
+    findUnique: (args: unknown) => Promise<Row | null>
+    findFirst: (args: unknown) => Promise<Row | null>
+  }
   remakeProject: { create: (args: unknown) => Promise<Row> }
   remakeShot: { findUnique: (args: unknown) => Promise<Row | null>; update: (args: unknown) => Promise<Row> }
   remakeShotRevision: { create: (args: unknown) => Promise<Row> }
@@ -120,6 +124,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
   const project = await client.project.findUnique({
     where: { id: input.projectId },
     include: {
+      novelPromotionData: true,
       remakeProject: {
         include: {
           currentSource: true,
@@ -159,7 +164,21 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
     orderBy: { createdAt: 'desc' },
   })
   return {
-    project: { id: projectRow.id, name: projectRow.name, description: projectRow.description, type: projectRow.type },
+    project: (() => {
+      // Also load the NovelPromotionProject asset container so config (artStyle, models, etc.)
+      // shows up correctly in the project config UI for remake projects.
+      const novelPromo = (projectRow as Row).novelPromotionData as Row | null | undefined
+      const baseProject = {
+        id: projectRow.id,
+        name: projectRow.name,
+        description: projectRow.description,
+        type: projectRow.type,
+      }
+      if (novelPromo) {
+        return { ...baseProject, novelPromotionData: novelPromo }
+      }
+      return baseProject
+    })(),
     source: (() => {
       const current = remake?.currentSource as Row | null | undefined
       return {
