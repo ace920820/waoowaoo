@@ -77,7 +77,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
         <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
       </main>
       {stage === 'prompt' ? <PromptStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} onEnterStoryboard={() => updateStage('storyboard')} /> : null}
-      {stage === 'storyboard' ? <RemakeStoryboardStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} /> : null}
+      {stage === 'storyboard' ? <RemakeStoryboardStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} onNavigateToPrompt={() => updateStage('prompt')} /> : null}
       {stage === 'video' ? <RemakeVideoStage projectId={projectId} snapshot={snapshot} /> : null}
 
       {taskDrawerOpen ? <div className="remake-task-overlay" role="presentation" onMouseDown={() => setTaskDrawerOpen(false)}>

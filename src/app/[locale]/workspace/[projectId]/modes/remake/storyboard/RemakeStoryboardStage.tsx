@@ -51,13 +51,15 @@ function PromptStatusBadge({ status }: { status: 'approved' | 'missing' | 'needs
   )
 }
 
-export default function RemakeStoryboardStage({ projectId, snapshot, selectedShotId, onSelectedShotChange }: {
+export default function RemakeStoryboardStage({ projectId, snapshot, selectedShotId, onSelectedShotChange, onNavigateToPrompt }: {
   projectId: string
   snapshot: RemakeSnapshot
   /** 外部控制的选中镜头 ID（跨阶段共享） */
   selectedShotId?: string | null
   /** 选中镜头变化时通知父组件 */
   onSelectedShotChange?: (shotId: string) => void
+  /** 切换到 Prompt 页（与顶部标签一致，客户端导航并保持选中镜头） */
+  onNavigateToPrompt?: () => void
 }) {
   const shots = useMemo(() => adaptRemakeShots(snapshot), [snapshot])
   const [internalSelectedShotId, setInternalSelectedShotId] = useState(selectedShotId ?? shots[0]?.id ?? '')
@@ -95,14 +97,14 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
               </button>
             ))}
           </aside>
-          {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} /> : null}
+          {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} onNavigateToPrompt={onNavigateToPrompt} /> : null}
         </div>
       )}
     </section>
   )
 }
 
-function ShotBlock({ projectId, shot }: { projectId: string; shot: RemakeShotView }) {
+function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string; shot: RemakeShotView; onNavigateToPrompt?: () => void }) {
   const select = useSelectRemakeKeyframe(projectId)
   const generate = useGenerateRemakeKeyframe(projectId)
   const adopt = useAdoptRemakeKeyframe(projectId)
@@ -263,7 +265,7 @@ function ShotBlock({ projectId, shot }: { projectId: string; shot: RemakeShotVie
       </div>
 
       {/* 语义层 — 随当前选中帧刷新 */}
-      <ShotSemanticsPanel projectId={projectId} shot={shot} activeSlot={selectedSourceSlot} />
+      <ShotSemanticsPanel projectId={projectId} shot={shot} activeSlot={selectedSourceSlot} onNavigateToPrompt={onNavigateToPrompt} />
 
       {/* 比较区（保留） */}
       {compare.left || compare.right ? (

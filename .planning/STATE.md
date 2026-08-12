@@ -94,6 +94,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 | 2026-05-07 | `260507-cpz-fix-frontend-result-page-missing-fields-` | Fixed storyboard package frontend result/preview rendering for shot-level `focalLength`, `dof`, and `lighting` while preserving backend generation contracts. |
 | 2026-07-03 | `260703-lqd-fix-shot-group-videoreferencesjson-overf` | Widened `NovelPromotionShotGroup.videoReferencesJson` to MySQL `LONGTEXT` so imported cinematic plans and submitted storyboard prompts can persist without overflowing the column. |
 | 2026-08-07 | `260807-vrz-remakeworkbench` | Verified the video-remake creation entry and `RemakeWorkbench` mount; 7 focused tests and typecheck passed. |
+| 2026-08-12 | `20260812-storyboard-go-prompt-sync` | 分镜页「前往 Prompt 页」按钮改为客户端 stage 切换（复用 updateStage('prompt')），与顶部标签一致，整页跳转改为直接切换并保持当前选中的镜头片段。 |
 
 ### UAT / Verification Notes
 

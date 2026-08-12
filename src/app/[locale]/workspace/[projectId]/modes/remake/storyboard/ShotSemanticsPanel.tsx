@@ -13,9 +13,10 @@ type Props = {
   projectId: string
   shot: RemakeShotView
   activeSlot?: 'start' | 'middle' | 'end'
+  onNavigateToPrompt?: () => void
 }
 
-export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "middle" }: Props & { activeSlot?: "start" | "middle" | "end" }) {
+export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "middle", onNavigateToPrompt }: Props & { activeSlot?: "start" | "middle" | "end" }) {
   const semantics = shot.semantics
   const update = useUpdateRemakeShotSemantics(projectId)
   const [editing, setEditing] = useState(false)
@@ -121,8 +122,6 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
     setLocalCharacterTags(semantics.characterTags.join(', '))
     setEditing(false)
   }
-
-  const promptHref = `?stage=prompt&shot=${encodeURIComponent(shot.id)}`
 
   return (
     <section
@@ -410,12 +409,13 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
       <div className="mt-4 border-t border-slate-200 pt-3">
         <div className="mb-2 flex items-center justify-between">
           <h5 className="text-xs font-bold text-slate-700">Prompt 状态</h5>
-          <a
-            href={promptHref}
+          <button
+            type="button"
+            onClick={onNavigateToPrompt}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
           >
             前往 Prompt 页 <AppIcon name="arrowRight" size={10} className="inline" />
-          </a>
+          </button>
         </div>
         <div className="grid gap-2 md:grid-cols-4">
           {REMAKE_KEYFRAME_SLOTS.map((slot) => (
@@ -424,14 +424,14 @@ export default function ShotSemanticsPanel({ projectId, shot, activeSlot = "midd
               label={`图片 ${slot.toUpperCase()}`}
               status={shot.imagePromptStatus[slot]}
               versionLabel={shot.imagePrompts[slot]?.coreText ? '已采用版本' : '暂无版本'}
-              href={promptHref}
+              onClick={onNavigateToPrompt}
             />
           ))}
           <PromptStatusCard
             label="视频"
             status={shot.videoPromptStatus}
             versionLabel={shot.videoPrompt?.coreText ? '已采用版本' : '暂无版本'}
-            href={promptHref}
+            onClick={onNavigateToPrompt}
           />
         </div>
       </div>
@@ -469,18 +469,19 @@ function ValueText({ value, placeholder, multiline }: { value: string | null; pl
 function PromptStatusCard({
   label,
   status,
-  href,
+  onClick,
   versionLabel,
 }: {
   label: string
   status: 'approved' | 'missing' | 'needs_review'
-  href: string
+  onClick?: () => void
   versionLabel?: string
 }) {
   return (
-    <a
-      href={href}
-      className="block rounded-md border border-slate-200 bg-white p-2 transition hover:border-indigo-300 hover:bg-indigo-50/30"
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full text-left rounded-md border border-slate-200 bg-white p-2 transition hover:border-indigo-300 hover:bg-indigo-50/30"
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-600">{label}</span>
@@ -489,7 +490,7 @@ function PromptStatusCard({
       <p className="mt-1 text-[10px] text-slate-400">
         {versionLabel || '暂无版本'}
       </p>
-    </a>
+    </button>
   )
 }
 
