@@ -37,7 +37,11 @@ function ensureKeyframeMigrationFixture() {
     writeFileSync(schemaPath, baselineSchema)
     const baselineSql = shell('npx', ['prisma', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'])
     shell('docker', ['exec', '-i', 'waoowaoo-test-mysql', 'mysql', '-uroot', '-proot', 'waoowaoo_test'], { input: baselineSql })
-    const migrationNames = readdirSync('prisma/migrations').filter((name) => name !== CURRENT_MIGRATION).sort()
+    // Baseline (e933e2a) already covers history up to CURRENT_MIGRATION's predecessor.
+    // Only resolve migrations strictly older than CURRENT so the current migration AND
+    // any migrations created after it (e.g. 20260811030000_add_remake_shot_semantics)
+    // are actually applied to keep the fixture in sync with the live Prisma schema.
+    const migrationNames = readdirSync('prisma/migrations').filter((name) => name !== CURRENT_MIGRATION && name < CURRENT_MIGRATION).sort()
     for (const migrationName of migrationNames) {
       shell('npx', ['prisma', 'migrate', 'resolve', '--applied', migrationName], { stdio: 'ignore' })
     }
