@@ -51,10 +51,22 @@ function PromptStatusBadge({ status }: { status: 'approved' | 'missing' | 'needs
   )
 }
 
-export default function RemakeStoryboardStage({ projectId, snapshot }: { projectId: string; snapshot: RemakeSnapshot }) {
+export default function RemakeStoryboardStage({ projectId, snapshot, selectedShotId, onSelectedShotChange }: {
+  projectId: string
+  snapshot: RemakeSnapshot
+  /** 外部控制的选中镜头 ID（跨阶段共享） */
+  selectedShotId?: string | null
+  /** 选中镜头变化时通知父组件 */
+  onSelectedShotChange?: (shotId: string) => void
+}) {
   const shots = useMemo(() => adaptRemakeShots(snapshot), [snapshot])
-  const [selectedShotId, setSelectedShotId] = useState(shots[0]?.id ?? '')
-  const selectedShot = shots.find((shot) => shot.id === selectedShotId) ?? shots[0]
+  const [internalSelectedShotId, setInternalSelectedShotId] = useState(selectedShotId ?? shots[0]?.id ?? '')
+  const currentSelectedShotId = selectedShotId ?? internalSelectedShotId
+  const setSelectedShotId = (id: string) => {
+    setInternalSelectedShotId(id)
+    onSelectedShotChange?.(id)
+  }
+  const selectedShot = shots.find((shot) => shot.id === currentSelectedShotId) ?? shots[0]
 
   return (
     <section className="space-y-6 pb-16" data-testid="remake-storyboard-stage">

@@ -28,6 +28,8 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
   const t = useTranslations('remakeWorkbench')
   const searchParams = useSearchParams()
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)
+  // 在 prompt / 分镜 / 视频等阶段之间共享选中的镜头
+  const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
   const requestedStage = searchParams?.get('stage') as RemakeStage | null
   const stage = isRemakeWorkbenchStage(requestedStage) ? requestedStage : 'overview'
   const query = useRemakeProject(projectId)
@@ -74,8 +76,8 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
       <main className="remake-stage-main" data-stage-active={stage === 'scenedetect' ? 'true' : 'false'}>
         <SceneDetectStageHost projectId={projectId} initialProject={null} runtime={runtime} enabled availability="ready" />
       </main>
-      {stage === 'prompt' ? <PromptStage projectId={projectId} snapshot={snapshot} onEnterStoryboard={() => updateStage('storyboard')} /> : null}
-      {stage === 'storyboard' ? <RemakeStoryboardStage projectId={projectId} snapshot={snapshot} /> : null}
+      {stage === 'prompt' ? <PromptStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} onEnterStoryboard={() => updateStage('storyboard')} /> : null}
+      {stage === 'storyboard' ? <RemakeStoryboardStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} /> : null}
       {stage === 'video' ? <RemakeVideoStage projectId={projectId} snapshot={snapshot} /> : null}
 
       {taskDrawerOpen ? <div className="remake-task-overlay" role="presentation" onMouseDown={() => setTaskDrawerOpen(false)}>

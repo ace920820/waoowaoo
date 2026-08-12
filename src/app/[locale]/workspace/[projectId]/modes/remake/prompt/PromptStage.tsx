@@ -9,7 +9,15 @@ import { PromptImageTab } from './PromptImageTab'
 import { PromptVideoTab } from './PromptVideoTab'
 import './prompt-stage.css'
 
-type Props = { projectId: string; snapshot: RemakeSnapshot; onEnterStoryboard?: () => void }
+type Props = {
+  projectId: string
+  snapshot: RemakeSnapshot
+  onEnterStoryboard?: () => void
+  /** 外部控制的选中镜头 ID（跨阶段共享） */
+  selectedShotId?: string | null
+  /** 选中镜头变化时通知父组件 */
+  onSelectedShotChange?: (shotId: string) => void
+}
 type Filter = 'all' | 'pending_review' | 'approved'
 const slots = ['start', 'middle', 'end'] as const
 
@@ -23,13 +31,19 @@ function stateFor(track: PromptTrackSummary | null) {
   return track.adoptedVersion ? 'approved' : 'pending_review'
 }
 
-export function PromptStage({ projectId, snapshot, onEnterStoryboard }: Props) {
+export function PromptStage({ projectId, snapshot, onEnterStoryboard, selectedShotId, onSelectedShotChange }: Props) {
   const t = useTranslations('remakeWorkbench')
-  const [selectedShotId, setSelectedShotId] = useState(snapshot.shots[0]?.id ?? '')
+  const [internalSelectedShotId, setInternalSelectedShotId] = useState(selectedShotId ?? snapshot.shots[0]?.id ?? '')
+  // 如果父组件传入了 selectedShotId，则以父组件为准（受控模式）
+  const currentSelectedShotId = selectedShotId ?? internalSelectedShotId
+  const setSelectedShotId = (id: string) => {
+    setInternalSelectedShotId(id)
+    onSelectedShotChange?.(id)
+  }
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const analyze = useAnalyzeRemakePrompt(projectId)
-  const selectedShot = snapshot.shots.find((shot) => shot.id === selectedShotId) ?? snapshot.shots[0]
+  const selectedShot = snapshot.shots.find((shot) => shot.id === currentSelectedShotId) ?? snapshot.shots[0]
   const allTracks = snapshot.shots.flatMap((shot) => shot.promptTracks ?? [])
   const totalKeyframes = snapshot.shots.length * 3
   const analyzedKeyframes = snapshot.shots.flatMap((shot) => slots.map((slot) => trackFor(shot.promptTracks, `image:${slot}`))).filter((track) => Boolean(track?.latestVersion)).length
