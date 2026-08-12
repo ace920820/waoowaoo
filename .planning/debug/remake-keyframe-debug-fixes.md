@@ -40,3 +40,34 @@ updated: 2026-08-12
 - 新增测试：
   - `remake-keyframe-model-resolution.test.ts`（项目模型 > 用户模型、显式 model 优先）。
   - `remake-action-sheet.test.ts`（纵向拼接尺寸、mediaId 写入与回填）。
+
+
+---
+
+## Follow-up: 资产保存改为“确认即保存”后直接报错（Failed to update shot semantics）
+
+### Symptom
+- 上轮把资产选择改为“确认即保存”后，点击确认触发 PATCH `/shots/[id]/semantics`，但直接报错 `Failed to update shot semantics`。
+
+### Root Cause
+- `src/lib/remake-projects/semantics/service.ts` 中的归属校验：
+  ```ts
+  if (shot.remakeProjectId !== input.projectId) return null
+  ```
+  `shot.remakeProjectId` 是 **remake_projects 行 id**（如 `05616017-…`），而 `input.projectId` 是 **projects.id**（如 `e44be650-…`），两者是不同 UUID，**永远不相等** → `updateRemakeShotSemantics` 恒返回 `null` → 路由抛 `NOT_FOUND` → 前端显示“Failed to update shot semantics”。
+- 之前“未保存”与此同根因：旧代码保存按钮未启用、PATCH 未发出；本次 auto-save 发出 PATCH 后才暴露出该恒真失败的校验。
+- 附带：前端 mutation 读取 `payload.detail`（单数），而 API 错误体返回 `details`（复数），导致真实错误信息被“Failed to update shot semantics”掩盖。
+
+### Fix
+- `service.ts`：改为与项目归属 id 比较：
+  ```ts
+  const project = shot.remakeProject?.project
+  if (!project || project.userId !== input.userId || project.type !== 'remake') return null
+  if (project.id !== input.projectId) return null   // 之前误用 shot.remakeProjectId
+  ```
+- `remake-keyframe-mutations.ts`：错误信息改读 `details` / `error.details` / `message`，避免掩盖真实原因。
+
+### Verification
+- 用 dev 库实拍：修复前字符保存返回 null（恒失败）；修复后成功写库并回读 `characterAssetIds`/`characterTags`。
+- 新增回归测试 `tests/unit/remake-projects/remake-shot-semantics-save.test.ts`（项目 id 匹配时持久化、不匹配返回 null）。
+- `tsc --noEmit`、ESLint 通过；`tests/unit/remake-projects` + `tests/unit/worker` 共 81 文件 / 333 用例全部通过。

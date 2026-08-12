@@ -7,7 +7,7 @@ import { queryKeys } from '../keys'
 async function request<T>(url: string, body: Record<string, unknown>): Promise<T> {
   const response = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Remake keyframe request failed')
+  if (!response.ok) throw new Error(typeof payload?.details === 'string' ? payload.details : typeof payload?.error?.details === 'string' ? payload.error.details : typeof payload?.message === 'string' ? payload.message : 'Remake keyframe request failed')
   return payload as T
 }
 
@@ -62,7 +62,7 @@ export function useUpdateRemakeShotSemantics(projectId: string) {
           body: JSON.stringify(input.patch),
         })
         const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Failed to update shot semantics')
+        if (!response.ok) throw new Error(typeof payload?.details === 'string' ? payload.details : typeof payload?.error?.details === 'string' ? payload.error.details : typeof payload?.message === 'string' ? payload.message : 'Failed to update shot semantics')
         return payload as { semantics: Record<string, unknown> }
       })(),
     onSuccess: refetch,

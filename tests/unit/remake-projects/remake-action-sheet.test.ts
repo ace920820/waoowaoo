@@ -71,7 +71,10 @@ describe('persistActionSheet mediaId', () => {
       ],
       mediaId: 'media-action-sheet',
     })
-    expect(result.reused).toBe(true)
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') {
+      expect(result.reused).toBe(true)
+    }
     expect(prismaMocks.update).toHaveBeenCalledWith(expect.objectContaining({ data: { mediaId: 'media-action-sheet' } }))
   })
 })

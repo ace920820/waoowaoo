@@ -62,7 +62,7 @@ expected: 场景可用下拉选择（跟随默认/本镜头指定）；角色与
 result: issue
 reported: "场景下拉选择正常，但选择并确认后没有保存，显示为未选择状态"
 severity: major
-fixed: "资产选择确认后立即持久化；hasChanges 纳入资产字段，保存按钮正确启用"（见 .planning/debug/remake-keyframe-debug-fixes.md）
+fixed: "资产选择确认后立即持久化；hasChanges 纳入资产字段，保存按钮正确启用；并修复 updateRemakeShotSemantics 归属校验恒失败导致的 PATCH 报错"（见 .planning/debug/remake-keyframe-debug-fixes.md）
 
 ### 12. 成片页只读边界
 expected: 成片页显示主画面参考与辅助动作参考；视频生成按钮禁用（Phase 9）。

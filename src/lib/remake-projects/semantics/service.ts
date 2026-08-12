@@ -36,7 +36,9 @@ export async function updateRemakeShotSemantics(input: {
   if (!shot) return null
   const project = shot.remakeProject?.project
   if (!project || project.userId !== input.userId || project.type !== 'remake') return null
-  if (shot.remakeProjectId !== input.projectId) return null
+  // `shot.remakeProjectId` is the remake_projects row id, NOT the owning project id.
+  // Compare against the owning project id (projects.id) resolved via the relation.
+  if (project.id !== input.projectId) return null
 
   // Validate asset ownership: all referenced assets must belong to this project's asset library.
   // This prevents global/asset-center assets or cross-project assets from being bound to remake shots.
