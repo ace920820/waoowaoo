@@ -78,7 +78,7 @@ export default function RemakeWorkbench({ projectId, onStageChange }: RemakeWork
       </main>
       {stage === 'prompt' ? <PromptStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} onEnterStoryboard={() => updateStage('storyboard')} /> : null}
       {stage === 'storyboard' ? <RemakeStoryboardStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} onNavigateToPrompt={() => updateStage('prompt')} /> : null}
-      {stage === 'video' ? <RemakeVideoStage projectId={projectId} snapshot={snapshot} /> : null}
+      {stage === 'video' ? <RemakeVideoStage projectId={projectId} snapshot={snapshot} selectedShotId={selectedShotId} onSelectedShotChange={setSelectedShotId} /> : null}
 
       {taskDrawerOpen ? <div className="remake-task-overlay" role="presentation" onMouseDown={() => setTaskDrawerOpen(false)}>
         <aside className="remake-task-drawer" role="dialog" aria-modal="true" aria-label={t('tasks')} onMouseDown={(event) => event.stopPropagation()}>

@@ -14,6 +14,7 @@ import {
   type SelectedVideoReferences,
 } from '@/lib/remake-projects/keyframes/video-inputs'
 import { RemakeProductionTools } from '../RemakeProductionTools'
+import { RemakeShotOverview } from '../ShotOverview'
 import {
   normalizeVideoGenerationSelections,
   resolveEffectiveVideoCapabilityDefinitions,
@@ -64,15 +65,29 @@ function apiErrorMessage(data: unknown, fallback: string) {
 export default function RemakeVideoStage({
   projectId,
   snapshot,
+  selectedShotId,
+  onSelectedShotChange,
 }: {
   projectId: string
   snapshot: RemakeSnapshot
+  /** 外部控制的选中镜头 ID（跨阶段共享） */
+  selectedShotId?: string | null
+  /** 选中镜头变化时通知父组件 */
+  onSelectedShotChange?: (shotId: string) => void
 }) {
   const shots = useMemo(() => adaptRemakeShots(snapshot), [snapshot])
   const cards = useMemo(
     () => shots.map((shot) => ({ shot, input: mapRemakeVideoInputs(shot) })),
     [shots],
   )
+  const [internalSelectedShotId, setInternalSelectedShotId] = useState(selectedShotId ?? shots[0]?.id ?? '')
+  const currentSelectedShotId = selectedShotId ?? internalSelectedShotId
+  const setSelectedShotId = (id: string) => {
+    setInternalSelectedShotId(id)
+    onSelectedShotChange?.(id)
+  }
+  const selectedShot = shots.find((shot) => shot.id === currentSelectedShotId) ?? shots[0]
+  const selectedCard = cards.find((card) => card.shot.id === selectedShot?.id) ?? cards[0]
   const adoptedCount = cards.reduce(
     (total, card) => total + card.input.mainImages.length,
     0,
@@ -148,21 +163,30 @@ export default function RemakeVideoStage({
           暂无可生成的 Video 镜头。
         </div>
       ) : (
-        <div className="space-y-5">
-          {cards.map(({ shot, input }) => (
-            <VideoShotCard
-              key={shot.id}
-              projectId={projectId}
-              sourceMediaUrl={snapshot.source.mediaUrl}
-              shot={shot}
-              input={input}
-              defaultVideoModel={defaultVideoModel}
-              videoModelOptions={videoModelOptions}
-              capabilityOverrides={capabilityOverrides}
-              generationTask={videoTaskByShot.get(shot.id) ?? null}
-              onGenerated={refresh}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <RemakeShotOverview
+              shots={snapshot.shots}
+              selectedShotId={selectedShot?.id ?? ''}
+              onSelectShot={setSelectedShotId}
             />
-          ))}
+          </div>
+          <div className="min-w-0 lg:col-span-8">
+            {selectedCard ? (
+              <VideoShotCard
+                key={selectedCard.shot.id}
+                projectId={projectId}
+                sourceMediaUrl={snapshot.source.mediaUrl}
+                shot={selectedCard.shot}
+                input={selectedCard.input}
+                defaultVideoModel={defaultVideoModel}
+                videoModelOptions={videoModelOptions}
+                capabilityOverrides={capabilityOverrides}
+                generationTask={videoTaskByShot.get(selectedCard.shot.id) ?? null}
+                onGenerated={refresh}
+              />
+            ) : null}
+          </div>
         </div>
       )}
     </section>

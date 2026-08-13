@@ -18,6 +18,7 @@ import {
   useSelectRemakeKeyframe,
 } from '@/lib/query/mutations/remake-keyframe-mutations'
 import { RemakeProductionTools } from '../RemakeProductionTools'
+import { RemakeShotOverview } from '../ShotOverview'
 import ShotSemanticsPanel from './ShotSemanticsPanel'
 import KeyframePreviewModal from './KeyframePreviewModal'
 
@@ -81,22 +82,17 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
       {shots.length === 0 ? (
         <EmptyState text="暂无可用 Shot" />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="space-y-2 rounded-xl border border-slate-200 bg-white p-3" aria-label="Shot 列表">
-            {shots.map((shot) => (
-              <button
-                key={shot.id}
-                type="button"
-                onClick={() => setSelectedShotId(shot.id)}
-                className={`w-full rounded-lg border p-3 text-left ${
-                  selectedShot?.id === shot.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200'
-                }`}
-              >
-                <strong>{shot.label}</strong>
-              </button>
-            ))}
-          </aside>
-          {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} onNavigateToPrompt={onNavigateToPrompt} tasks={snapshot.tasks} /> : null}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <RemakeShotOverview
+              shots={snapshot.shots}
+              selectedShotId={selectedShot?.id ?? ''}
+              onSelectShot={setSelectedShotId}
+            />
+          </div>
+          <div className="min-w-0 lg:col-span-8">
+            {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} onNavigateToPrompt={onNavigateToPrompt} tasks={snapshot.tasks} /> : null}
+          </div>
         </div>
       )}
     </section>
