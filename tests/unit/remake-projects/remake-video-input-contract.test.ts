@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RemakeShotView } from '@/lib/remake-projects/keyframes/adapter'
 import {
   buildOrderedVideoReferences,
+  DEFAULT_SELECTED_VIDEO_REFERENCES,
   mapRemakeVideoInputs,
   videoSubmissionReadiness,
 } from '@/lib/remake-projects/keyframes/video-inputs'
@@ -93,6 +94,7 @@ describe('buildOrderedVideoReferences (D-04 fixed order)', () => {
 
     // User selects in "wrong" order
     const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
       slots: ['end', 'start'],
       includeActionSheet: true,
     })
@@ -110,6 +112,7 @@ describe('buildOrderedVideoReferences (D-04 fixed order)', () => {
   it('includes only explicitly selected references (D-01)', () => {
     const input = mapRemakeVideoInputs(makeShot())
     const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
       slots: ['middle'],
       includeActionSheet: false,
     })
@@ -123,6 +126,7 @@ describe('buildOrderedVideoReferences (D-04 fixed order)', () => {
     const input = mapRemakeVideoInputs(shot)
 
     const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
       slots: ['middle'],
       includeActionSheet: true,
     })
@@ -132,6 +136,7 @@ describe('buildOrderedVideoReferences (D-04 fixed order)', () => {
   it('does not include keyframes when none are selected (action sheet only is blocked by readiness, not here)', () => {
     const input = mapRemakeVideoInputs(makeShot())
     const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
       slots: [],
       includeActionSheet: true,
     })
@@ -144,13 +149,13 @@ describe('buildOrderedVideoReferences (D-04 fixed order)', () => {
 describe('videoSubmissionReadiness (VGEN-07 / D-03)', () => {
   it('returns no reasons when one keyframe and approved prompt are selected', () => {
     const input = mapRemakeVideoInputs(makeShot())
-    const reasons = videoSubmissionReadiness(input, { slots: ['middle'], includeActionSheet: false })
+    const reasons = videoSubmissionReadiness(input, { ...DEFAULT_SELECTED_VIDEO_REFERENCES, slots: ['middle'], includeActionSheet: false })
     expect(reasons).toEqual([])
   })
 
   it('blocks when no keyframe is selected', () => {
     const input = mapRemakeVideoInputs(makeShot())
-    const reasons = videoSubmissionReadiness(input, { slots: [], includeActionSheet: true })
+    const reasons = videoSubmissionReadiness(input, { ...DEFAULT_SELECTED_VIDEO_REFERENCES, slots: [], includeActionSheet: true })
     expect(reasons).toContainEqual(expect.stringContaining('至少选择'))
   })
 
@@ -163,7 +168,7 @@ describe('videoSubmissionReadiness (VGEN-07 / D-03)', () => {
       } as RemakeShotView['slots'],
     })
     const input = mapRemakeVideoInputs(shot)
-    const reasons = videoSubmissionReadiness(input, { slots: ['start', 'middle'], includeActionSheet: false })
+    const reasons = videoSubmissionReadiness(input, { ...DEFAULT_SELECTED_VIDEO_REFERENCES, slots: ['start', 'middle'], includeActionSheet: false })
     // start is selected but not adopted, so only middle counts; at least one keyframe is selected => passes
     // But the effective selected keyframes count is 1, so it passes
     expect(reasons).toEqual([])
@@ -171,7 +176,96 @@ describe('videoSubmissionReadiness (VGEN-07 / D-03)', () => {
 
   it('blocks when video prompt is missing or needs review', () => {
     const input = mapRemakeVideoInputs(makeShot({ videoPromptStatus: 'needs_review' } as Partial<RemakeShotView>))
-    const reasons = videoSubmissionReadiness(input, { slots: ['middle'], includeActionSheet: false })
+    const reasons = videoSubmissionReadiness(input, { ...DEFAULT_SELECTED_VIDEO_REFERENCES, slots: ['middle'], includeActionSheet: false })
     expect(reasons).toContainEqual(expect.stringContaining('复核'))
+  })
+})
+
+
+describe('buildOrderedVideoReferences with asset references (omni-reference parity)', () => {
+  const assets = {
+    characters: [
+      {
+        id: 'char-sam',
+        name: '萨姆',
+        appearances: [{ imageUrl: 'https://cdn/sam.png' }],
+        customVoiceUrl: 'https://cdn/sam-voice.mp3',
+      },
+    ],
+    locations: [
+      {
+        id: 'loc-cabin',
+        name: '机舱内部',
+        selectedImageId: 'img-cabin',
+        images: [{ id: 'img-cabin', imageUrl: 'https://cdn/cabin.png', isSelected: false, imageIndex: 0, description: null, previousImageUrl: null, previousDescription: null }],
+      },
+    ],
+    props: [
+      {
+        id: 'prop-briefcase',
+        name: '公文包',
+        selectedImageId: 'img-briefcase',
+        images: [{ id: 'img-briefcase', imageUrl: 'https://cdn/briefcase.png', isSelected: false, imageIndex: 0, description: null, previousImageUrl: null, previousDescription: null }],
+      },
+    ],
+  } as never
+
+  const boundShot = makeShot({
+    semantics: {
+      shotType: null,
+      cameraMove: null,
+      description: null,
+      moodPresetId: null,
+      customMood: null,
+      sceneTag: '机舱内部_白天',
+      characterTags: ['萨姆'],
+      sceneAssetId: 'loc-cabin',
+      characterAssetIds: ['char-sam'],
+      propAssetIds: ['prop-briefcase'],
+    } as RemakeShotView['semantics'],
+  } as Partial<RemakeShotView>)
+
+  it('appends characters -> scene -> props -> audio after keyframes/action sheet', () => {
+    const input = mapRemakeVideoInputs(boundShot)
+    const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
+      slots: ['middle'],
+      includeActionSheet: true,
+      includeCharacterImages: true,
+      includeLocationImage: true,
+      includePropImages: true,
+      includeCharacterAudio: true,
+    }, assets)
+
+    expect(refs.map((r) => r.role)).toEqual([
+      'middle_keyframe',
+      'action_sheet',
+      'character_reference',
+      'scene_reference',
+      'prop_reference',
+      'character_audio_reference',
+    ])
+    expect(refs.map((r) => r.ordinal)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(refs[2].label).toBe('角色 萨姆')
+    expect(refs[2].mediaUrl).toBe('https://cdn/sam.png')
+    expect(refs[3].label).toBe('场景 机舱内部')
+    expect(refs[4].label).toBe('物品 公文包')
+    expect(refs[5].mediaType).toBe('audio')
+    expect(refs[5].mediaUrl).toBe('https://cdn/sam-voice.mp3')
+  })
+
+  it('omits toggled-off or unbound asset categories', () => {
+    const input = mapRemakeVideoInputs(boundShot)
+    const refs = buildOrderedVideoReferences(input, {
+      ...DEFAULT_SELECTED_VIDEO_REFERENCES,
+      slots: ['middle'],
+      includeActionSheet: false,
+      includeCharacterImages: false,
+      includeLocationImage: false,
+      includePropImages: false,
+      includeCharacterAudio: false,
+    }, assets)
+
+    expect(refs.map((r) => r.role)).toEqual(['middle_keyframe'])
   })
 })

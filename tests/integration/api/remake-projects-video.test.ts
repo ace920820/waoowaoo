@@ -80,6 +80,45 @@ const prismaMock = vi.hoisted(() => ({
       status: 'completed',
     })),
   },
+  novelPromotionProject: {
+    findUnique: vi.fn(async () => ({ id: 'asset-container-1' })),
+  },
+  novelPromotionCharacter: {
+    findMany: vi.fn(async () => [
+      {
+        id: 'char-1',
+        name: '萨姆',
+        appearances: [{
+          id: 'appearance-1',
+          appearanceIndex: 0,
+          imageMediaId: 'b1111111-1111-4111-8111-111111111111',
+          imageUrl: null,
+          imageUrls: null,
+          selectedIndex: null,
+        }],
+        customVoiceMediaId: 'e1111111-1111-4111-8111-111111111111',
+        customVoiceUrl: null,
+      },
+    ]),
+  },
+  novelPromotionLocation: {
+    findMany: vi.fn(async () => [
+      {
+        id: 'scene-1',
+        name: '机舱内部',
+        assetKind: 'location',
+        selectedImage: { id: 'img-scene', imageMediaId: 'c1111111-1111-4111-8111-111111111111', imageUrl: null },
+        images: [],
+      },
+      {
+        id: 'prop-1',
+        name: '公文包',
+        assetKind: 'prop',
+        selectedImage: { id: 'img-prop', imageMediaId: 'd1111111-1111-4111-8111-111111111111', imageUrl: null },
+        images: [],
+      },
+    ]),
+  },
   task: {
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'task-1', ...data })),
   },
@@ -94,6 +133,7 @@ vi.mock('@/lib/config-service', () => ({
     resolution: '720p',
     generateAudio: false,
     duration: 5,
+    generationMode: 'normal',
   })),
 }))
 
@@ -110,8 +150,14 @@ vi.mock('@/lib/remake-projects/prompt/service', () => ({
   })),
 }))
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 vi.mock('@/lib/media/service', () => ({
-  resolveMediaRef: vi.fn(async (id: string) => ({ id, storageKey: `storage/${id}` })),
+  resolveMediaRef: vi.fn(async (id?: string, legacy?: string) => {
+    const raw = id || legacy || ''
+    if (UUID_RE.test(raw)) return { id: raw, storageKey: `storage/${raw}` }
+    // Storage key -> simulate ensureMediaObjectFromStorageKey producing a uuid MediaObject.
+    return { id: '99999999-9999-4999-8999-999999999999', storageKey: raw }
+  }),
   ensureMediaObjectFromStorageKey: vi.fn(async (key: string) => ({ id: `media-${key}`, storageKey: key })),
 }))
 
@@ -277,6 +323,227 @@ describe('remake video generation service', () => {
       shotDurationSeconds: 3,
     })
     expect(c.inputFingerprint).not.toBe(a.inputFingerprint)
+  })
+})
+
+describe('remake video generation — omni-reference asset parity', () => {
+  const assetBoundShot = {
+    id: IDS.shotId,
+    remakeProjectId: IDS.remakeProjectId,
+    stableKey: 'shot-01',
+    currentRevision: 1,
+    sceneAssetId: 'scene-1',
+    characterAssetIds: JSON.stringify(['char-1']),
+    propAssetIds: JSON.stringify(['prop-1']),
+    remakeProject: {
+      projectId: IDS.projectId,
+      currentSource: { sourceRevision: 1 },
+    },
+    revisions: [{
+      id: IDS.revisionId,
+      revision: 1,
+      lifecycleState: 'active',
+      sourceRevision: 1,
+    }],
+  }
+
+  it('resolves bound scene/prop/character/voice assets into the frozen plan with Ark content[] mode', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(assetBoundShot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-assets',
+      model: 'ark::doubao-seedance-2-0-260128',
+      selectedSlots: ['start', 'middle', 'end'],
+      includeActionSheet: true,
+      includeCharacterImages: true,
+      includeLocationImage: true,
+      includePropImages: true,
+      includeCharacterAudio: true,
+      shotDurationSeconds: 4,
+    })
+
+    const refs = descriptor.payload.inputSnapshot.orderedReferences
+    expect(refs.map((r: { role: string }) => r.role)).toEqual([
+      'start_keyframe',
+      'middle_keyframe',
+      'end_keyframe',
+      'action_sheet',
+      'character_reference',
+      'scene_reference',
+      'prop_reference',
+      'character_audio_reference',
+    ])
+    const byRole = Object.fromEntries(
+      refs.map((r) => [r.role, r]),
+    ) as Record<string, { role: string; label?: string; mediaId?: string; mediaType?: string }>
+    expect(byRole.character_reference.label).toBe('角色 萨姆')
+    expect(byRole.character_reference.mediaId).toBe('b1111111-1111-4111-8111-111111111111')
+    expect(byRole.scene_reference.label).toBe('场景 机舱内部')
+    expect(byRole.scene_reference.mediaId).toBe('c1111111-1111-4111-8111-111111111111')
+    expect(byRole.prop_reference.label).toBe('物品 公文包')
+    expect(byRole.prop_reference.mediaId).toBe('d1111111-1111-4111-8111-111111111111')
+    expect(byRole.character_audio_reference.mediaType).toBe('audio')
+    expect(byRole.character_audio_reference.mediaId).toBe('e1111111-1111-4111-8111-111111111111')
+
+    expect(descriptor.payload.inputSnapshot.referenceMode).toBe('ark_content_multireference')
+    const promptText = descriptor.payload.inputSnapshot.promptText
+    expect(promptText).toContain('参考素材使用说明：')
+    expect(promptText).toContain('@Image1（Start 起始帧）')
+    expect(promptText).toContain('@Image5（角色 萨姆）')
+    expect(promptText).toContain('@Audio1（角色 萨姆 声音）')
+  })
+
+  it('skips asset categories that are toggled off or lack media', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(assetBoundShot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-no-assets',
+      model: 'ark::doubao-seedance-2-0-260128',
+      selectedSlots: ['middle'],
+      includeActionSheet: false,
+      includeCharacterImages: false,
+      includeLocationImage: false,
+      includePropImages: false,
+      includeCharacterAudio: false,
+      shotDurationSeconds: 4,
+    })
+
+    const roles = descriptor.payload.inputSnapshot.orderedReferences.map((r: { role: string }) => r.role)
+    expect(roles).toEqual(['middle_keyframe'])
+  })
+
+  it('degrades to composite_image_mvp without the reference suffix for non-Ark models', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(assetBoundShot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-degrade',
+      model: 'openai::video-model',
+      selectedSlots: ['middle'],
+      includeActionSheet: false,
+      shotDurationSeconds: 4,
+    })
+
+    expect(descriptor.payload.inputSnapshot.referenceMode).toBe('composite_image_mvp')
+    expect(descriptor.payload.inputSnapshot.promptText).toBe('character runs through alley')
+  })
+})
+
+describe('remake video generation — storage-key keyframe regression (REVIEW-01)', () => {
+  const storageKeyShot = {
+    id: IDS.shotId,
+    remakeProjectId: IDS.remakeProjectId,
+    stableKey: 'shot-01',
+    currentRevision: 1,
+    sceneAssetId: null,
+    characterAssetIds: null,
+    propAssetIds: null,
+    remakeProject: {
+      projectId: IDS.projectId,
+      currentSource: { sourceRevision: 1 },
+    },
+    revisions: [{
+      id: IDS.revisionId,
+      revision: 1,
+      lifecycleState: 'active',
+      sourceRevision: 1,
+    }],
+  }
+
+  it('normalizes keyframe output storage keys to a stable MediaObject uuid before freezing', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(storageKeyShot)
+    prismaMock.remakeKeyframeTrack.findUnique.mockResolvedValueOnce({
+      id: 'track-middle',
+      slot: 'middle',
+      adoptedCandidateId: 'cand-m',
+      adoptedCandidate: {
+        id: 'cand-m',
+        outputVersion: {
+          id: 'output-m',
+          mediaId: 'images/remake/proj/keyframes-middle-abc123.jpg',
+        },
+      },
+    })
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-storage-key',
+      model: 'ark::doubao-seedance-2-0-260128',
+      selectedSlots: ['middle'],
+      includeActionSheet: false,
+      includeCharacterImages: false,
+      includeLocationImage: false,
+      includePropImages: false,
+      includeCharacterAudio: false,
+      shotDurationSeconds: 4,
+    })
+
+    const ref = descriptor.payload.inputSnapshot.orderedReferences[0]
+    // mediaId must be a valid uuid (normalized from the storage key)
+    expect(ref.mediaId).toBeDefined()
+    expect(UUID_RE.test(ref.mediaId ?? '')).toBe(true)
+    // raw storage key retained for currentness + traceability
+    expect(ref.mediaUrl).toBe('images/remake/proj/keyframes-middle-abc123.jpg')
+    expect(ref.role).toBe('middle_keyframe')
+    expect(descriptor.payload.inputSnapshot.referenceMode).toBe('ark_content_multireference')
+  })
+})
+
+describe('remake video generation — server-authoritative capability defaults', () => {
+  it('defaults required capability fields (generationMode/generateAudio/resolution) when the client omits them', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    const { resolveProjectModelCapabilityGenerationOptions } = await import('@/lib/config-service')
+    const shot = {
+      id: IDS.shotId,
+      remakeProjectId: IDS.remakeProjectId,
+      stableKey: 'shot-01',
+      currentRevision: 1,
+      sceneAssetId: null,
+      characterAssetIds: null,
+      propAssetIds: null,
+      remakeProject: { projectId: IDS.projectId, currentSource: { sourceRevision: 1 } },
+      revisions: [{ id: IDS.revisionId, revision: 1, lifecycleState: 'active', sourceRevision: 1 }],
+    }
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(shot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-defaults',
+      model: 'ark::doubao-seedance-2-0-260128',
+      selectedSlots: ['middle'],
+      includeActionSheet: false,
+      shotDurationSeconds: 4,
+      options: {},
+    })
+
+    // Runtime selections passed to capability normalization must include the defaults.
+    const runtimeCall = vi.mocked(resolveProjectModelCapabilityGenerationOptions).mock.calls.at(-1)
+    expect(runtimeCall?.[0].runtimeSelections).toMatchObject({
+      generationMode: 'normal',
+      generateAudio: expect.any(Boolean),
+      resolution: expect.any(String),
+      duration: expect.any(Number),
+    })
+    // The frozen snapshot options must be complete so the worker/provider never see missing fields.
+    expect(descriptor.payload.inputSnapshot.options).toMatchObject({
+      generationMode: 'normal',
+    })
   })
 })
 

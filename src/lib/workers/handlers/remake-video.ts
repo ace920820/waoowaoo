@@ -2,14 +2,50 @@ import type { Job } from 'bullmq'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { parseRemakeVideoTaskPayload } from '@/lib/remake-projects/video/task-contract'
+import type { OrderedVideoReference } from '@/lib/remake-projects/video/contracts'
 import {
   appendVideoGenerationBatch,
   assertVideoSubmissionCurrent,
   resolveVideoReferenceStorageKeys,
 } from '@/lib/remake-projects/video/service'
+import { supportsShotGroupMultiReferenceModes } from '@/lib/shot-group/video-config'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import { assertTaskActive, resolveVideoSourceFromGeneration, uploadVideoSourceToCos } from '../utils'
+
+type SignedReference = OrderedVideoReference & { signedUrl: string }
+
+function isImageReference(ref: OrderedVideoReference): boolean {
+  if (ref.mediaType) return ref.mediaType === 'image'
+  return ref.role !== 'character_audio_reference'
+}
+
+/**
+ * Build Ark content[] items from the frozen reference plan:
+ *   - images become `image_url` with `role: 'reference_image'` (base64 data URLs);
+ *   - audio becomes `audio_url` with `role: 'reference_audio'` (signed URLs).
+ * Order matches the snapshot ordinals exactly.
+ */
+async function buildArkContentItems(referenceRefs: SignedReference[]) {
+  const contentItems: Array<Record<string, unknown>> = []
+  for (const ref of referenceRefs) {
+    if (isImageReference(ref)) {
+      const base64 = await normalizeToBase64ForGeneration(ref.signedUrl)
+      contentItems.push({
+        type: 'image_url',
+        image_url: { url: base64 },
+        role: 'reference_image',
+      })
+    } else {
+      contentItems.push({
+        type: 'audio_url',
+        audio_url: { url: ref.signedUrl },
+        role: 'reference_audio',
+      })
+    }
+  }
+  return contentItems
+}
 
 export async function handleRemakeVideoTask(job: Job<TaskJobData>) {
   const payload = parseRemakeVideoTaskPayload(job.data.payload)
@@ -22,21 +58,18 @@ export async function handleRemakeVideoTask(job: Job<TaskJobData>) {
 
   // Resolve references and normalize for the video gateway
   const referenceRefs = await resolveVideoReferenceStorageKeys(snapshot)
-  // The video gateway expects the first reference to be the main image (imageUrl param).
-  // For multi-reference models, we pass contentItems.
-  const firstRef = referenceRefs[0]
-  if (!firstRef) throw new Error('REMAKE_VIDEO_NO_REFERENCES')
+  const firstImageRef = referenceRefs.find((ref) => isImageReference(ref)) || referenceRefs[0]
+  if (!firstImageRef) throw new Error('REMAKE_VIDEO_NO_REFERENCES')
 
-  const imageBase64 = await normalizeToBase64ForGeneration(firstRef.signedUrl)
+  const imageBase64 = await normalizeToBase64ForGeneration(firstImageRef.signedUrl)
 
-  // Build content items for multi-reference models (ordered references after the first)
-  const additionalRefs = referenceRefs.slice(1)
-  const contentItems = additionalRefs.length > 0
-    ? additionalRefs.map((ref) => ({
-        type: 'image_url' as const,
-        image_url: { url: ref.signedUrl },
-        role: ref.role === 'action_sheet' ? 'reference_image' : 'reference_image',
-      }))
+  // Omni-reference parity: Ark models receive the full content[] plan
+  // (reference_image + reference_audio). Non-Ark models degrade to a single
+  // main image (composite_image_mvp) without contentItems.
+  const isMultiReference = (snapshot.referenceMode ?? undefined) === 'ark_content_multireference'
+    || (snapshot.referenceMode === undefined && supportsShotGroupMultiReferenceModes(snapshot.model.id))
+  const contentItems = isMultiReference
+    ? await buildArkContentItems(referenceRefs)
     : undefined
 
   await reportTaskProgress(job, 20, { stage: 'submitting_to_provider' })
@@ -52,7 +85,7 @@ export async function handleRemakeVideoTask(job: Job<TaskJobData>) {
         Object.entries(snapshot.options).filter(([key]) => key !== 'duration'),
       ),
       ...(contentItems ? { contentItems } : {}),
-      generationMode: 'normal',
+      generationMode: snapshot.options.generationMode === 'firstlastframe' ? 'firstlastframe' : 'normal',
     },
     pollProgress: { start: 25, end: 85 },
   })

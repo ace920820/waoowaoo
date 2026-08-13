@@ -13,6 +13,10 @@ const generateSchema = z.object({
   options: z.record(z.unknown()).default({}),
   selectedSlots: z.array(z.enum(['start', 'middle', 'end'])).min(1).max(3),
   includeActionSheet: z.boolean().default(false),
+  includeCharacterImages: z.boolean().default(true),
+  includeLocationImage: z.boolean().default(true),
+  includePropImages: z.boolean().default(true),
+  includeCharacterAudio: z.boolean().default(false),
   shotDurationSeconds: z.number().min(0.1),
 }).strict()
 

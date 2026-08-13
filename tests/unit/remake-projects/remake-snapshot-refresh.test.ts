@@ -42,3 +42,15 @@ describe('remake snapshot refresh interval', () => {
     expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-2', type: 'remake_video_prompt_analyze', targetType: 'remake_project', targetId: 'project-1', status: 'processing', createdAt: '', updatedAt: '' }] }))).toBe(1000)
   })
 })
+
+describe('remake snapshot refresh interval — video generation tasks', () => {
+  it('keeps fetching while a remake_video_generate task is queued or processing', () => {
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v1', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'queued', createdAt: '', updatedAt: '' }] }))).toBe(3000)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v2', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'processing', createdAt: '', updatedAt: '' }] }))).toBe(3000)
+  })
+
+  it('stops fetching once the video generation task is completed or failed', () => {
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v1', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'completed', createdAt: '', updatedAt: '' }] }))).toBe(false)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v2', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'failed', createdAt: '', updatedAt: '' }] }))).toBe(false)
+  })
+})

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
-import { useProjectData, useRefreshRemakeProject, useUserModels } from '@/lib/query/hooks'
+import { useProjectAssets, useProjectData, useRefreshRemakeProject, useUserModels } from '@/lib/query/hooks'
 import { adaptRemakeShots } from '@/lib/remake-projects/keyframes/adapter'
 import {
   buildOrderedVideoReferences,
+  DEFAULT_SELECTED_VIDEO_REFERENCES,
   mapRemakeVideoInputs,
   videoSubmissionReadiness,
   type SelectedVideoReferences,
@@ -97,6 +98,18 @@ export default function RemakeVideoStage({
     }))
   }, [modelsQuery.data])
 
+  // Latest remake_video_generate task per shot, so the card can surface the
+  // running/failed result instead of silently doing nothing.
+  const videoTaskByShot = useMemo(() => {
+    const byShot = new Map<string, RemakeSnapshot['tasks'][number]>()
+    for (const task of snapshot.tasks) {
+      if (task.type !== 'remake_video_generate') continue
+      const current = byShot.get(task.targetId)
+      if (!current || task.createdAt > current.createdAt) byShot.set(task.targetId, task)
+    }
+    return byShot
+  }, [snapshot.tasks])
+
   return (
     <section
       className="space-y-6 pb-16"
@@ -145,6 +158,7 @@ export default function RemakeVideoStage({
               defaultVideoModel={defaultVideoModel}
               videoModelOptions={videoModelOptions}
               capabilityOverrides={capabilityOverrides}
+              generationTask={videoTaskByShot.get(shot.id) ?? null}
               onGenerated={refresh}
             />
           ))}
@@ -170,6 +184,7 @@ function VideoShotCard({
   defaultVideoModel,
   videoModelOptions,
   capabilityOverrides,
+  generationTask,
   onGenerated,
 }: {
   projectId: string
@@ -178,12 +193,15 @@ function VideoShotCard({
   defaultVideoModel: string
   videoModelOptions: VideoModelOption[]
   capabilityOverrides: Record<string, unknown> | undefined
+  generationTask: RemakeSnapshot['tasks'][number] | null
   onGenerated: () => void
 }) {
-  const [selected, setSelected] = useState<SelectedVideoReferences>({
-    slots: [],
-    includeActionSheet: false,
-  })
+  const projectAssets = useProjectAssets(projectId)
+  const assetsData = projectAssets.data ?? null
+
+  const [selected, setSelected] = useState<SelectedVideoReferences>(
+    DEFAULT_SELECTED_VIDEO_REFERENCES,
+  )
   const [showPreview, setShowPreview] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -309,8 +327,11 @@ function VideoShotCard({
   }, [capabilityDefinitions, generationOptions, selectedModelOption])
 
   const orderedRefs = useMemo(
-    () => buildOrderedVideoReferences(input, selected),
-    [input, selected],
+    () => buildOrderedVideoReferences(input, selected, assetsData),
+    [input, selected, assetsData],
+  )
+  const characterAudioAvailable = input.assetBindings.characters.some((assetId) =>
+    assetsData?.characters.some((character) => character.id === assetId && Boolean(character.customVoiceUrl)),
   )
   const readinessReasons = useMemo(() => {
     const reasons = videoSubmissionReadiness(input, selected)
@@ -334,6 +355,12 @@ function VideoShotCard({
     setSelected((prev) => ({ ...prev, includeActionSheet: !prev.includeActionSheet }))
   }, [])
 
+  const toggleAssetCategory = useCallback((
+    field: 'includeCharacterImages' | 'includeLocationImage' | 'includePropImages' | 'includeCharacterAudio',
+  ) => {
+    setSelected((prev) => ({ ...prev, [field]: !prev[field] }))
+  }, [])
+
   const handleGenerate = useCallback(async () => {
     if (!canSubmit) return
     setSubmitting(true)
@@ -348,6 +375,10 @@ function VideoShotCard({
           operationKey: `gen-${Date.now()}`,
           selectedSlots: selected.slots,
           includeActionSheet: selected.includeActionSheet,
+          includeCharacterImages: selected.includeCharacterImages,
+          includeLocationImage: selected.includeLocationImage,
+          includePropImages: selected.includePropImages,
+          includeCharacterAudio: selected.includeCharacterAudio,
           shotDurationSeconds: shot.durationSeconds,
           model: selectedModel,
           options: generationOptions,
@@ -365,7 +396,7 @@ function VideoShotCard({
     } finally {
       setSubmitting(false)
     }
-  }, [canSubmit, projectId, shot.id, shot.durationSeconds, selected.slots, selected.includeActionSheet, selectedModel, generationOptions, onGenerated])
+  }, [canSubmit, projectId, shot.id, shot.durationSeconds, selected.slots, selected.includeActionSheet, selected.includeCharacterImages, selected.includeLocationImage, selected.includePropImages, selected.includeCharacterAudio, selectedModel, generationOptions, onGenerated])
 
   // --- Version data ---
   const track = shot.videoGeneration.track
@@ -516,8 +547,34 @@ function VideoShotCard({
         </ul>
       )}
       {errorMsg && (
-        <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" data-testid="generate-error">
           {errorMsg}
+        </div>
+      )}
+
+      {generationTask && (generationTask.status === 'queued' || generationTask.status === 'processing' || generationTask.status === 'running') && (
+        <div
+          className="mt-2 flex items-center gap-2 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800"
+          data-testid="video-task-running"
+        >
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+          视频生成中…（任务已提交，完成后会自动出现在版本历史）
+        </div>
+      )}
+
+      {generationTask?.status === 'failed' && (
+        <div
+          className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+          data-testid="video-task-failed"
+        >
+          <p className="font-semibold">
+            视频生成失败{generationTask.errorCode ? `（${generationTask.errorCode}）` : ''}
+          </p>
+          {generationTask.errorMessage ? (
+            <p className="mt-1 break-words text-red-600">{generationTask.errorMessage}</p>
+          ) : (
+            <p className="mt-1 text-red-600">生成任务失败，请稍后重试，或检查视频模型配置。</p>
+          )}
         </div>
       )}
 
@@ -566,6 +623,65 @@ function VideoShotCard({
                   </button>
                 )
               })}
+            </div>
+          </InputGroup>
+
+          <InputGroup
+            title="参考素材（场景 / 物品 / 角色 / 音色）"
+            description="绑定到本镜头的资产库素材，按 Omni reference 固定优先级进入 content[]（图片最多 9 张、音频最多 3 段）。"
+          >
+            <div className="space-y-2">
+              {[
+                {
+                  key: 'includeCharacterImages' as const,
+                  label: '角色形象图',
+                  available: input.assetBindings.characters.length > 0,
+                  hint: input.assetBindings.characters.length > 0
+                    ? `${input.assetBindings.characters.length} 个已绑定角色`
+                    : '未绑定角色资产',
+                },
+                {
+                  key: 'includeLocationImage' as const,
+                  label: '场景设定图',
+                  available: Boolean(input.assetBindings.scene),
+                  hint: input.assetBindings.scene ? '已绑定场景' : '未绑定场景资产',
+                },
+                {
+                  key: 'includePropImages' as const,
+                  label: '物品设定图',
+                  available: input.assetBindings.props.length > 0,
+                  hint: input.assetBindings.props.length > 0
+                    ? `${input.assetBindings.props.length} 个已绑定物品`
+                    : '未绑定物品资产',
+                },
+                {
+                  key: 'includeCharacterAudio' as const,
+                  label: '角色音色',
+                  available: characterAudioAvailable,
+                  hint: characterAudioAvailable ? '已有角色音色' : '未绑定含音色的角色',
+                },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className={`flex items-center justify-between gap-2 rounded border px-3 py-2 text-xs ${
+                    item.available
+                      ? 'border-slate-200 bg-white'
+                      : 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
+                  }`}
+                >
+                  <span className="flex flex-col">
+                    <span className="font-medium text-slate-700">{item.label}</span>
+                    <span className="text-[10px] text-slate-400">{item.hint}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={item.available && selected[item.key]}
+                    disabled={!item.available}
+                    onChange={() => toggleAssetCategory(item.key)}
+                    data-testid={`ref-asset-${item.key}`}
+                  />
+                </label>
+              ))}
             </div>
           </InputGroup>
 
@@ -727,28 +843,38 @@ function VideoShotCard({
               data-testid="toggle-preview"
               className="flex w-full items-center justify-between text-xs text-indigo-600 hover:text-indigo-700"
             >
-              <span>{orderedRefs.length} 张参考图 · 点击{showPreview ? '收起' : '展开'}</span>
+              <span>{orderedRefs.length} 项参考素材 · 点击{showPreview ? '收起' : '展开'}</span>
               <AppIcon name={showPreview ? 'chevronUp' : 'chevronDown'} size={14} />
             </button>
             {showPreview && (
               <div className="mt-2 border-t border-slate-100 pt-2">
                 {orderedRefs.length === 0 ? (
-                  <Missing text="尚未选择任何参考图片" />
+                  <Missing text="尚未选择任何参考素材" />
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {orderedRefs.map((ref) => (
-                      <div key={`${ref.role}-${ref.ordinal}`} className="flex flex-col items-center">
+                      <div
+                        key={`${ref.role}-${ref.ordinal}`}
+                        className="flex flex-col items-center"
+                        title={ref.usage}
+                      >
                         <div className="relative">
-                          <span className="absolute -left-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
+                          <span className="absolute -left-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
                             {ref.ordinal}
                           </span>
-                          <img
-                            src={mediaUrl(projectId, ref.mediaId) || ''}
-                            alt={ref.label}
-                            className="h-16 w-24 rounded border border-slate-200 object-cover"
-                          />
+                          {ref.mediaType === 'audio' ? (
+                            <div className="flex h-16 w-24 items-center justify-center rounded border border-slate-200 bg-slate-50">
+                              <AppIcon name="mic" size={20} className="text-slate-400" />
+                            </div>
+                          ) : (
+                            <img
+                              src={ref.mediaUrl || mediaUrl(projectId, ref.mediaId) || ''}
+                              alt={ref.label}
+                              className="h-16 w-24 rounded border border-slate-200 object-cover"
+                            />
+                          )}
                         </div>
-                        <span className="mt-1 text-[10px] text-slate-600">
+                        <span className="mt-1 max-w-24 truncate text-[10px] text-slate-600">
                           {ref.label}
                         </span>
                       </div>

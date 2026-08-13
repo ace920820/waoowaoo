@@ -209,7 +209,7 @@ describe('RemakeVideoStage (Wave 3)', () => {
       const html = renderStage(makeSnapshot())
 
       expect(html).toContain('data-testid="ref-action-sheet"')
-      expect(html).toContain('包含动作表')
+      expect(html).toContain('>包含</span>')
     })
 
     it('shows actual input preview with ordered numbered references', () => {
@@ -408,5 +408,54 @@ describe('RemakeVideoStage (Wave 3)', () => {
       expect(source).toContain('selectedSlots')
       expect(source).toContain('includeActionSheet')
     })
+  })
+})
+
+describe('RemakeVideoStage generation result feedback', () => {
+  it('renders a running banner while a remake_video_generate task is processing', () => {
+    Reflect.set(globalThis, 'React', React)
+    const html = renderStage(makeSnapshot({
+      tasks: [{
+        id: 'task-v1',
+        type: 'remake_video_generate',
+        targetType: 'remake_shot',
+        targetId: 'shot-1',
+        status: 'processing',
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:01.000Z',
+      }],
+    }))
+
+    expect(html).toContain('data-testid="video-task-running"')
+    expect(html).toContain('视频生成中')
+  })
+
+  it('renders a failure banner with the task error message when generation fails', () => {
+    Reflect.set(globalThis, 'React', React)
+    const html = renderStage(makeSnapshot({
+      tasks: [{
+        id: 'task-v1',
+        type: 'remake_video_generate',
+        targetType: 'remake_shot',
+        targetId: 'shot-1',
+        status: 'failed',
+        errorCode: 'INTERNAL_ERROR',
+        errorMessage: 'The request failed because the output video may be related to copyright restrictions.',
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:01:00.000Z',
+      }],
+    }))
+
+    expect(html).toContain('data-testid="video-task-failed"')
+    expect(html).toContain('视频生成失败')
+    expect(html).toContain('INTERNAL_ERROR')
+    expect(html).toContain('copyright')
+  })
+
+  it('shows no generation banner when there are no video tasks', () => {
+    Reflect.set(globalThis, 'React', React)
+    const html = renderStage(makeSnapshot())
+    expect(html).not.toContain('data-testid="video-task-running"')
+    expect(html).not.toContain('data-testid="video-task-failed"')
   })
 })

@@ -210,3 +210,76 @@ describe('handleRemakeVideoTask', () => {
     expect(generation.resolveVideoSourceFromGeneration).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('handleRemakeVideoTask omni-reference parity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('builds Ark content[] with reference_image (base64) and reference_audio (signed URL) for ark_content_multireference', async () => {
+    const snapshot = {
+      ...baseSnapshot,
+      referenceMode: 'ark_content_multireference' as const,
+      orderedReferences: [
+        { role: 'middle_keyframe' as const, ordinal: 1, mediaType: 'image' as const, sourceType: 'middle_keyframe', label: 'Middle 中间帧', usage: 'usage', mediaId: IDS.mediaRef1 },
+        { role: 'action_sheet' as const, ordinal: 2, mediaType: 'image' as const, sourceType: 'action_sheet', label: '动作表', usage: 'usage', mediaId: IDS.mediaRef2 },
+        { role: 'character_audio_reference' as const, ordinal: 3, mediaType: 'audio' as const, sourceType: 'character_voice_reference', label: '角色 萨姆 声音', usage: 'usage', mediaUrl: 'voice/sam.mp3' },
+      ],
+    }
+    service.resolveVideoReferenceStorageKeys.mockResolvedValueOnce([
+      { ...snapshot.orderedReferences[0], signedUrl: 'https://cdn/mid.png' },
+      { ...snapshot.orderedReferences[1], signedUrl: 'https://cdn/action.gif' },
+      { ...snapshot.orderedReferences[2], signedUrl: 'https://cdn/voice.mp3' },
+    ] as never)
+    const descriptor = buildRemakeVideoTaskDescriptor({
+      projectId: IDS.projectId,
+      operationKey: 'gen-omni',
+      inputSnapshot: snapshot,
+    })
+    const { handleRemakeVideoTask } = await import('@/lib/workers/handlers/remake-video')
+    const job = buildJob({ payload: descriptor.payload })
+
+    await handleRemakeVideoTask(job)
+
+    const call = generation.resolveVideoSourceFromGeneration.mock.calls[0] as unknown as
+      [unknown, { imageUrl: string; options: { contentItems?: Array<Record<string, unknown>>; prompt: string } }]
+    const options = call[1].options
+    expect(options.contentItems).toEqual([
+      { type: 'image_url', image_url: { url: 'base64:https://cdn/mid.png' }, role: 'reference_image' },
+      { type: 'image_url', image_url: { url: 'base64:https://cdn/action.gif' }, role: 'reference_image' },
+      { type: 'audio_url', audio_url: { url: 'https://cdn/voice.mp3' }, role: 'reference_audio' },
+    ])
+    expect(options.prompt).toBe(snapshot.promptText)
+  })
+
+  it('degrades to a single main image (composite_image_mvp) without contentItems for non-Ark models', async () => {
+    const snapshot = {
+      ...baseSnapshot,
+      model: { id: 'non-ark-video', provider: 'openai' },
+      referenceMode: 'composite_image_mvp' as const,
+      orderedReferences: [
+        { role: 'middle_keyframe' as const, ordinal: 1, mediaType: 'image' as const, sourceType: 'middle_keyframe', label: 'Middle 中间帧', usage: 'usage', mediaId: IDS.mediaRef1 },
+        { role: 'action_sheet' as const, ordinal: 2, mediaType: 'image' as const, sourceType: 'action_sheet', label: '动作表', usage: 'usage', mediaId: IDS.mediaRef2 },
+      ],
+    }
+    service.resolveVideoReferenceStorageKeys.mockResolvedValueOnce([
+      { ...snapshot.orderedReferences[0], signedUrl: 'https://cdn/mid.png' },
+      { ...snapshot.orderedReferences[1], signedUrl: 'https://cdn/action.gif' },
+    ] as never)
+    const descriptor = buildRemakeVideoTaskDescriptor({
+      projectId: IDS.projectId,
+      operationKey: 'gen-degrade',
+      inputSnapshot: snapshot,
+    })
+    const { handleRemakeVideoTask } = await import('@/lib/workers/handlers/remake-video')
+    const job = buildJob({ payload: descriptor.payload })
+
+    await handleRemakeVideoTask(job)
+
+    const call = generation.resolveVideoSourceFromGeneration.mock.calls[0] as unknown as
+      [unknown, { imageUrl: string; options: { contentItems?: Array<Record<string, unknown>>; prompt: string } }]
+    const options = call[1].options
+    expect(options.contentItems).toBeUndefined()
+    expect(call[1].imageUrl).toBe('base64:https://cdn/mid.png')
+  })
+})

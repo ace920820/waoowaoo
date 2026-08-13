@@ -137,7 +137,12 @@ export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefin
   const hasActivePromptTask = snapshot.tasks.some((task) =>
     task.type.includes('prompt') && ['queued', 'processing', 'running'].includes(task.status),
   )
-  return hasPendingKeyframes || hasActivePromptTask ? 1000 : false
+  const hasActiveVideoTask = snapshot.tasks.some((task) =>
+    task.type === 'remake_video_generate' && ['queued', 'processing', 'running'].includes(task.status),
+  )
+  if (hasActiveVideoTask) return 3000
+  if (hasPendingKeyframes || hasActivePromptTask) return 1000
+  return false
 }
 
 export function useRemakeProject(projectId: string | null) {
