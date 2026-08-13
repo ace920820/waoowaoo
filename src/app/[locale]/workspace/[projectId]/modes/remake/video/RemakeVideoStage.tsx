@@ -153,6 +153,7 @@ export default function RemakeVideoStage({
             <VideoShotCard
               key={shot.id}
               projectId={projectId}
+              sourceMediaUrl={snapshot.source.mediaUrl}
               shot={shot}
               input={input}
               defaultVideoModel={defaultVideoModel}
@@ -179,6 +180,7 @@ type VideoModelOption = {
 
 function VideoShotCard({
   projectId,
+  sourceMediaUrl,
   shot,
   input,
   defaultVideoModel,
@@ -188,6 +190,7 @@ function VideoShotCard({
   onGenerated,
 }: {
   projectId: string
+  sourceMediaUrl: string | null
   shot: ReturnType<typeof adaptRemakeShots>[number]
   input: ReturnType<typeof mapRemakeVideoInputs>
   defaultVideoModel: string
@@ -608,7 +611,7 @@ function VideoShotCard({
                   >
                     {image ? (
                       <img
-                        src={mediaUrl(projectId, image.mediaId) || ''}
+                        src={mediaUrl(projectId, image.mediaId) ?? undefined}
                         alt={slot}
                         className="aspect-video w-full object-cover"
                       />
@@ -866,13 +869,20 @@ function VideoShotCard({
                             <div className="flex h-16 w-24 items-center justify-center rounded border border-slate-200 bg-slate-50">
                               <AppIcon name="mic" size={20} className="text-slate-400" />
                             </div>
-                          ) : (
-                            <img
-                              src={ref.mediaUrl || mediaUrl(projectId, ref.mediaId) || ''}
-                              alt={ref.label}
-                              className="h-16 w-24 rounded border border-slate-200 object-cover"
-                            />
-                          )}
+                          ) : (() => {
+                            const refSrc = ref.mediaUrl || mediaUrl(projectId, ref.mediaId)
+                            return refSrc ? (
+                              <img
+                                src={refSrc}
+                                alt={ref.label}
+                                className="h-16 w-24 rounded border border-slate-200 object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-16 w-24 items-center justify-center rounded border border-slate-200 bg-slate-50">
+                                <AppIcon name="image" size={20} className="text-slate-400" />
+                              </div>
+                            )
+                          })()}
                         </div>
                         <span className="mt-1 max-w-24 truncate text-[10px] text-slate-600">
                           {ref.label}
@@ -898,12 +908,18 @@ function VideoShotCard({
                   }`}
                   data-playing-kind="original"
                 >
-                  <video
-                    src=""
-                    controls
-                    className="aspect-video w-full bg-black"
-                    onClick={() => setPlayingKind('original')}
-                  />
+                  {sourceMediaUrl ? (
+                    <video
+                      src={sourceMediaUrl}
+                      controls
+                      className="aspect-video w-full bg-black"
+                      onClick={() => setPlayingKind('original')}
+                    />
+                  ) : (
+                    <div className="flex aspect-video w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
+                      暂无原始视频
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -1102,7 +1118,7 @@ function VideoShotCard({
               <div className="flex justify-center">
                 <div className="relative w-2/5 overflow-hidden rounded border border-slate-200">
                   <img
-                    src={mediaUrl(projectId, input.actionSheet.mediaId) || ''}
+                    src={mediaUrl(projectId, input.actionSheet.mediaId) ?? undefined}
                     alt="动作表"
                     className="w-full object-cover"
                     data-testid="action-sheet-image"
