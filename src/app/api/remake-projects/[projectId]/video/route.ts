@@ -53,10 +53,15 @@ export const POST = apiHandler(
         { status: 202 },
       )
     } catch (error) {
-      if (error instanceof Error && /(?:STALE|MISMATCH|NOT_FOUND|INVALID)/.test(error.message)) {
+      if (error instanceof Error && /(?:STALE|MISMATCH|NOT_FOUND|INVALID|NOT_APPROVED)/.test(error.message)) {
         throw new ApiError(
-          error.message.includes('STALE') ? 'CONFLICT' : 'INVALID_PARAMS',
-          { details: error.message },
+          /(?:STALE|NOT_APPROVED)/.test(error.message) ? 'CONFLICT' : 'INVALID_PARAMS',
+          {
+            details: error.message,
+            message: error.message === 'REMAKE_VIDEO_PROMPT_NOT_APPROVED'
+              ? 'Video Prompt 已因镜头重新分析而需要复核，请在 Prompt 分析页重新分析并审核，或编辑后保存并采用。'
+              : error.message,
+          },
         )
       }
       throw error

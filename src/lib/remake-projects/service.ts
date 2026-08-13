@@ -150,7 +150,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
                 },
               },
               provenance: true,
-              promptTracks: { include: { versions: { orderBy: { versionNumber: 'desc' } } } },
+              promptTracks: { include: { versions: { include: { invalidations: true }, orderBy: { versionNumber: 'desc' } } } },
             },
             orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
           },
@@ -333,22 +333,24 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         const versions = (track.versions as Row[] | undefined) ?? []
         const latest = versions[0]
         const adopted = versions.find((version) => version.id === track.adoptedVersionId)
+        const hasOpenInvalidation = (version: Row | undefined) =>
+          ((version?.invalidations as Row[] | undefined) ?? []).some((invalidation) => invalidation.status === 'needs_review')
         return {
           id: track.id,
           targetKey: track.targetKey,
-          latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt ? 'needs_review' : latest.status } : null,
+          latestVersion: latest ? { id: latest.id, versionNumber: latest.versionNumber, reviewStatus: latest.invalidatedAt || hasOpenInvalidation(latest) ? 'needs_review' : latest.status } : null,
           adoptedVersion: adopted
             ? {
                 id: adopted.id,
                 versionNumber: adopted.versionNumber,
-                reviewStatus: adopted.invalidatedAt ? 'needs_review' : adopted.status,
+                reviewStatus: adopted.invalidatedAt || hasOpenInvalidation(adopted) ? 'needs_review' : adopted.status,
                 coreText: adopted.integratedGenerationPrompt ?? null,
                 negativeConstraints: Array.isArray(adopted.negativeConstraints)
                   ? adopted.negativeConstraints.filter((item): item is string => typeof item === 'string')
                   : [],
               }
             : null,
-          needsReview: versions.some((version) => Boolean(version.invalidatedAt)),
+          needsReview: versions.some((version) => Boolean(version.invalidatedAt) || hasOpenInvalidation(version)),
         }
       }),
       revisions: revisions.map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),

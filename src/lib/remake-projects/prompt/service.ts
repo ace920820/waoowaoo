@@ -444,11 +444,14 @@ export async function saveAndAdoptPromptHumanEdit(input: {
     }
 
     // 3. 追加新版本（在同一事务内）
+    const currentSnapshot = await currentInput(tx, { projectId: input.projectId, shotId: track.shotId })
     const newVersion = await appendPromptVersion({
       projectId: input.projectId,
       shotId: track.shotId,
       targetKey: track.targetKey,
-      inputSnapshot: promptInputSnapshotSchema.parse(source.inputSnapshot),
+      // A human edit is an explicit review action. Bind the new version to the
+      // current shot revision rather than retaining the stale source snapshot.
+      inputSnapshot: currentSnapshot,
       content,
       tx,
     })

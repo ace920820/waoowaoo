@@ -50,6 +50,16 @@ function parseGenerationOptionValue(raw: string | boolean, sample: CapabilityVal
   return String(raw)
 }
 
+function apiErrorMessage(data: unknown, fallback: string) {
+  if (!data || typeof data !== 'object') return fallback
+  const body = data as { message?: unknown; details?: unknown; error?: { message?: unknown; details?: unknown } }
+  if (typeof body.error?.message === 'string' && body.error.message.trim()) return body.error.message
+  if (typeof body.message === 'string' && body.message.trim()) return body.message
+  if (typeof body.details === 'string' && body.details.trim()) return body.details
+  if (typeof body.error?.details === 'string' && body.error.details.trim()) return body.error.details
+  return fallback
+}
+
 export default function RemakeVideoStage({
   projectId,
   snapshot,
@@ -345,7 +355,7 @@ function VideoShotCard({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || data.details || '生成失败')
+        throw new Error(apiErrorMessage(data, '生成失败'))
       }
       onGenerated()
     } catch (err) {

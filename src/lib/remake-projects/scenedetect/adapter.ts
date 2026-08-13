@@ -6,6 +6,7 @@ import { createExternalShotKey } from './id-map'
 import { parseSceneDetectInput, type SceneDetectProject } from './contracts'
 import { parseSceneDetectResultEnvelope, wrapLegacySceneDetectProject } from './result-envelope'
 import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
+import { invalidatePromptVersionsForShotRevision } from '../prompt/service'
 import { actionSheetFingerprint } from '../keyframes/action-sheet'
 
 type Row = Record<string, unknown>
@@ -136,6 +137,7 @@ export async function commitSceneDetectImport(input: {
         actionSheetTasks.push({ shotId: String(row.id), revisionId: String(createdRevision.id), sources, fingerprint: actionSheetFingerprint({ revisionId: String(createdRevision.id), sources }) })
       }
       await invalidateKeyframeOutputsForRevision({ tx: tx as unknown, shotId: String(row.id), revisionId: String(createdRevision.id), reason: 'scenedetect_import' })
+      await invalidatePromptVersionsForShotRevision({ tx: tx as unknown, shotId: String(row.id), revisionId: String(createdRevision.id), reason: 'scenedetect_import' })
       await tx.remakeShot.update({
         where: { id: row.id },
         data: { sequence: shot.shotNumber, externalIdentity: shot.id, currentRevision: nextRevision, version: { increment: 1 }, reviewStatus: 'pending', needsReview: false },
