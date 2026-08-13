@@ -350,7 +350,10 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
                   : [],
               }
             : null,
-          needsReview: versions.some((version) => Boolean(version.invalidatedAt) || hasOpenInvalidation(version)),
+          // Review state belongs to the version currently adopted by this track.
+          // Historical versions may remain invalidated after a re-analysis; they
+          // must not keep a newly saved-and-adopted version in "needs review".
+          needsReview: Boolean(adopted && (adopted.invalidatedAt || hasOpenInvalidation(adopted))),
         }
       }),
       revisions: revisions.map((revision) => ({ id: revision.id, revision: revision.revision, sourceRevision: revision.sourceRevision ?? null, lifecycleState: revision.lifecycleState, changeReason: revision.changeReason, payload: revision.payload ?? null, keyframeMediaRefs: revision.keyframeMediaRefs ?? null })),
