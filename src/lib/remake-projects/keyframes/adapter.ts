@@ -1,4 +1,5 @@
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
+import { parseTimecodeSeconds } from '@/lib/remake-projects/unit/timecode'
 
 export const REMAKE_KEYFRAME_SLOTS = ['start', 'middle', 'end'] as const
 export type RemakeKeyframeSlot = typeof REMAKE_KEYFRAME_SLOTS[number]
@@ -85,6 +86,26 @@ export type RemakeShotView = {
       }>
     } | null
   }
+}
+
+/**
+ * Resolve one side of a shot time range to seconds. Numeric values pass
+ * through; string timecodes (`MM:SS.mmm` / `HH:MM:SS.mmm` / plain seconds)
+ * are parsed with the shared client-safe parser. Returns null when the side
+ * carries no parseable value (Pitfall 1: never fall back to 3 when parseable
+ * timecodes exist).
+ */
+function timeRangeSideToSeconds(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') return parseTimecodeSeconds(value)
+  return null
+}
+
+function shotDurationSeconds(shot: RemakeSnapshot['shots'][number]): number {
+  const start = timeRangeSideToSeconds(shot.timeRange?.start)
+  const end = timeRangeSideToSeconds(shot.timeRange?.end)
+  if (start === null || end === null) return 3
+  return Math.max(0.1, end - start)
 }
 
 function asCandidate(candidate: Record<string, unknown>): RemakeKeyframeCandidate {
@@ -190,9 +211,7 @@ export function adaptRemakeShot(shot: RemakeSnapshot['shots'][number]): RemakeSh
       trackId: videoTrack?.id ?? null,
       coreText: (videoTrack?.adoptedVersion as { coreText?: string | null } | null | undefined)?.coreText ?? null,
     },
-    durationSeconds: typeof shot.timeRange?.start === 'number' && typeof shot.timeRange?.end === 'number'
-      ? Math.max(0.1, shot.timeRange.end - shot.timeRange.start)
-      : 3,
+    durationSeconds: shotDurationSeconds(shot),
     videoGeneration: (() => {
       const vg = shot.videoGeneration as { track?: { id?: string; adoptedVersionId?: string; hasInvalidated?: boolean; batches?: unknown[] } } | undefined
       const track = vg?.track
