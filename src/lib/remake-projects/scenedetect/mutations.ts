@@ -72,7 +72,7 @@ export async function commitNativeProjectMutation(input: { projectId: string; us
       const created = await tx.remakeShotRevision.create({ data: { shotId: row.id, revision: nextRevision, lifecycleState: 'active', sourceRevision: meta.currentSource?.sourceRevision ?? null, changeReason: input.operationKey || 'native_mutation', payload: payloadFor(normalized), keyframeFrames: normalized.keyframeFrames ? JSON.stringify(normalized.keyframeFrames) : null } })
       const mediaIds = normalized.mediaIds
       const frames = normalized.keyframeFrames
-      if (normalized.status === 'keep' && mediaIds?.first && mediaIds.middle && mediaIds.last && frames) {
+      if (mediaIds?.first && mediaIds.middle && mediaIds.last && frames) {
         const sources = [
           { slot: 'start' as const, mediaId: mediaIds.first, timestamp: frames.first },
           { slot: 'middle' as const, mediaId: mediaIds.middle, timestamp: frames.middle },

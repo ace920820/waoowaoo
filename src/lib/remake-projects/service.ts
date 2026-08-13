@@ -289,9 +289,10 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         })),
         actionSheet: (() => {
           const sheet = actionSheets.find((output) => output.revisionId === current?.id && !output.invalidatedAt)
-          return sheet
-            ? { status: 'current', id: sheet.id, mediaId: sheet.mediaId ?? null, fingerprint: sheet.fingerprint }
-            : { status: review.confirmed ? 'missing' : 'waiting', id: null, mediaId: null, fingerprint: null }
+          if (sheet) return { status: 'current' as const, id: sheet.id, mediaId: sheet.mediaId ?? null, fingerprint: sheet.fingerprint }
+          // 有关键帧即可生成动作表，不需等状态审批通过
+          const hasKeyframes = refs.first && refs.middle && refs.last
+          return { status: hasKeyframes ? 'missing' as const : 'waiting' as const, id: null, mediaId: null, fingerprint: null }
         })(),
         history: actionSheets.map((output) => ({ id: output.id, revisionId: output.revisionId, mediaId: output.mediaId ?? null, fingerprint: output.fingerprint, invalidated: Boolean(output.invalidatedAt) })),
       },

@@ -1,9 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { extractStorageKey } from '@/lib/storage'
+import { submitTask } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
 import { createExternalShotKey } from './id-map'
 import { parseSceneDetectInput, type SceneDetectProject } from './contracts'
 import { parseSceneDetectResultEnvelope, wrapLegacySceneDetectProject } from './result-envelope'
 import { invalidateKeyframeOutputsForRevision } from '../keyframes/invalidation'
+import { actionSheetFingerprint } from '../keyframes/action-sheet'
 
 type Row = Record<string, unknown>
 
@@ -79,6 +82,7 @@ export async function commitSceneDetectImport(input: {
   const existingOperation = await client.remakeProvenanceRecord.findFirst({ where: { shot: { remakeProjectId: input.projectId }, payload: { contains: `\"operationKey\":\"${input.operationKey}\"` } } })
   if (existingOperation) return { committed: false, replayOf: existingOperation.id }
 
+  const actionSheetTasks: Array<{ shotId: string; revisionId: string; fingerprint: string; sources: Array<{ slot: 'start' | 'middle' | 'end'; mediaId: string; timestamp: number }> }> = []
   return client.$transaction(async (tx) => {
     const remakeProject = await tx.remakeProject.findUnique({ where: { projectId: input.projectId } })
     if (!remakeProject) throw new Error('Remake project metadata not found')
@@ -118,8 +122,19 @@ export async function commitSceneDetectImport(input: {
         : null
       const nextRevision = Number(latestRevision?.revision ?? 0) + 1
       const createdRevision = await tx.remakeShotRevision.create({
-        data: { shotId: row.id, revision: nextRevision, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}) },
+        data: { shotId: row.id, revision: nextRevision, sourceRevision, lifecycleState: 'active', changeReason: 'scenedetect_import', payload: JSON.stringify(shot), keyframeMediaRefs: JSON.stringify(shot.mediaIds || {}), keyframeFrames: shot.keyframeFrames ? JSON.stringify(shot.keyframeFrames) : null },
       })
+      // 导入时如有关键帧，立即生成动作表参考图（不需等状态设为 keep）
+      const mediaIds = shot.mediaIds
+      const frames = shot.keyframeFrames
+      if (mediaIds?.first && mediaIds?.middle && mediaIds?.last && frames) {
+        const sources = [
+          { slot: 'start' as const, mediaId: mediaIds.first, timestamp: frames.first },
+          { slot: 'middle' as const, mediaId: mediaIds.middle, timestamp: frames.middle },
+          { slot: 'end' as const, mediaId: mediaIds.last, timestamp: frames.last },
+        ]
+        actionSheetTasks.push({ shotId: String(row.id), revisionId: String(createdRevision.id), sources, fingerprint: actionSheetFingerprint({ revisionId: String(createdRevision.id), sources }) })
+      }
       await invalidateKeyframeOutputsForRevision({ tx: tx as unknown, shotId: String(row.id), revisionId: String(createdRevision.id), reason: 'scenedetect_import' })
       await tx.remakeShot.update({
         where: { id: row.id },
@@ -132,4 +147,23 @@ export async function commitSceneDetectImport(input: {
     await tx.remakeProject.update({ where: { id: remakeProject.id }, data: { importStatus: 'analyzed' } })
     return { committed: true, shotCount: project.shots.length }
   })
+  // 为导入成功的镜头批量提交动作表生成任务
+  for (const task of actionSheetTasks) {
+    try {
+      await submitTask({
+        userId: input.userId,
+        locale: 'zh' as const,
+        projectId: input.projectId,
+        type: TASK_TYPE.REMAKE_KEYFRAME_ACTION_SHEET,
+        targetType: 'remake_shot',
+        targetId: task.shotId,
+        dedupeKey: `remake-action-sheet:${task.revisionId}:${task.fingerprint}`,
+        payload: { kind: 'action_sheet', projectId: input.projectId, shotId: task.shotId, revisionId: task.revisionId, confirmed: true, sources: task.sources, fingerprint: task.fingerprint },
+        maxAttempts: 1,
+      })
+    } catch (err) {
+      // 动作表生成失败不影响导入主流程
+      console.error('[scenedetect-import] Failed to submit action sheet task for shot', task.shotId, err)
+    }
+  }
 }
