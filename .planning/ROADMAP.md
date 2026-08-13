@@ -43,6 +43,7 @@
 - [ ] **Phase 7: Prompt 分析与人工审核** - 为已确认 Shot 生成、修订、比较和批准结构化图片与 Video Prompt。
 - [ ] **Phase 8: 新关键帧生成与版本选择** - 基于已批准的图片 Prompt 生成、比较和采用新的关键帧。
 - [ ] **Phase 9: 新视频镜头生成与版本选择** - 使用采用的关键帧和已批准 Video Prompt 生成、审核和采用 Shot 视频。
+- [ ] **Phase 09.1: 短镜头合并 unit 视频生成 (INSERTED)** - 为成片中短镜头合并为一个 unit 一次生成翻拍视频（交付单位为 unit，每镜头 1 关键帧 + 合并动作表大图 + 资产去重 + 时间锚点提示词）。
 - [ ] **Phase 10: 批量任务编排与恢复** - 提供受控批量执行、取消、重试、恢复和项目级任务进度。
 - [ ] **Phase 11: 最终素材检查与导出** - 检查每个 Shot 的采用版本完整性，并导出供人工剪辑的素材和 manifest。
 
@@ -128,25 +129,6 @@ Plans:
 
 **UI hint**: yes
 
-## v1.1 集成边界
-
-### SceneDetect 复用原则
-
-1. **后端优先复用：** 复用 SceneDetect 的 `pySceneDetect` 分析、帧边界换算、首/中/尾关键帧提取和按修订边界重新提取能力；Waoo 只负责任务编排、鉴权、媒体存储、结果导入和状态持久化。
-2. **前端整应用复用：** 复用单元是 SceneDetect 的完整应用及其 `App.tsx` 编排，不是播放器、Timeline、ShotInspector、KeyframeSelector 等零散组件。Waoo 不重写编辑状态机、undo/redo、分析流程或页面布局。
-3. **适配器负责口径转换：** SceneDetect schema/API 的 `shotNumber`、帧范围、媒体 URL、关键帧和审核字段必须先转换为 Waoo 的稳定 Shot UUID、revision、Asset/Output 引用、Review 状态和 provenance。
-4. **单一事实来源：** SceneDetect 可以作为分析执行器和可复用 UI 能力提供者，但 Waoo 数据库、对象存储和既有 Task/GraphRun 是项目状态、版本和任务状态的唯一事实来源。
-5. **源码 vendoring：** SceneDetect 前端通过 canonical vendor root 引入；`VENDOR.json` 记录源仓库/路径、commit 或版本、文件 hash、同步命令和允许的 integration patches。当前不选 iframe，也不在本里程碑开始前抽 npm 包。
-6. **原生类型驱动：** StageHost 和 `SceneDetectIntegrationRuntime` 从 SceneDetect 原生 `SceneDetectProject`、`Shot`、`VideoMetadata` 与回调合同推导；Waoo snapshot 先经 adapter 转换，不把 normalized Waoo Shot DTO 直接当编辑器 props。
-7. **视觉与嵌入边界：** SceneDetect stage 保留自身深色主题并做样式作用域隔离；glass 只约束 Waoo 外壳。允许最小 embedded integration patch，但不得改造原页面布局或重复学习成本高的交互。
-8. **禁止重复实现：** Phase 5/6 不新增第二套镜头检测算法、时间轴状态、Shot 项目文件、关键帧提取服务、编辑器编排、队列或 Task Center；如接口不兼容，只新增边界 adapter/runtime 和兼容测试。
-
-### Phase 5/6 交付顺序
-
-`Phase 5 项目框架与适配器合同` → `Phase 6 SceneDetect 实际接入与审核闭环` → `Phase 7 Prompt 分析` → `Phase 8/9 生成`。
-
-Phase 5 的 tracer 可以使用固定的 SceneDetect adapter fixture 验证稳定 Shot 映射，并通过 compile-only/disabled harness 验证 vendored 完整 App、原生类型和 StageHost 合同，但不能创建没有原视频来源的伪造业务 Shot，也不开放真实编辑阶段。Phase 6 才负责注入真实 Waoo runtime，完成上传、分析、导入和编辑回写。
-
 ### Phase 8: 新关键帧生成与版本选择
 
 **Goal**: 用户可以使用已批准的图片 Prompt，经现有图片模型网关生成、比较和采用可追溯的新关键帧版本。
@@ -197,6 +179,29 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 09.1: 短镜头合并 unit 视频生成 (INSERTED)
+
+**Goal:** 为成片中短镜头（低于视频模型最短生成档位约 4s）提供"合并 unit"视频生成：用户手动把多个镜头（任意组合，不要求相邻）组成一个 unit，系统把各成员镜头的关键帧（每镜头 1 张）、合并动作表大图、去重资产和带时间锚点的合并提示词一次提交生成整段 unit 翻拍视频，并完成 unit 级版本审核、采用与上游失效复核闭环；短镜头也可单独生成（拉长到最短档并标注）。
+**Requirements**: D-01..D-22（CONTEXT.md 锁定决策；阶段由启发式插入，未映射 REQ-ID，继承 Phase 9 的 VGEN 语义）
+**Depends on:** Phase 9
+**Success Criteria** (what must be TRUE):
+
+  1. 用户可以在成片页勾选任意多个镜头组成 unit，提交前看到完整预览（成员顺序/时长、参考图顺序、时间锚点提示词、总时长与参数）。
+  2. unit 生成使用每镜头 1 张已采用关键帧 + 合并 6/9 宫格动作表大图 + 跨成员去重资产，一次调用生成整段翻拍视频。
+  3. unit 有独立版本列表，沿用 batch/version/采用/备注/失效语义；成员在单 shot 视图显示"由 unit 交付"并可跳回。
+  4. 任一成员缺少已采用关键帧/已批准 Video Prompt/合法参数时阻止生成并逐成员说明；上游变化通过 invalidation 传播到 unit 版本复核状态。
+
+**Plans:** 6 plans
+
+Plans:
+
+- [ ] `09.1-01-PLAN.md` — tracer：时间码→秒投影 + 时间锚点提示词 + shot_keyframe 角色扩展 + unit 快照/指纹（Wave 1）
+- [ ] `09.1-02-PLAN.md` — 参考归并：每镜头 1 帧 + 6/9 宫格动作表渲染器 + 资产去重 + WYSIWYG 预览装配（Wave 2）
+- [ ] `09.1-03-PLAN.md` — Prisma unit/member 模型 + unit 版本/采用/失效服务 + 提交即冻结门禁（Wave 2）
+- [ ] `09.1-04-PLAN.md` — unit 提交服务（逐成员缺项门禁）+ unit API 路由 + 预览 on-demand 渲染（Wave 3）
+- [ ] `09.1-05-PLAN.md` — 任务注册（REMAKE_VIDEO_UNIT_GENERATE）+ worker 处理器 + 共享 buildArkContentItems（Wave 4）
+- [ ] `09.1-06-PLAN.md` — 成片页 unit 模式：任意勾选、WYSIWYG 预览、unit 版本闭环、由 unit 交付/跳回、短镜头标注（Wave 4）
+
 ### Phase 10: 批量任务编排与恢复
 
 **Goal**: 用户可以在不中断审核工作的前提下，可靠地批量运行、停止、重试和恢复翻拍生产任务。
@@ -225,6 +230,27 @@ Plans:
 
 **Plans**: TBD
 **UI hint**: yes
+
+## v1.1 集成边界
+
+### SceneDetect 复用原则
+
+1. **后端优先复用：** 复用 SceneDetect 的 `pySceneDetect` 分析、帧边界换算、首/中/尾关键帧提取和按修订边界重新提取能力；Waoo 只负责任务编排、鉴权、媒体存储、结果导入和状态持久化。
+2. **前端整应用复用：** 复用单元是 SceneDetect 的完整应用及其 `App.tsx` 编排，不是播放器、Timeline、ShotInspector、KeyframeSelector 等零散组件。Waoo 不重写编辑状态机、undo/redo、分析流程或页面布局。
+3. **适配器负责口径转换：** SceneDetect schema/API 的 `shotNumber`、帧范围、媒体 URL、关键帧和审核字段必须先转换为 Waoo 的稳定 Shot UUID、revision、Asset/Output 引用、Review 状态和 provenance。
+4. **单一事实来源：** SceneDetect 可以作为分析执行器和可复用 UI 能力提供者，但 Waoo 数据库、对象存储和既有 Task/GraphRun 是项目状态、版本和任务状态的唯一事实来源。
+5. **源码 vendoring：** SceneDetect 前端通过 canonical vendor root 引入；`VENDOR.json` 记录源仓库/路径、commit 或版本、文件 hash、同步命令和允许的 integration patches。当前不选 iframe，也不在本里程碑开始前抽 npm 包。
+6. **原生类型驱动：** StageHost 和 `SceneDetectIntegrationRuntime` 从 SceneDetect 原生 `SceneDetectProject`、`Shot`、`VideoMetadata` 与回调合同推导；Waoo snapshot 先经 adapter 转换，不把 normalized Waoo Shot DTO 直接当编辑器 props。
+7. **视觉与嵌入边界：** SceneDetect stage 保留自身深色主题并做样式作用域隔离；glass 只约束 Waoo 外壳。允许最小 embedded integration patch，但不得改造原页面布局或重复学习成本高的交互。
+8. **禁止重复实现：** Phase 5/6 不新增第二套镜头检测算法、时间轴状态、Shot 项目文件、关键帧提取服务、编辑器编排、队列或 Task Center；如接口不兼容，只新增边界 adapter/runtime 和兼容测试。
+
+### Phase 5/6 交付顺序
+
+`Phase 5 项目框架与适配器合同` → `Phase 6 SceneDetect 实际接入与审核闭环` → `Phase 7 Prompt 分析` → `Phase 8/9 生成`。
+
+Phase 5 的 tracer 可以使用固定的 SceneDetect adapter fixture 验证稳定 Shot 映射，并通过 compile-only/disabled harness 验证 vendored 完整 App、原生类型和 StageHost 合同，但不能创建没有原视频来源的伪造业务 Shot，也不开放真实编辑阶段。Phase 6 才负责注入真实 Waoo runtime，完成上传、分析、导入和编辑回写。
+
+> **Phase 09.1 补充**：为成片中短镜头 (< 模型最小时长) 引入"合并 unit"视频生成——用户手动把多个镜头（任意组合，不要求相邻）合并为一个 unit 一次生成，交付单位为 unit。详见 `.planning/phases/09.1-unit/` 与 `.planning/remake-video-merge-unit-design.md`。
 
 ## 需求覆盖
 
