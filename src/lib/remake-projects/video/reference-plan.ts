@@ -2,8 +2,8 @@ import type {
   OrderedVideoReference,
   VideoReferenceMediaType,
   VideoReferenceRole,
-} from './contracts'
-import { VIDEO_REFERENCE_ROLE_ORDER } from './contracts'
+} from './reference-roles'
+import { VIDEO_REFERENCE_ROLE_ORDER } from './reference-roles'
 
 /**
  * Shared, pure reference-plan builder for Remake video generation.

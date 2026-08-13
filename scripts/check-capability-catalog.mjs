@@ -14,7 +14,6 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'resolutionOptions',
     'firstlastframe',
     'supportGenerateAudio',
-    'supportsMultimodalReferences',
     'fieldI18n',
   ]),
   audio: new Set(['voiceOptions', 'rateOptions', 'fieldI18n']),
@@ -226,9 +225,6 @@ function validateCapabilitiesForModelType(issues, file, index, modelType, capabi
       }
       if (video.firstlastframe !== undefined && typeof video.firstlastframe !== 'boolean') {
         pushIssue(issues, file, index, 'capabilities.video.firstlastframe', 'must be boolean')
-      }
-      if (video.supportsMultimodalReferences !== undefined && typeof video.supportsMultimodalReferences !== 'boolean') {
-        pushIssue(issues, file, index, 'capabilities.video.supportsMultimodalReferences', 'must be boolean')
       }
       validateFieldI18nMap(issues, file, index, 'video', video)
     }

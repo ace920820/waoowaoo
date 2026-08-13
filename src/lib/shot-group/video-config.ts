@@ -1,6 +1,5 @@
 import type { CapabilitySelections, CapabilityValue } from '@/lib/model-config-contract'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
-import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
 
 export type ShotGroupVideoMode = 'omni-reference' | 'smart-multi-frame'
 export type ShotGroupVideoGenerationOptions = Record<string, CapabilityValue>
@@ -89,15 +88,21 @@ export function deriveShotGroupModeFlags(mode: ShotGroupVideoMode) {
 }
 
 /**
- * Only models that actually support Ark r2v (content[] multimodal references,
- * e.g. Seedance 2.0) get the omni-reference content[] path. Older i2v models
- * (Seedance 1.5 Pro / 1.0) reject `task_type=r2v`, so they must degrade to the
- * single-main-image flow (`composite_image_mvp`).
+ * Ark models that accept content[] multimodal references (task_type=r2v,
+ * e.g. Seedance 2.0). This list lives here (client-safe, no `node:fs`) and is
+ * the single gate for the omni-reference content[] path across client and
+ * server. Older i2v models (Seedance 1.5 Pro / 1.0) reject `task_type=r2v`,
+ * so they must degrade to the single-main-image flow (`composite_image_mvp`).
  */
+const ARK_R2V_VIDEO_MODEL_IDS = new Set([
+  'doubao-seedance-2-0-260128',
+  'doubao-seedance-2-0-fast-260128',
+])
+
 export function supportsShotGroupMultiReferenceModes(modelKey: string | null | undefined) {
   const parsed = parseModelKeyStrict(modelKey || '')
   if (!parsed || parsed.provider !== 'ark') return false
-  return findBuiltinCapabilities('video', parsed.provider, parsed.modelId)?.video?.supportsMultimodalReferences === true
+  return ARK_R2V_VIDEO_MODEL_IDS.has(parsed.modelId)
 }
 
 export function resolveShotGroupModeForModel(input: {

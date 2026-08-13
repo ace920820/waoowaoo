@@ -46,8 +46,7 @@
           "720p"
         ],
         "firstlastframe": true,
-        "supportGenerateAudio": true,
-        "supportsMultimodalReferences": true
+        "supportGenerateAudio": true
       }
     }
   },
@@ -84,8 +83,7 @@
           "720p"
         ],
         "firstlastframe": true,
-        "supportGenerateAudio": true,
-        "supportsMultimodalReferences": true
+        "supportGenerateAudio": true
       }
     }
   },

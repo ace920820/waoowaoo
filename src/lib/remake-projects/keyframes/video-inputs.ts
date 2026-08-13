@@ -6,7 +6,7 @@ import {
   remakeReferenceRoleUsage,
   type RemakeReferenceCandidate,
 } from '@/lib/remake-projects/video/reference-plan'
-import type { VideoReferenceRole } from '@/lib/remake-projects/video/contracts'
+import type { VideoReferenceRole } from '@/lib/remake-projects/video/reference-roles'
 
 export type RemakeVideoInputState = {
   shotId: string
