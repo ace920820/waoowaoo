@@ -392,7 +392,7 @@ describe('remake video generation — omni-reference asset parity', () => {
     expect(descriptor.payload.inputSnapshot.referenceMode).toBe('ark_content_multireference')
     const promptText = descriptor.payload.inputSnapshot.promptText
     expect(promptText).toContain('参考素材使用说明：')
-    expect(promptText).toContain('@Image1（Start 起始帧）')
+    expect(promptText).toContain('@Image1（主画面参考关键帧 · Start 起始帧）')
     expect(promptText).toContain('@Image5（角色 萨姆）')
     expect(promptText).toContain('@Audio1（角色 萨姆 声音）')
   })

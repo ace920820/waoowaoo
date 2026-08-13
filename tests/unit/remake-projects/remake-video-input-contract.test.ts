@@ -246,6 +246,8 @@ describe('buildOrderedVideoReferences with asset references (omni-reference pari
       'character_audio_reference',
     ])
     expect(refs.map((r) => r.ordinal)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(refs[0].label).toBe('主画面参考关键帧 · Middle 中间帧')
+    expect(refs[1].label).toBe('动作参考表')
     expect(refs[2].label).toBe('角色 萨姆')
     expect(refs[2].mediaUrl).toBe('https://cdn/sam.png')
     expect(refs[3].label).toBe('场景 机舱内部')

@@ -2,6 +2,8 @@ import type { RemakeShotView } from './adapter'
 import type { Character, Location, Prop } from '@/types/project'
 import {
   buildRemakeReferencePlan,
+  remakeReferenceRoleLabel,
+  remakeReferenceRoleUsage,
   type RemakeReferenceCandidate,
 } from '@/lib/remake-projects/video/reference-plan'
 import type { VideoReferenceRole } from '@/lib/remake-projects/video/contracts'
@@ -69,21 +71,6 @@ const SLOT_ROLE_MAP: Record<'start' | 'middle' | 'end', VideoReferenceRole> = {
   middle: 'middle_keyframe',
   end: 'end_keyframe',
 }
-const SLOT_LABEL_MAP: Record<'start' | 'middle' | 'end', string> = {
-  start: 'Start 起始帧',
-  middle: 'Middle 中间帧',
-  end: 'End 结尾帧',
-}
-const SLOT_USAGE_MAP: Record<'start' | 'middle' | 'end', string> = {
-  start: '参考镜头起点构图、人物站位和动作起点',
-  middle: '参考镜头中段构图、人物站位和动作推进',
-  end: '参考镜头结尾构图、人物站位和动作落点',
-}
-const ACTION_SHEET_USAGE = '参考原片镜头顺序、构图和动作节奏；不要把三帧拼接直接做成成片'
-const SCENE_USAGE = '参考空间结构、材质、光线方向和场面调度边界'
-const PROP_USAGE = '参考关键物品外观，保持触发剧情的道具一致'
-const CHARACTER_USAGE = '必须保持角色身份、性别、脸型、发型、服装和年龄感一致'
-const CHARACTER_AUDIO_USAGE = '参考角色音色、语气、年龄感和情绪强度；不要当作背景音乐'
 
 function firstCharacterImage(character: Character): string | null {
   const appearance = character.appearances[0]
@@ -172,8 +159,8 @@ export function buildOrderedVideoReferences(
       role: SLOT_ROLE_MAP[slot],
       mediaType: 'image',
       sourceType: SLOT_ROLE_MAP[slot],
-      label: SLOT_LABEL_MAP[slot],
-      usage: SLOT_USAGE_MAP[slot],
+      label: remakeReferenceRoleLabel(SLOT_ROLE_MAP[slot]),
+      usage: remakeReferenceRoleUsage(SLOT_ROLE_MAP[slot]),
       mediaId: image.mediaId,
     })
   }
@@ -184,8 +171,8 @@ export function buildOrderedVideoReferences(
       role: 'action_sheet',
       mediaType: 'image',
       sourceType: 'action_sheet',
-      label: '动作表',
-      usage: ACTION_SHEET_USAGE,
+      label: remakeReferenceRoleLabel('action_sheet'),
+      usage: remakeReferenceRoleUsage('action_sheet'),
       mediaId: input.actionSheet.mediaId,
     })
   }
@@ -203,7 +190,7 @@ export function buildOrderedVideoReferences(
             mediaType: 'image',
             sourceType: 'character_reference',
             label: `角色 ${character.name}`,
-            usage: CHARACTER_USAGE,
+            usage: remakeReferenceRoleUsage('character_reference'),
             assetId,
             mediaUrl: imageUrl,
           })
@@ -215,7 +202,7 @@ export function buildOrderedVideoReferences(
           mediaType: 'audio',
           sourceType: 'character_voice_reference',
           label: `角色 ${character.name} 声音`,
-          usage: CHARACTER_AUDIO_USAGE,
+          usage: remakeReferenceRoleUsage('character_audio_reference'),
           assetId,
           mediaUrl: character.customVoiceUrl,
         })
@@ -232,7 +219,7 @@ export function buildOrderedVideoReferences(
             mediaType: 'image',
             sourceType: 'location_reference',
             label: `场景 ${location.name}`,
-            usage: SCENE_USAGE,
+            usage: remakeReferenceRoleUsage('scene_reference'),
             assetId: location.id,
             mediaUrl: imageUrl,
           })
@@ -251,7 +238,7 @@ export function buildOrderedVideoReferences(
             mediaType: 'image',
             sourceType: 'prop_reference',
             label: `物品 ${prop.name}`,
-            usage: PROP_USAGE,
+            usage: remakeReferenceRoleUsage('prop_reference'),
             assetId,
             mediaUrl: imageUrl,
           })
