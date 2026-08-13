@@ -2,7 +2,7 @@
 slug: remake-video-generation-feedback
 date: 2026-08-13
 type: quick
-status: in-progress
+status: complete
 ---
 
 # 视频生成必须有结果反馈：成功出视频、失败给原因
