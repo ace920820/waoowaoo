@@ -5,16 +5,16 @@ milestone_name: AI 视频翻拍工作台整合
 current_phase: 08
 current_phase_name: keyframe-generation
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-08-12T13:35:02.579Z"
+stopped_at: Phase 09.1 context gathered
+last_updated: "2026-08-13T15:49:57.460Z"
 last_activity: 2026-08-11
 last_activity_desc: Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
 progress:
-  total_phases: 5
-  completed_phases: 2
+  total_phases: 8
+  completed_phases: 3
   total_plans: 30
-  completed_plans: 23
-  percent: 40
+  completed_plans: 27
+  percent: 38
 ---
 
 # STATE
@@ -119,6 +119,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 - 2026-04-26: Phase 03.2 planned and implemented with three completed plans: schema/validation, parser, and mapper/unit tests. Focused Vitest suite and TypeScript typecheck passed.
 - Phase 02.1 inserted after Phase 2: Multi-Shot Asset Injection (URGENT)
 - Proposed next insertion: Phase 03.1 Multi-Shot Cinematic Prompting, focused on splitting one shared `narrativePrompt` into specialized reference/storyboard/video prompts plus shot-level cinematic plans before final Phase 4 hardening.
+- Phase 09.1 inserted after Phase 9: 短镜头合并 unit 视频生成 (URGENT)
 
 ## Initialization Notes
 
@@ -149,15 +150,16 @@ Progress: [██████████] 100%
 
 ## Operator Next Steps
 
+- **规划新插入的 Phase 09.1（短镜头合并 unit 视频生成，URGENT）**：`/gsd-plan-phase 09.1`，设计见 `.planning/remake-video-merge-unit-design.md`。
 - 执行 Phase 08 人工验收（桌面/移动端视觉与交互走查）：画面描述可编辑并即时生效、空卡生成按钮、悬浮浮窗、候选比较 radio。
 - 修复 `check:config-center-guards` 中 `video.worker.ts` 的 4 个既有 modelId 降级违规（历史遗留，非本 wave 范围）。
 - Phase 07-04 的 verification/真实 Codex/人工验收仍需在 Phase 07 关闭前完成。
 
 ## Session
 
-**Last session:** 2026-08-12T11:21:13.186Z
-**Stopped at:** Phase 9 context gathered
-**Resume file:** .planning/phases/09-video-generation/09-CONTEXT.md
+**Last session:** 2026-08-13T15:49:57.433Z
+**Stopped at:** Phase 09.1 context gathered
+**Resume file:** .planning/phases/09.1-unit/09.1-CONTEXT.md
 
 ## Performance Metrics
 
