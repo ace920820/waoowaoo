@@ -969,6 +969,45 @@ function VideoShotCard({
               </div>
             )}
           </div>
+
+          {/* Action Sheet */}
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">动作表参考</h4>
+                <p className="text-[11px] text-slate-500">
+                  原始三帧纵向拼接，Start → Middle → End 从上到下
+                </p>
+              </div>
+              {input.actionSheet.status === 'current' && input.actionSheet.mediaId ? (
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={selected.includeActionSheet}
+                    onChange={toggleActionSheet}
+                    data-testid="ref-action-sheet"
+                  />
+                  <span>包含</span>
+                </label>
+              ) : null}
+            </div>
+            {input.actionSheet.status === 'current' && input.actionSheet.mediaId ? (
+              <div className="flex justify-center">
+                <div className="relative w-2/5 overflow-hidden rounded border border-slate-200">
+                  <img
+                    src={mediaUrl(projectId, input.actionSheet.mediaId) || ''}
+                    alt="动作表"
+                    className="w-full object-cover"
+                    data-testid="action-sheet-image"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="rounded border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">
+                {input.actionSheet.status === 'missing' ? '动作表缺失' : '等待生成中...'}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </article>
