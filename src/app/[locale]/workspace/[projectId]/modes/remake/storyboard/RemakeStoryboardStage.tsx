@@ -308,6 +308,7 @@ function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string;
       <KeyframePreviewModal
         open={previewSlot !== null}
         onClose={() => setPreviewSlot(null)}
+        projectId={projectId}
         slot={previewSlot ?? 'start'}
         batches={previewSlot ? shot.slots[previewSlot].batches : []}
         adoptedCandidateId={previewSlot ? shot.slots[previewSlot].adoptedCandidateId ?? null : null}

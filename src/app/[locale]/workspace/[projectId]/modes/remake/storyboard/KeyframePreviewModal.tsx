@@ -11,6 +11,7 @@ import type {
 type Props = {
   open: boolean
   onClose: () => void
+  projectId: string
   slot: RemakeKeyframeSlot
   isOriginal?: boolean
   originalMediaUrl?: string | null
@@ -35,6 +36,7 @@ function mediaUrl(projectId: string, mediaId: string | null | undefined) {
 export default function KeyframePreviewModal({
   open,
   onClose,
+  projectId,
   slot,
   isOriginal = false,
   originalMediaUrl,
@@ -154,6 +156,7 @@ export default function KeyframePreviewModal({
                   <div key={batch.id}>
                     <p className="mb-1 text-[10px] text-slate-400">
                       批次 {batchIndex + 1} · {batch.candidates.length} 候选
+                      {batch.referenceMediaIds?.length ? ` · ${batch.referenceMediaIds.length} 参考图` : ''}
                     </p>
                     <div className="grid grid-cols-2 gap-1">
                       {batch.candidates
@@ -285,6 +288,27 @@ export default function KeyframePreviewModal({
         {/* 数据面板 */}
         {showData && !isOriginal ? (
           <div className="max-h-40 overflow-y-auto border-t border-slate-100 bg-slate-50 p-4 text-sm">
+            {(() => {
+              const referenceMediaIds = batches.flatMap((batch) => batch.referenceMediaIds ?? [])
+              const uniqueReferences = [...new Set(referenceMediaIds)]
+              return uniqueReferences.length > 0 ? (
+                <div className="mb-3">
+                  <p className="mb-1 text-xs font-semibold text-slate-600">
+                    参考图（已上传并引用 {uniqueReferences.length} 张）
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueReferences.map((mediaId) => (
+                      <img
+                        key={mediaId}
+                        src={mediaUrl(projectId, mediaId) ?? ''}
+                        alt={`参考图 ${mediaId}`}
+                        className="h-16 w-24 rounded border border-slate-200 object-cover"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null
+            })()}
             {promptText ? (
               <div className="mb-3">
                 <p className="mb-1 text-xs font-semibold text-slate-600">图片 Prompt</p>

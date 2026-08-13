@@ -3,6 +3,13 @@ import { resolveProjectModelCapabilityGenerationOptions, getUserModelConfig, get
 import { resolveMediaRef } from '@/lib/media/service'
 import { getSignedUrl } from '@/lib/storage'
 import { getAdoptedPromptForGeneration } from '../prompt/service'
+import {
+  readAssetIdList,
+  resolveShotAssetMedia,
+  type ResolvedCharacterAsset,
+  type ResolvedLocationAsset,
+} from '../semantics/asset-media'
+import { remakeReferenceRoleUsage } from '../video/reference-plan'
 import { keyframeInputFingerprint, keyframeInputSnapshotSchema, keyframeSlotSchema, type KeyframeInputSnapshot } from './contracts'
 import { buildRemakeKeyframeTaskDescriptor } from './task-contract'
 
@@ -16,6 +23,9 @@ type CurrentKeyframe = {
   sourceRevision: number
   revision: number
   revisionId: string
+  sceneAssetId: string | null
+  characterAssetIds: string[]
+  propAssetIds: string[]
 }
 
 async function currentKeyframe(client: Client, input: { projectId: string; shotId: string }): Promise<CurrentKeyframe> {
@@ -27,11 +37,103 @@ async function currentKeyframe(client: Client, input: { projectId: string; shotI
   const sourceRevision = shot?.remakeProject.currentSource?.sourceRevision
   if (!shot || !revision || !Number.isSafeInteger(sourceRevision) || !sourceRevision) throw new Error('REMAKE_KEYFRAME_INPUT_STALE')
   if (shot.currentRevision !== revision.revision || revision.sourceRevision !== sourceRevision) throw new Error('REMAKE_KEYFRAME_INPUT_STALE')
-  return { projectId: input.projectId, remakeProjectId: shot.remakeProjectId, shotId: shot.id, stableKey: shot.stableKey, sourceRevision, revision: revision.revision, revisionId: revision.id }
+  return {
+    projectId: input.projectId,
+    remakeProjectId: shot.remakeProjectId,
+    shotId: shot.id,
+    stableKey: shot.stableKey,
+    sourceRevision,
+    revision: revision.revision,
+    revisionId: revision.id,
+    sceneAssetId: shot.sceneAssetId ?? null,
+    characterAssetIds: readAssetIdList(shot.characterAssetIds),
+    propAssetIds: readAssetIdList(shot.propAssetIds),
+  }
 }
 
 function promptTargetKey(slot: string) {
   return `image:${keyframeSlotSchema.parse(slot)}` as const
+}
+
+/** 单次分镜图片生成最多携带的参考图数量（与视频 omni-reference 图片上限一致）。 */
+const REMAKE_KEYFRAME_REFERENCE_IMAGE_CAP = 9
+
+type KeyframeReferenceCandidate = {
+  role: 'character_reference' | 'scene_reference' | 'prop_reference'
+  label: string
+  usage: string
+  mediaId?: string
+  mediaUrl?: string
+}
+
+function referenceMediaFields(mediaId: string | null | undefined, url: string | null | undefined): Pick<KeyframeReferenceCandidate, 'mediaId' | 'mediaUrl'> {
+  if (mediaId) return { mediaId }
+  if (url) return { mediaUrl: url }
+  return {}
+}
+
+/**
+ * 从镜头语义绑定的资产（角色 / 场景 / 物品）构建参考候选，顺序与
+ * 多镜头确认页 / 视频生成的 omni-reference 优先级一致：角色 -> 场景 -> 物品。
+ */
+function buildKeyframeAssetReferenceCandidates(input: {
+  sceneAssetId: string | null
+  characterAssetIds: string[]
+  propAssetIds: string[]
+  characters: Map<string, ResolvedCharacterAsset>
+  locations: Map<string, ResolvedLocationAsset>
+}): KeyframeReferenceCandidate[] {
+  const candidates: KeyframeReferenceCandidate[] = []
+  for (const assetId of input.characterAssetIds) {
+    const character = input.characters.get(assetId)
+    if (!character) continue
+    const media = referenceMediaFields(character.imageMediaId, character.imageUrl)
+    if (!media.mediaId && !media.mediaUrl) continue
+    candidates.push({
+      role: 'character_reference',
+      label: `角色 ${character.name}`,
+      usage: remakeReferenceRoleUsage('character_reference'),
+      ...media,
+    })
+  }
+  if (input.sceneAssetId) {
+    const scene = input.locations.get(input.sceneAssetId)
+    if (scene) {
+      const media = referenceMediaFields(scene.imageMediaId, scene.imageUrl)
+      if (media.mediaId || media.mediaUrl) {
+        candidates.push({
+          role: 'scene_reference',
+          label: `场景 ${scene.name}`,
+          usage: remakeReferenceRoleUsage('scene_reference'),
+          ...media,
+        })
+      }
+    }
+  }
+  for (const assetId of input.propAssetIds) {
+    const prop = input.locations.get(assetId)
+    if (!prop) continue
+    const media = referenceMediaFields(prop.imageMediaId, prop.imageUrl)
+    if (!media.mediaId && !media.mediaUrl) continue
+    candidates.push({
+      role: 'prop_reference',
+      label: `物品 ${prop.name}`,
+      usage: remakeReferenceRoleUsage('prop_reference'),
+      ...media,
+    })
+  }
+  return candidates
+}
+
+/** 参考素材使用说明后缀：与多镜头确认页 / 视频生成一致，明确 @ImageN 的用途。 */
+function buildKeyframeReferencePromptSuffix(refs: KeyframeReferenceCandidate[]): string {
+  if (refs.length === 0) return ''
+  const lines = refs.map((ref, index) => `@Image${index + 1}（${ref.label}）：${ref.usage}。`)
+  return [
+    '参考素材使用说明：',
+    ...lines,
+    '请严格按上述 @Image 引用理解素材用途，优先保证角色外观、场景质感和关键物品一致。',
+  ].join('\n')
 }
 
 export async function buildKeyframeGenerationSubmission(input: {
@@ -53,6 +155,38 @@ export async function buildKeyframeGenerationSubmission(input: {
   if (!track?.selectedForGeneration) throw new Error('REMAKE_KEYFRAME_SLOT_NOT_SELECTED')
   const prompt = await getAdoptedPromptForGeneration({ projectId: input.projectId, shotId: input.shotId, targetKey: promptTargetKey(slot) })
   if (!prompt) throw new Error('REMAKE_KEYFRAME_PROMPT_NOT_APPROVED')
+
+  // 参考图：优先解析镜头语义中绑定的角色 / 场景 / 物品资产（多镜头确认页同款服务端推导），
+  // 再追加客户端显式传入的参考图；全部归一为 MediaObject id 后冻结进 snapshot。
+  const assetMedia = await resolveShotAssetMedia({
+    projectId: input.projectId,
+    sceneAssetId: current.sceneAssetId,
+    characterAssetIds: current.characterAssetIds,
+    propAssetIds: current.propAssetIds,
+  })
+  const referenceCandidates = buildKeyframeAssetReferenceCandidates({
+    sceneAssetId: current.sceneAssetId,
+    characterAssetIds: current.characterAssetIds,
+    propAssetIds: current.propAssetIds,
+    characters: assetMedia.characterById,
+    locations: assetMedia.locationById,
+  })
+  const referenceMediaIds: string[] = []
+  const includedReferenceCandidates: KeyframeReferenceCandidate[] = []
+  for (const candidate of referenceCandidates) {
+    if (referenceMediaIds.length >= REMAKE_KEYFRAME_REFERENCE_IMAGE_CAP) break
+    const media = await resolveMediaRef(candidate.mediaId ?? null, candidate.mediaUrl ?? null)
+    if (!media?.id || referenceMediaIds.includes(media.id)) continue
+    referenceMediaIds.push(media.id)
+    includedReferenceCandidates.push(candidate)
+  }
+  for (const mediaId of input.referenceMediaIds) {
+    if (referenceMediaIds.length >= REMAKE_KEYFRAME_REFERENCE_IMAGE_CAP) break
+    if (!referenceMediaIds.includes(mediaId)) referenceMediaIds.push(mediaId)
+  }
+  const promptSuffix = buildKeyframeReferencePromptSuffix(includedReferenceCandidates)
+  const promptText = promptSuffix ? `${prompt.integratedGenerationPrompt}\n\n${promptSuffix}` : prompt.integratedGenerationPrompt
+
   // 解析最终使用的模型：显式 model > 项目 storyboardModel > 用户 storyboardModel
   let resolvedModel = input.model?.trim() || null
   if (!resolvedModel) {
@@ -82,10 +216,10 @@ export async function buildKeyframeGenerationSubmission(input: {
     shotRevisionId: current.revisionId,
     slot,
     promptVersionId: prompt.id,
-    promptText: prompt.integratedGenerationPrompt,
+    promptText,
     model: { id: resolvedModel },
     options: capabilityOptions,
-    referenceMediaIds: input.referenceMediaIds,
+    referenceMediaIds,
     requestedCandidateCount: input.count,
   })
   return buildRemakeKeyframeTaskDescriptor({ projectId: input.projectId, operationKey: input.operationKey, inputSnapshot: snapshot })
@@ -100,7 +234,7 @@ export async function assertKeyframeSubmissionCurrent(snapshot: KeyframeInputSna
   const track = await client.remakeKeyframeTrack.findUnique({ where: { shotRevisionId_slot: { shotRevisionId: parsed.shotRevisionId, slot: parsed.slot } } })
   if (!track?.selectedForGeneration) throw new Error('REMAKE_KEYFRAME_SLOT_NOT_SELECTED')
   const prompt = await getAdoptedPromptForGeneration({ projectId: parsed.projectId, shotId: parsed.shotId, targetKey: promptTargetKey(parsed.slot) })
-  if (!prompt || prompt.id !== parsed.promptVersionId || prompt.integratedGenerationPrompt !== parsed.promptText) throw new Error('REMAKE_KEYFRAME_INPUT_STALE')
+  if (!prompt || prompt.id !== parsed.promptVersionId || !parsed.promptText.startsWith(prompt.integratedGenerationPrompt)) throw new Error('REMAKE_KEYFRAME_INPUT_STALE')
 }
 
 export async function resolveKeyframeReferenceStorageKeys(snapshot: KeyframeInputSnapshot) {
