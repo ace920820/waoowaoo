@@ -94,6 +94,10 @@ export type RemakeSnapshot = {
     errorCode?: string | null
     errorMessage?: string | null
     promptSlot?: 'start' | 'middle' | 'end' | null
+    /** 0-100 进度（worker reportTaskProgress 写入） */
+    progress?: number | null
+    /** 最近一次进度载荷（stage / stageLabel / message / candidateIndex 等） */
+    payload?: Record<string, unknown> | null
     createdAt: string
     updatedAt: string
   }>
@@ -140,8 +144,13 @@ export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefin
   const hasActiveVideoTask = snapshot.tasks.some((task) =>
     task.type === 'remake_video_generate' && ['queued', 'processing', 'running'].includes(task.status),
   )
+  // 关键帧图片生成是异步任务：POST 返回 202 后由 worker 继续生成，
+  // 需要持续轮询，直到任务完成/失败且候选已落库，否则分镜页会一直停留在 0 批 / 0 候选。
+  const hasActiveKeyframeImageTask = snapshot.tasks.some((task) =>
+    task.type === 'remake_keyframe_image_generate' && ['queued', 'processing', 'running'].includes(task.status),
+  )
   if (hasActiveVideoTask) return 3000
-  if (hasPendingKeyframes || hasActivePromptTask) return 1000
+  if (hasPendingKeyframes || hasActivePromptTask || hasActiveKeyframeImageTask) return 1000
   return false
 }
 

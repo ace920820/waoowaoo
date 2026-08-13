@@ -71,6 +71,27 @@ describe('remake prompt Codex executor', () => {
     visit(schema)
   })
 
+  it('instructs the image skill to exclude character appearance descriptors from the generated prompt', async () => {
+    const { imagePrompt } = await import('@/lib/workers/handlers/remake-prompt')
+    const prompt = imagePrompt(
+      {
+        projectId: '11111111-1111-4111-8111-111111111111',
+        remakeProjectId: '22222222-2222-4222-8222-222222222222',
+        shotId: '33333333-3333-4333-8333-333333333333',
+        stableKey: 'shot-01',
+        sourceRevision: 1,
+        shotRevision: 1,
+        shotRevisionId: '44444444-4444-4444-8444-444444444444',
+        keyframeMediaRefs: { first: 'frames/start.jpg' },
+      },
+      'start',
+    )
+
+    expect(prompt).toContain('$image-to-structured-prompt')
+    expect(prompt).toContain('integratedGenerationPrompt 中禁止输出任何与人物外貌形象有关的描述词')
+    expect(prompt).toContain('人物外观一律由参考图提供')
+  })
+
   it('resolves persisted MediaObject IDs to storage keys before reading prompt media', async () => {
     getMediaObjectByIdMock.mockResolvedValueOnce({ storageKey: 'images/scenedetect/frame-1.jpg' })
     const { resolvePromptMediaKey } = await import('@/lib/workers/handlers/remake-prompt')

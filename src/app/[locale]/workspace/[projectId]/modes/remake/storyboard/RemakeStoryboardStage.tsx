@@ -96,14 +96,34 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
               </button>
             ))}
           </aside>
-          {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} onNavigateToPrompt={onNavigateToPrompt} /> : null}
+          {selectedShot ? <ShotBlock projectId={projectId} shot={selectedShot} onNavigateToPrompt={onNavigateToPrompt} tasks={snapshot.tasks} /> : null}
         </div>
       )}
     </section>
   )
 }
 
-function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string; shot: RemakeShotView; onNavigateToPrompt?: () => void }) {
+const KEYFRAME_STAGE_LABELS: Record<string, string> = {
+  remake_keyframe_preflight: '正在准备',
+  generate_remake_keyframe_candidate: '正在生成图片',
+  persist_remake_keyframe_candidates: '正在保存结果',
+  polling_external: '等待图片模型返回',
+}
+
+type RemakeTask = RemakeSnapshot['tasks'][number]
+
+function keyframeProgressText(task: RemakeTask): string {
+  const payload = task.payload ?? null
+  const stage = typeof payload?.stage === 'string' ? payload.stage : null
+  const label = (stage && KEYFRAME_STAGE_LABELS[stage]) || '正在生成图片'
+  const candidateIndex = typeof payload?.candidateIndex === 'number' ? payload.candidateIndex : null
+  const percent = typeof task.progress === 'number' ? task.progress : null
+  return [label, candidateIndex != null ? `第 ${candidateIndex} 张` : null, percent != null ? `${percent}%` : null]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+function ShotBlock({ projectId, shot, tasks, onNavigateToPrompt }: { projectId: string; shot: RemakeShotView; tasks: RemakeTask[]; onNavigateToPrompt?: () => void }) {
   const select = useSelectRemakeKeyframe(projectId)
   const generate = useGenerateRemakeKeyframe(projectId)
   const adopt = useAdoptRemakeKeyframe(projectId)
@@ -152,6 +172,31 @@ function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string;
     trackId: string
     candidate: RemakeKeyframeCandidate
   } | null>(null)
+  // 异步关键帧生成任务：POST 返回后 worker 继续生成，按 shot + slot 关联出活动/失败任务，
+  // 用于在候选返回前显示「生成中 + 当前进度」，失败时展示错误信息。
+  const activeKeyframeTaskBySlot = useMemo(() => {
+    const bySlot: Partial<Record<RemakeKeyframeSlot, RemakeTask>> = {}
+    for (const task of tasks) {
+      if (task.type !== 'remake_keyframe_image_generate' || task.targetId !== shot.id) continue
+      if (!['queued', 'processing', 'running'].includes(task.status)) continue
+      if (task.promptSlot === 'start' || task.promptSlot === 'middle' || task.promptSlot === 'end') {
+        if (!bySlot[task.promptSlot]) bySlot[task.promptSlot] = task
+      }
+    }
+    return bySlot
+  }, [tasks, shot.id])
+
+  const failedKeyframeTaskBySlot = useMemo(() => {
+    const bySlot: Partial<Record<RemakeKeyframeSlot, RemakeTask>> = {}
+    for (const task of tasks) {
+      if (task.type !== 'remake_keyframe_image_generate' || task.targetId !== shot.id || task.status !== 'failed') continue
+      if (task.promptSlot === 'start' || task.promptSlot === 'middle' || task.promptSlot === 'end') {
+        bySlot[task.promptSlot] = task
+      }
+    }
+    return bySlot
+  }, [tasks, shot.id])
+
   const selectedCount = REMAKE_KEYFRAME_SLOTS.filter(
     (slot) => localSelected[slot],
   ).length
@@ -235,6 +280,8 @@ function ShotBlock({ projectId, shot, onNavigateToPrompt }: { projectId: string;
         onGenerate={handleGenerate}
         generating={generate.isPending}
         pendingSlot={pendingSlot}
+        activeKeyframeTasks={activeKeyframeTaskBySlot}
+        failedKeyframeTasks={failedKeyframeTaskBySlot}
         counts={counts}
         onCountChange={(slot, value) => setCounts((prev) => ({ ...prev, [slot]: value }))}
         hints={hints}
@@ -350,6 +397,8 @@ function TwoRowGrid({
   onGenerate,
   generating,
   pendingSlot,
+  activeKeyframeTasks,
+  failedKeyframeTasks,
   counts,
   onCountChange,
   hints,
@@ -367,6 +416,8 @@ function TwoRowGrid({
   onGenerate: (slot: RemakeKeyframeSlot) => void
   generating: boolean
   pendingSlot: RemakeKeyframeSlot | null
+  activeKeyframeTasks: Partial<Record<RemakeKeyframeSlot, RemakeTask>>
+  failedKeyframeTasks: Partial<Record<RemakeKeyframeSlot, RemakeTask>>
   counts: Record<RemakeKeyframeSlot, number>
   onCountChange: (slot: RemakeKeyframeSlot, value: number) => void
   hints: Record<RemakeKeyframeSlot, string | null>
@@ -455,7 +506,9 @@ function TwoRowGrid({
           )
           const adopted = slotState.adoptedCandidate
           const isEmpty = !adopted?.mediaId && !candidates[0]?.mediaId
-          const isGenerating = generating && pendingSlot === column.slot
+          const activeTask = activeKeyframeTasks[column.slot]
+          const failedTask = failedKeyframeTasks[column.slot]
+          const isGenerating = Boolean(activeTask) || (generating && pendingSlot === column.slot)
           const activeCandidateId = viewedCandidate[column.slot] ?? adopted?.id ?? candidates[0]?.id ?? null
           const displayed =
             candidates.find((candidate) => candidate.id === activeCandidateId) ??
@@ -496,7 +549,7 @@ function TwoRowGrid({
                       type="button"
                       data-testid={`generate-${column.slot}`}
                       onClick={() => onGenerate(column.slot)}
-                      disabled={generating}
+                      disabled={generating || Boolean(activeTask)}
                       className="rounded bg-indigo-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                     >
                       {isGenerating ? '生成中…' : '生成图片'}
@@ -504,8 +557,11 @@ function TwoRowGrid({
                   </div>
                 )}
                 {isGenerating ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs font-medium text-indigo-700">
-                    生成中…
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-white/75 px-2 text-center text-xs font-medium text-indigo-700">
+                    <AppIcon name="sparkles" size={16} className="animate-spin" />
+                    <span className="truncate">
+                      {activeTask ? keyframeProgressText(activeTask) : '正在提交…'}
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -554,6 +610,11 @@ function TwoRowGrid({
                   {hints[column.slot]}
                 </p>
               ) : null}
+              {failedTask && isEmpty && !isGenerating ? (
+                <p role="alert" className="mt-1 text-[10px] text-red-600">
+                  {failedTask.errorMessage || '生成失败，请重试'}
+                </p>
+              ) : null}
 
               {/* 悬浮浮窗：候选数量 + 生成/重新生成 + 查看数据 */}
               <div className="static z-10 mt-2 flex w-max items-center gap-1 rounded-md border border-slate-200 bg-white/95 px-1.5 py-1 shadow-sm sm:absolute sm:bottom-1.5 sm:left-1/2 sm:mt-0 sm:-translate-x-1/2 sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto">
@@ -576,7 +637,7 @@ function TwoRowGrid({
                   type="button"
                   data-testid={`regenerate-${column.slot}`}
                   onClick={() => onGenerate(column.slot)}
-                  disabled={generating}
+                  disabled={generating || Boolean(activeTask)}
                   className="rounded bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {isGenerating ? '生成中…' : isEmpty ? '生成' : '重新生成'}

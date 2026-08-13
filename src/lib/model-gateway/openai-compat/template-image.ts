@@ -109,9 +109,14 @@ export async function generateImageViaOpenAICompatTemplate(
     ? request.referenceImages[0]
     : ''
   const alias = resolveOpenAICompatImageModelAlias(request.modelId)
+  // gpt-image-2 携带参考图时会走 multipart /images/edits 端点，其 bodyTemplate 需要 quality。
+  // 别名变体（high/medium/low/auto）已注入固定 quality；基础 gpt-image-2 没有别名 quality，
+  // 这里兜底默认 auto，保证分镜关键帧带参考图生成不会因缺少 quality 而失败。
   const templateOptions = alias.quality
     ? { ...request.options, quality: alias.quality }
-    : request.options
+    : alias.modelId === 'gpt-image-2' && hasReferenceImages(request)
+      ? { ...request.options, quality: 'auto' }
+      : request.options
   const variables = buildTemplateVariables({
     model: alias.modelId || request.modelId || 'gpt-image-1',
     prompt: request.prompt,

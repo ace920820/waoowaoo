@@ -38,8 +38,10 @@ function parseRevision(row: Row): Row {
   return { ...row, payload, refs }
 }
 
-function imagePrompt(snapshot: PromptInputSnapshot, slot: string) {
-  return `$image-to-structured-prompt\nAnalyze exactly one reference image for Shot ${snapshot.stableKey}, slot ${slot}. Return one JSONL final event with the complete contracted sections, including integratedGenerationPrompt and negativeConstraints. Keep facts, inferences, and recommendations separate.`
+export function imagePrompt(snapshot: PromptInputSnapshot, slot: string) {
+  return `$image-to-structured-prompt\nAnalyze exactly one reference image for Shot ${snapshot.stableKey}, slot ${slot}. Return one JSONL final event with the complete contracted sections, including integratedGenerationPrompt and negativeConstraints. Keep facts, inferences, and recommendations separate.
+
+生成约束（重要）：该镜头生成关键帧图片时会附加人物形象参考图，因此 integratedGenerationPrompt 中禁止输出任何与人物外貌形象有关的描述词——不要写面部特征、发型、体型、肤色、服装、配饰、年龄感等人物身份/外貌细节；人物外观一律由参考图提供，提示词只保留镜头与构图、机位景别、动作姿态、场景空间、光线、色彩与成像等非人物外貌信息。结构化 subjects 的 appearance / wardrobeAndEquipment 字段仍按 schema 填写以便审核，但不得因此把人物外貌描述写进 integratedGenerationPrompt。`
 }
 
 function videoPrompt() {

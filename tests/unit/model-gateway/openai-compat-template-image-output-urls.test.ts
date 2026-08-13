@@ -60,6 +60,51 @@ describe('openai-compat template image output urls', () => {
     })
   })
 
+  it('defaults quality to auto for base gpt-image-2 when reference images force the edits endpoint', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ url: 'https://cdn.test/edit.png' }],
+    }), { status: 200 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await generateImageViaOpenAICompatTemplate({
+      userId: 'user-1',
+      providerId: 'openai-compatible:test-provider',
+      modelId: 'gpt-image-2',
+      modelKey: 'openai-compatible:test-provider::gpt-image-2',
+      prompt: 'edit this frame',
+      profile: 'openai-compatible',
+      referenceImages: ['data:image/png;base64,QQ=='],
+      template: {
+        version: 1,
+        mediaType: 'image',
+        mode: 'sync',
+        create: {
+          method: 'POST',
+          path: '/images/generations',
+          contentType: 'application/json',
+          bodyTemplate: {
+            model: '{{model}}',
+            prompt: '{{prompt}}',
+          },
+        },
+        response: {
+          outputUrlPath: '$.data[0].url',
+          outputUrlsPath: '$.data',
+        },
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.imageUrl).toBe('https://cdn.test/edit.png')
+    const [url, init] = (fetchMock.mock.calls[0] ?? []) as unknown as [string, RequestInit]
+    expect(url).toContain('/images/edits')
+    const body = init.body
+    if (body instanceof FormData) {
+      expect(body.get('quality')).toBe('auto')
+      expect(body.get('model')).toBe('gpt-image-2')
+    }
+  })
+
   it('renders gpt-image-2 quality alias as upstream model plus quality', async () => {
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
       data: [{ url: 'https://cdn.test/alias.png' }],

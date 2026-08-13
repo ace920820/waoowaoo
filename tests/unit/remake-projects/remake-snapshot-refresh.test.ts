@@ -53,4 +53,18 @@ describe('remake snapshot refresh interval — video generation tasks', () => {
     expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v1', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'completed', createdAt: '', updatedAt: '' }] }))).toBe(false)
     expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-v2', type: 'remake_video_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'failed', createdAt: '', updatedAt: '' }] }))).toBe(false)
   })
+
+
+describe('remake snapshot refresh interval — keyframe image generation tasks', () => {
+  it('keeps fetching while a remake_keyframe_image_generate task is queued or processing', () => {
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-k1', type: 'remake_keyframe_image_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'queued', createdAt: '', updatedAt: '' }] }))).toBe(1000)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-k2', type: 'remake_keyframe_image_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'processing', createdAt: '', updatedAt: '' }] }))).toBe(1000)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-k3', type: 'remake_keyframe_image_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'running', createdAt: '', updatedAt: '' }] }))).toBe(1000)
+  })
+
+  it('stops fetching once the keyframe image task is completed or failed', () => {
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-k1', type: 'remake_keyframe_image_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'completed', createdAt: '', updatedAt: '' }] }))).toBe(false)
+    expect(remakeSnapshotRefreshInterval(snapshot({ tasks: [{ id: 'task-k2', type: 'remake_keyframe_image_generate', targetType: 'remake_shot', targetId: 'shot-1', status: 'failed', createdAt: '', updatedAt: '' }] }))).toBe(false)
+  })
+})
 })
