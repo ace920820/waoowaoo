@@ -636,35 +636,6 @@ function VideoShotCard({
           </InputGroup>
 
           <InputGroup
-            title="动作表参考（可选）"
-            description="原始三帧纵向拼接图，Start → Middle → End，从上到下。"
-          >
-            {input.actionSheet.status === 'current' && input.actionSheet.mediaId ? (
-              <div className="space-y-2">
-                <div className="relative overflow-hidden rounded border border-slate-200">
-                  <img
-                    src={mediaUrl(projectId, input.actionSheet.mediaId) || ''}
-                    alt="动作表"
-                    className="w-full object-cover"
-                    data-testid="action-sheet-image"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={selected.includeActionSheet}
-                    onChange={toggleActionSheet}
-                    data-testid="ref-action-sheet"
-                  />
-                  <span>包含动作表（附加参考输入）</span>
-                </label>
-              </div>
-            ) : (
-              <Missing text={`动作表状态：${input.actionSheet.status === 'missing' ? '缺失' : '等待生成中...'}`} />
-            )}
-          </InputGroup>
-
-          <InputGroup
             title="生成参数"
             description="默认使用项目配置，本次修改不影响项目默认值。"
           >
