@@ -81,6 +81,8 @@ interface ArkSeedanceModelSpec {
     supportsGenerateAudio: boolean
     supportsDraft: boolean
     supportsFrames: boolean
+    /** Ark r2v: model accepts content[] multimodal references (reference_image / reference_video). */
+    supportsMultimodalReferences?: boolean
     resolutionOptions: ReadonlyArray<'480p' | '720p' | '1080p'>
 }
 
@@ -128,6 +130,7 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: true,
         supportsDraft: false,
         supportsFrames: false,
+        supportsMultimodalReferences: true,
         resolutionOptions: ['480p', '720p'],
     },
     'doubao-seedance-2-0-fast-260128': {
@@ -137,6 +140,7 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: true,
         supportsDraft: false,
         supportsFrames: false,
+        supportsMultimodalReferences: true,
         resolutionOptions: ['480p', '720p'],
     },
 }
@@ -536,6 +540,10 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             const hasMultimodalReferences = contentItems.some((item) => 'role' in item && (item.role === 'reference_image' || item.role === 'reference_video'))
             if (lastFrameImageUrl || (hasFrameRoles && hasMultimodalReferences)) {
                 throw new Error('ARK_VIDEO_OPTION_INVALID: first/last frame cannot be mixed with multimodal references')
+            }
+            if (modelSpec && modelSpec.supportsMultimodalReferences !== true) {
+                // Older i2v models (Seedance 1.5 Pro / 1.0) reject task_type=r2v.
+                throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: multimodal references for ${realModel} (model does not support r2v)`)
             }
             content.push(...(await normalizeArkVideoContentItems(contentItems)))
         } else if (lastFrameImageUrl) {

@@ -111,7 +111,6 @@ describe('shot-group-video-config', () => {
   })
 
   it('normalizes non-Ark models to composite storyboard semantics', () => {
-    expect(supportsShotGroupMultiReferenceModes('ark::seedance')).toBe(true)
     expect(supportsShotGroupMultiReferenceModes('fal::kling-v1')).toBe(false)
     expect(resolveShotGroupModeForModel({
       mode: 'smart-multi-frame',
@@ -121,6 +120,22 @@ describe('shot-group-video-config', () => {
       mode: 'smart-multi-frame',
       modelKey: 'fal::kling-v1',
     })).toBe('composite_image_mvp')
+  })
+
+  it('only enables omni-reference content[] for models that support Ark r2v (e.g. Seedance 2.0)', () => {
+    expect(supportsShotGroupMultiReferenceModes('ark::doubao-seedance-2-0-260128')).toBe(true)
+    expect(supportsShotGroupMultiReferenceModes('ark::doubao-seedance-2-0-fast-260128')).toBe(true)
+    // Seedance 1.5 Pro / 1.0 reject task_type=r2v -> degrade to composite_image_mvp
+    expect(supportsShotGroupMultiReferenceModes('ark::doubao-seedance-1-5-pro-251215')).toBe(false)
+    expect(supportsShotGroupMultiReferenceModes('ark::doubao-seedance-1-0-pro-250528')).toBe(false)
+    expect(resolveShotGroupReferenceMode({
+      mode: 'smart-multi-frame',
+      modelKey: 'ark::doubao-seedance-1-5-pro-251215',
+    })).toBe('composite_image_mvp')
+    expect(resolveShotGroupReferenceMode({
+      mode: 'omni-reference',
+      modelKey: 'ark::doubao-seedance-2-0-260128',
+    })).toBe('ark_content_multireference')
   })
 
   it('builds prompt around composite storyboard mode without reference-image or music language', () => {

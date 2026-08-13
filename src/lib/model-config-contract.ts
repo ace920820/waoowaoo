@@ -42,6 +42,8 @@ export interface VideoCapabilities {
   resolutionOptions?: string[]
   firstlastframe?: boolean
   supportGenerateAudio?: boolean
+  /** Ark r2v: model accepts content[] multimodal references (reference_image / reference_video). */
+  supportsMultimodalReferences?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -96,6 +98,7 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
   'resolutionOptions',
   'firstlastframe',
   'supportGenerateAudio',
+  'supportsMultimodalReferences',
   'fieldI18n',
 ])
 
@@ -354,6 +357,14 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
       code: 'CAPABILITY_FIELD_INVALID',
       field: 'capabilities.video.firstlastframe',
       message: 'firstlastframe must be boolean',
+    })
+  }
+
+  if (raw.supportsMultimodalReferences !== undefined && typeof raw.supportsMultimodalReferences !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.supportsMultimodalReferences',
+      message: 'supportsMultimodalReferences must be boolean',
     })
   }
 

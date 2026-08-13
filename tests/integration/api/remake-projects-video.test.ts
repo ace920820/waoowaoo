@@ -547,6 +547,63 @@ describe('remake video generation — server-authoritative capability defaults',
   })
 })
 
+describe('remake video generation — r2v capability gate (REVIEW: seedance-1.5-pro)', () => {
+  const plainShot = {
+    id: IDS.shotId,
+    remakeProjectId: IDS.remakeProjectId,
+    stableKey: 'shot-01',
+    currentRevision: 1,
+    sceneAssetId: null,
+    characterAssetIds: null,
+    propAssetIds: null,
+    remakeProject: { projectId: IDS.projectId, currentSource: { sourceRevision: 1 } },
+    revisions: [{ id: IDS.revisionId, revision: 1, lifecycleState: 'active', sourceRevision: 1 }],
+  }
+
+  it('degrades to composite_image_mvp without the reference suffix for models that do not support r2v', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(plainShot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-15pro',
+      model: 'ark::doubao-seedance-1-5-pro-251215',
+      selectedSlots: ['middle'],
+      includeActionSheet: true,
+      includeCharacterImages: true,
+      includeLocationImage: true,
+      includePropImages: true,
+      includeCharacterAudio: false,
+      shotDurationSeconds: 4,
+    })
+
+    expect(descriptor.payload.inputSnapshot.referenceMode).toBe('composite_image_mvp')
+    expect(descriptor.payload.inputSnapshot.promptText).toBe('character runs through alley')
+    expect(descriptor.payload.inputSnapshot.promptText).not.toContain('参考素材使用说明')
+  })
+
+  it('keeps ark_content_multireference for Seedance 2.0 which supports r2v', async () => {
+    const { buildVideoGenerationSubmission } = await import('@/lib/remake-projects/video/service')
+    prismaMock.remakeShot.findFirst.mockResolvedValueOnce(plainShot)
+
+    const descriptor = await buildVideoGenerationSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      shotId: IDS.shotId,
+      operationKey: 'gen-20',
+      model: 'ark::doubao-seedance-2-0-260128',
+      selectedSlots: ['middle'],
+      includeActionSheet: false,
+      shotDurationSeconds: 4,
+    })
+
+    expect(descriptor.payload.inputSnapshot.referenceMode).toBe('ark_content_multireference')
+    expect(descriptor.payload.inputSnapshot.promptText).toContain('参考素材使用说明：')
+  })
+})
+
 describe('remake video route request schema', () => {
   const generateSchema = z.object({
     action: z.literal('generate'),
