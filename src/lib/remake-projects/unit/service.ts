@@ -63,6 +63,7 @@ export async function createVideoUnit(input: {
   projectId: string
   userId: string
   memberShotRevisionIds: string[]
+  userLabel?: string
 }): Promise<{ unitId: string }> {
   const memberShotRevisionIds = [...new Set(input.memberShotRevisionIds)]
   if (memberShotRevisionIds.length < 2) {
@@ -108,7 +109,10 @@ export async function createVideoUnit(input: {
     }
 
     const unit = await client.remakeVideoUnit.create({
-      data: { remakeProjectId: [...remakeProjectIds][0] },
+      data: {
+        remakeProjectId: [...remakeProjectIds][0],
+        ...(input.userLabel ? { userLabel: input.userLabel } : {}),
+      },
     })
     await client.remakeVideoUnitMember.createMany({
       data: memberShotRevisionIds.map((shotRevisionId, index) => ({
@@ -211,6 +215,30 @@ export async function getVideoUnitDetail(input: {
         }
       : null,
   }
+}
+
+/**
+ * D-14: update the user-facing unit label (ownership-scoped). `null` clears it.
+ */
+export async function updateVideoUnitLabel(input: {
+  projectId: string
+  userId: string
+  unitId: string
+  userLabel: string | null
+}) {
+  const unit = await prisma.remakeVideoUnit.findFirst({
+    where: {
+      id: input.unitId,
+      remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+    },
+    select: { id: true },
+  })
+  if (!unit) throw new Error('REMAKE_VIDEO_UNIT_NOT_FOUND')
+  const updated = await prisma.remakeVideoUnit.update({
+    where: { id: unit.id },
+    data: { userLabel: input.userLabel },
+  })
+  return { id: updated.id, userLabel: updated.userLabel }
 }
 
 /**
