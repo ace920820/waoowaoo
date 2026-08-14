@@ -97,6 +97,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 | 2026-08-12 | `20260812-storyboard-go-prompt-sync` | 分镜页「前往 Prompt 页」按钮改为客户端 stage 切换（复用 updateStage('prompt')），与顶部标签一致，整页跳转改为直接切换并保持当前选中的镜头片段。 |
 | 2026-08-12 | `20260812-shorten-shot-labels-unify-prompt-header` | 简化 prompt/分镜/成片三页镜头名称为「镜头XX」；prompt 分析页顶部卡片改为与分镜/成片统一的 p-5 pill 指标样式（含分析中任务数实时显示）。 |
 | 2026-08-13 | `20260813-remake-video-generation-feedback` | 视频生成结果反馈：任务运行中显示「视频生成中…」、失败显示 errorCode/errorMessage、成功自动出现版本；snapshot 对视频生成任务自动轮询（3s）。 |
+| 2026-08-14 | `260814-gxg-unit-unit-invalid-parameters` | 修复成片页 unit 合并：选择面板显示累计时长与中间帧缩略图；创建 unit 优先取 currentRevision 的 active revision，修复 Invalid parameters 报错。 |
 
 ### UAT / Verification Notes
 
@@ -144,7 +145,7 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
 Plan: 6 of 6
 Status: Phase complete — ready for verification
-Last activity: 2026-08-14 — Phase 09.1 execution started
+Last activity: 2026-08-14 - Completed quick task 260814-gxg: 修复成片页 unit 合并交互问题
 
 Progress: [█████████░] 92%
 
