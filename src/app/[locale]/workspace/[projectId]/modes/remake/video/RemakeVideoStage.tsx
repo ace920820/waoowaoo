@@ -373,6 +373,7 @@ export default function RemakeVideoStage({
               shots={snapshot.shots}
               selectedShotId={selectedShot?.id ?? ''}
               onSelectShot={setSelectedShotId}
+              shotToUnit={shotToUnit}
             />
           </div>
           <div className="min-w-0 lg:col-span-8">

@@ -39,12 +39,16 @@ export function RemakeVideoUnitPanel({
   snapshot,
   unitId,
   onExit,
+  onCloseList,
   onOpenUnit,
 }: {
   projectId: string
   snapshot: RemakeSnapshot
   unitId: string | null
+  /** 详情视图的「返回」（回到列表 / 上级视图） */
   onExit?: () => void
+  /** 列表视图的「返回」（收起整个 unit 管理区） */
+  onCloseList?: () => void
   onOpenUnit?: (unitId: string) => void
 }) {
   const refresh = useRefreshRemakeProject(projectId)
@@ -291,7 +295,7 @@ export function RemakeVideoUnitPanel({
         snapshot={snapshot}
         activeUnitId={unitId}
         onOpenUnit={onOpenUnit}
-        onExit={onExit}
+        onExit={onCloseList}
       />
     )
   }
