@@ -5,10 +5,6 @@ import {
   type RemakeKeyframeSlot,
 } from '../keyframes/adapter'
 import {
-  buildUnitReferencePlan,
-  dedupeUnitAssetCandidates,
-} from './reference-plan'
-import {
   remakeReferenceRoleUsage,
   type RemakeReferenceCandidate,
 } from '../video/reference-plan'

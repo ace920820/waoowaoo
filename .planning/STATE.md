@@ -5,15 +5,15 @@ milestone_name: AI 视频翻拍工作台整合
 current_phase: 09.1
 current_phase_name: 短镜头合并 unit 视频生成
 status: executing
-stopped_at: Completed 09.1-01-PLAN.md
-last_updated: "2026-08-14T02:03:14.726Z"
+stopped_at: Completed 09.1-02-PLAN.md
+last_updated: "2026-08-14T02:14:01.783Z"
 last_activity: 2026-08-14
 last_activity_desc: Phase 09.1 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 36
-  completed_plans: 28
+  completed_plans: 29
   percent: 38
 ---
 
@@ -142,11 +142,11 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-14 — Phase 09.1 execution started
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 81%
 
 ## Operator Next Steps
 
@@ -157,8 +157,8 @@ Progress: [████████░░] 78%
 
 ## Session
 
-**Last session:** 2026-08-14T02:03:14.715Z
-**Stopped at:** Completed 09.1-01-PLAN.md
+**Last session:** 2026-08-14T02:13:33.162Z
+**Stopped at:** Completed 09.1-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -167,6 +167,7 @@ Progress: [████████░░] 78%
 |------|----------|-------|-------|
 | Phase 07-prompt P03 | 10h 29m | 3 tasks | 28 files |
 | Phase 09.1-unit P01 | 30min | 3 tasks | 14 files |
+| Phase 09.1 P02 | 5min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -177,3 +178,9 @@ Progress: [████████░░] 78%
 - [Phase 09.1-unit]: assertVideoReferenceOrder relaxed from strictly-increasing to non-decreasing (equal role order allowed) - admits N consecutive member keyframes, preserves single-shot guarantees
 - [Phase 09.1-unit]: unit input snapshot is strict/frozen with promptText = D-09 timed prompt + reference suffix; members carry per-member promptVersionId (batch-level promptVersionId = first member's, resolved in 09.1-03 T3 per Open Question 1)
 - [Phase 09.1-unit]: unit task dedupe key remake-video-unit:{projectId}:{operationKey}:{fingerprint}; parseVideoUnitTaskPayload re-verifies fingerprint after stripping runtime keys (D-22)
+- [Phase ?]: Dedup key = (role, assetId): a character keeps both character_reference and character_audio_reference while the same asset across members collapses to one of each
+- [Phase ?]: Grid rule (D-07 discretion): 2-6 unit sources -> 2 columns, 7-9 -> 3 columns; cells are 640x360 cover-fit + 34px 镜头{N} label bar
+- [Phase ?]: buildUnitReferencePlan delegates sorting/truncation to the existing buildRemakeReferencePlan (T-091-05: member keyframes emitted before assets so degrade never drops a frame)
+- [Phase ?]: buildUnitSubmissionPreview derives total duration via deriveDefaultVideoDuration(sum, definitions ?? []) only when totalDurationSeconds is not supplied; preview promptText/orderedReferences are byte-identical to buildUnitTimedPrompt / buildUnitReferencePlan (D-16 WYSIWYG)
+- [Phase ?]: renderUnitActionSheet bounds sources 2..9 and rejects outside (T-091-07)
+- [Phase ?]: Pure reference-plan helpers extracted to a prisma-free module (unit/reference-plan.ts) so the D-16 preview stays client-safe; references.ts re-exports them
