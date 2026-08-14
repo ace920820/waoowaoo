@@ -413,6 +413,8 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       return {
         id: unit.id,
         userLabel: unit.userLabel ?? null,
+        dissolvedAt: unit.dissolvedAt ?? null,
+        dissolvedReason: unit.dissolvedReason ?? null,
         members: unitMembers
           .sort((left, right) => Number(left.ordinal) - Number(right.ordinal))
           .map((member) => {

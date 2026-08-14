@@ -868,6 +868,8 @@ model RemakeVideoUnit {
   id               String                       @id @default(uuid())
   remakeProjectId  String
   userLabel        String?
+  dissolvedAt      DateTime?
+  dissolvedReason  String?                      @db.Text
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @default(now()) @updatedAt
   remakeProject    RemakeProject                @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)

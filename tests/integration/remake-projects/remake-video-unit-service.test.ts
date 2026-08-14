@@ -31,11 +31,13 @@ const prismaMock = vi.hoisted(() => ({
   remakeShotRevision: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   remakeVideoUnit: {
     create: vi.fn(),
     findFirst: vi.fn(),
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   remakeVideoUnitMember: {
     findMany: vi.fn(),
@@ -53,6 +55,7 @@ const prismaMock = vi.hoisted(() => ({
   remakeVideoUnitBatch: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     create: vi.fn(),
   },
   remakeVideoUnitVersion: {
@@ -69,6 +72,8 @@ const prismaMock = vi.hoisted(() => ({
   },
   remakeInvalidation: {
     updateMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
   },
   remakeProvenanceRecord: {
     create: vi.fn(),
@@ -81,6 +86,20 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Clear any leftover mockResolvedValueOnce queues across tests.
+  for (const value of Object.values(prismaMock)) {
+    if (value && typeof value === 'object') {
+      for (const fn of Object.values(value as Record<string, unknown>)) {
+        if (typeof fn === 'function' && 'mockReset' in (fn as object)) {
+          ;(fn as unknown as { mockReset: () => void }).mockReset()
+        }
+      }
+    }
+  }
+  // Restore the transaction passthrough that mockReset wiped.
+  prismaMock.$transaction.mockImplementation(
+    async (callback: (tx: unknown) => unknown) => callback(prismaMock),
+  )
 })
 
 function activeCurrentRevision(shotRevisionId: string, remakeProjectId = IDS.remakeProjectId) {
@@ -216,11 +235,14 @@ describe('updateVideoUnitMembers (D-19 freeze gate)', () => {
     const { updateVideoUnitMembers } = await import('@/lib/remake-projects/unit/service')
     prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId })
     prismaMock.task.findFirst.mockResolvedValueOnce(null)
-    prismaMock.remakeVideoUnitBatch.findFirst.mockResolvedValueOnce(null)
     prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
       { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1 },
     ])
+    prismaMock.remakeVideoUnitMember.deleteMany.mockResolvedValueOnce({ count: 0 })
+    prismaMock.remakeVideoUnitMember.findUnique.mockResolvedValueOnce(null)
     prismaMock.remakeVideoUnitMember.createMany.mockResolvedValueOnce({ count: 1 })
+    // Member added → invalidation path runs; no committed batches → nothing invalidated.
+    prismaMock.remakeVideoUnitBatch.findMany.mockResolvedValueOnce([])
     prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
       { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1 },
       { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2 },
@@ -242,6 +264,7 @@ describe('updateVideoUnitMembers (D-19 freeze gate)', () => {
         ],
       }),
     )
+    expect(result.invalidated).toBe(0)
   })
 
   it('throws REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT when a queued/processing unit task exists', async () => {
@@ -251,24 +274,74 @@ describe('updateVideoUnitMembers (D-19 freeze gate)', () => {
     await expect(updateVideoUnitMembers(input)).rejects.toThrow(
       'REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT',
     )
-    expect(prismaMock.remakeVideoUnitBatch.findFirst).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnitMember.findMany).not.toHaveBeenCalled()
   })
 
-  it('throws REMAKE_VIDEO_UNIT_MEMBERS_FROZEN after the first committed batch', async () => {
+  it('allows member changes after a committed batch and invalidates prior unit versions (D-19 revised)', async () => {
     const { updateVideoUnitMembers } = await import('@/lib/remake-projects/unit/service')
     prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId })
     prismaMock.task.findFirst.mockResolvedValueOnce(null)
-    prismaMock.remakeVideoUnitBatch.findFirst.mockResolvedValueOnce({ id: 'batch-1' })
-    await expect(updateVideoUnitMembers(input)).rejects.toThrow(
-      'REMAKE_VIDEO_UNIT_MEMBERS_FROZEN',
+    // No MEMBERS_FROZEN gate anymore — committed batches no longer freeze members.
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1 },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2 },
+    ])
+    prismaMock.remakeVideoUnitMember.deleteMany.mockResolvedValueOnce({ count: 0 })
+    prismaMock.remakeVideoUnitMember.findUnique.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.createMany.mockResolvedValueOnce({ count: 0 })
+    // Member change triggers invalidation of the unit's prior completed versions.
+    prismaMock.remakeVideoUnitBatch.findMany.mockResolvedValueOnce([
+      {
+        id: 'unit-batch-1',
+        versions: [
+          {
+            id: 'uv-1',
+            outputVersionId: 'ov-1',
+            outputVersion: { status: 'completed', invalidatedAt: null },
+          },
+        ],
+      },
+    ])
+    prismaMock.remakeOutputVersion.updateMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitTrack.findUnique.mockResolvedValueOnce({ id: 'unit-track-1' })
+    prismaMock.remakeShotRevision.findFirst.mockResolvedValueOnce({ shotId: 'shot-1' })
+    prismaMock.remakeInvalidation.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeInvalidation.create.mockResolvedValueOnce({ id: 'inv-1' })
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1 },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2 },
+    ])
+
+    const result = await updateVideoUnitMembers({
+      ...input,
+      members: [
+        { shotRevisionId: IDS.member1ShotRevisionId, ordinal: 2 },
+        { shotRevisionId: IDS.member2ShotRevisionId, ordinal: 1 },
+      ],
+    })
+
+    expect(result.unitId).toBe(IDS.unitId)
+    // Reorder counts as a change → prior completed version is invalidated.
+    expect(prismaMock.remakeOutputVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { invalidatedAt: expect.any(Date), status: 'needs_review' },
+      }),
     )
+    expect(prismaMock.remakeInvalidation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reason: 'unit_members_changed',
+          unitVersionId: 'uv-1',
+        }),
+      }),
+    )
+    expect(result.invalidated).toBe(1)
   })
 
   it('removes dropped members and blocks re-adding a member of another unit (D-04)', async () => {
     const { updateVideoUnitMembers } = await import('@/lib/remake-projects/unit/service')
     prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId })
     prismaMock.task.findFirst.mockResolvedValueOnce(null)
-    prismaMock.remakeVideoUnitBatch.findFirst.mockResolvedValueOnce(null)
     prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
       { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1 },
       { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2 },
@@ -850,5 +923,86 @@ describe('getVideoUnitTrackDetail', () => {
       trackId: 'unit-track-1',
     })
     expect(result).toBeNull()
+  })
+})
+
+describe('dissolveVideoUnit (D-19 revised)', () => {
+  const dissolveInput = {
+    projectId: IDS.projectId,
+    userId: IDS.userId,
+    unitId: IDS.unitId,
+    reason: '手动解散，重新组织镜头',
+  }
+
+  it('soft-deletes the unit: releases members and stamps dissolvedAt', async () => {
+    const { dissolveVideoUnit } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({
+      id: IDS.unitId,
+      dissolvedAt: null,
+    })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.deleteMany.mockResolvedValueOnce({ count: 2 })
+    const dissolvedAt = new Date('2026-08-14T12:00:00Z')
+    prismaMock.remakeVideoUnit.update.mockResolvedValueOnce({
+      id: IDS.unitId,
+      dissolvedAt,
+    })
+
+    const result = await dissolveVideoUnit(dissolveInput)
+
+    expect(result).toEqual({ unitId: IDS.unitId, dissolvedAt })
+    expect(prismaMock.remakeVideoUnitMember.deleteMany).toHaveBeenCalledWith({
+      where: { unitId: IDS.unitId },
+    })
+    expect(prismaMock.remakeVideoUnit.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: IDS.unitId },
+        data: expect.objectContaining({
+          dissolvedAt: expect.any(Date),
+          dissolvedReason: '手动解散，重新组织镜头',
+        }),
+      }),
+    )
+  })
+
+  it('is idempotent when the unit is already dissolved (no member release)', async () => {
+    const { dissolveVideoUnit } = await import('@/lib/remake-projects/unit/service')
+    const dissolvedAt = new Date('2026-08-14T10:00:00Z')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({
+      id: IDS.unitId,
+      dissolvedAt,
+    })
+
+    const result = await dissolveVideoUnit(dissolveInput)
+
+    expect(result).toEqual({ unitId: IDS.unitId, dissolvedAt })
+    expect(prismaMock.task.findFirst).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnitMember.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnit.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks dissolve while a unit generation task is pending/running', async () => {
+    const { dissolveVideoUnit } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({
+      id: IDS.unitId,
+      dissolvedAt: null,
+    })
+    prismaMock.task.findFirst.mockResolvedValueOnce({ id: 'task-1' })
+
+    await expect(dissolveVideoUnit(dissolveInput)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT',
+    )
+    expect(prismaMock.remakeVideoUnitMember.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnit.update).not.toHaveBeenCalled()
+  })
+
+  it('throws REMAKE_VIDEO_UNIT_NOT_FOUND when the unit is not owned by the user', async () => {
+    const { dissolveVideoUnit } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce(null)
+
+    await expect(dissolveVideoUnit(dissolveInput)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_NOT_FOUND',
+    )
+    expect(prismaMock.remakeVideoUnitMember.deleteMany).not.toHaveBeenCalled()
   })
 })

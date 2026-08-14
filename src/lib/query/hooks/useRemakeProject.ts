@@ -88,6 +88,8 @@ export type RemakeSnapshot = {
   units?: Array<{
     id: string
     userLabel: string | null
+    dissolvedAt: string | null
+    dissolvedReason: string | null
     members: Array<{
       shotRevisionId: string
       ordinal: number

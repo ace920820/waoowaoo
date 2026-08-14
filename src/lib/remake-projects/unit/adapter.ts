@@ -39,6 +39,8 @@ export type UnitBatchView = {
 export type UnitView = {
   id: string
   userLabel: string | null
+  dissolvedAt: string | null
+  dissolvedReason: string | null
   members: UnitMemberView[]
   track: {
     id: string
@@ -84,6 +86,8 @@ export function adaptRemakeUnit(
   return {
     id: unit.id,
     userLabel: unit.userLabel,
+    dissolvedAt: unit.dissolvedAt ?? null,
+    dissolvedReason: unit.dissolvedReason ?? null,
     members,
     track: track
       ? {

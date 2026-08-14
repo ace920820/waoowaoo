@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { isErrorResponse, requireProjectAuthLight } from '@/lib/api-auth'
 import {
+  dissolveVideoUnit,
   getVideoUnitDetail,
   updateVideoUnitLabel,
 } from '@/lib/remake-projects/unit/service'
@@ -34,6 +35,13 @@ const generateSchema = z.object({
   model: z.string().trim().min(1).optional(),
   options: z.record(z.unknown()).default({}),
 }).strict()
+
+const dissolveSchema = z.object({
+  action: z.literal('dissolve'),
+  reason: z.string().trim().max(2000).optional(),
+}).strict()
+
+const actionSchema = z.discriminatedUnion('action', [generateSchema, dissolveSchema])
 
 export const GET = apiHandler(
   async (_request: NextRequest, context: { params: Promise<{ projectId: string; unitId: string }> }) => {
@@ -86,12 +94,22 @@ export const POST = apiHandler(
     if (isErrorResponse(auth)) return auth
     if (!idSchema.safeParse(unitId).success) throw new ApiError('NOT_FOUND')
 
-    const body = generateSchema.safeParse(await request.json().catch(() => null))
+    const body = actionSchema.safeParse(await request.json().catch(() => null))
     if (!body.success) {
-      throw new ApiError('INVALID_PARAMS', { details: 'Invalid unit generate request' })
+      throw new ApiError('INVALID_PARAMS', { details: 'Invalid unit request' })
     }
 
     try {
+      if (body.data.action === 'dissolve') {
+        const result = await dissolveVideoUnit({
+          projectId,
+          userId: auth.session.user.id,
+          unitId,
+          ...(body.data.reason ? { reason: body.data.reason } : {}),
+        })
+        return NextResponse.json(result)
+      }
+
       const descriptor = await buildVideoUnitSubmission({
         projectId,
         userId: auth.session.user.id,
@@ -116,7 +134,7 @@ export const POST = apiHandler(
         { status: 202 },
       )
     } catch (error) {
-      if (error instanceof Error && /(?:STALE|MISSING|NOT_APPROVED)/.test(error.message)) {
+      if (error instanceof Error && /(?:STALE|MISSING|NOT_APPROVED|IN_FLIGHT)/.test(error.message)) {
         throw new ApiError('CONFLICT', { details: error.message })
       }
       if (error instanceof Error && /NOT_FOUND/.test(error.message)) {

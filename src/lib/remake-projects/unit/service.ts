@@ -171,6 +171,8 @@ export async function getVideoUnitDetail(input: {
       id: unit.id,
       remakeProjectId: unit.remakeProjectId,
       userLabel: unit.userLabel,
+      dissolvedAt: unit.dissolvedAt,
+      dissolvedReason: unit.dissolvedReason,
       createdAt: unit.createdAt,
     },
     members: unit.members.map((member) => {
@@ -265,7 +267,10 @@ export async function updateVideoUnitMembers(input: {
     })
     if (!unit) throw new Error('REMAKE_VIDEO_UNIT_NOT_FOUND')
 
-    // D-19: a pending/running generation task freezes members immediately
+    // D-19 (revised): a pending/running generation task freezes members
+    // immediately; committed batches NO LONGER freeze members — after a
+    // member change the unit's existing versions are invalidated (needs_review)
+    // and the user can regenerate.
     const pendingTask = await client.task.findFirst({
       where: {
         targetType: 'remake_unit',
@@ -275,13 +280,6 @@ export async function updateVideoUnitMembers(input: {
       select: { id: true },
     })
     if (pendingTask) throw new Error('REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT')
-
-    // D-19: the first committed batch freezes members for good
-    const committedBatch = await client.remakeVideoUnitBatch.findFirst({
-      where: { track: { unitId: input.unitId } },
-      select: { id: true },
-    })
-    if (committedBatch) throw new Error('REMAKE_VIDEO_UNIT_MEMBERS_FROZEN')
 
     const existing = await client.remakeVideoUnitMember.findMany({
       where: { unitId: input.unitId },
@@ -321,13 +319,82 @@ export async function updateVideoUnitMembers(input: {
         })),
       })
     }
+    let orderChanged = false
     for (const member of submitted) {
       const existingMember = existingByShot.get(member.shotRevisionId)
       if (!existingMember || existingMember.ordinal === member.ordinal) continue
+      orderChanged = true
       await client.remakeVideoUnitMember.update({
         where: { id: existingMember.id },
         data: { ordinal: member.ordinal },
       })
+    }
+
+    // 成员集合/顺序实际变化时，失效该 unit 自身的旧视频版本（needs_review）。
+    // 只碰 unit batch 里的 versions；成员镜头的关键帧/Prompt/其他产物不受影响。
+    const membersChanged = removed.length > 0 || added.length > 0 || orderChanged
+    let invalidatedCount = 0
+    if (membersChanged) {
+      const unitBatches = await client.remakeVideoUnitBatch.findMany({
+        where: { track: { unitId: input.unitId } },
+        include: { versions: { include: { outputVersion: true } } },
+      })
+      const versionIds: Array<{ id: string; outputVersionId: string; batchId: string }> = []
+      for (const batch of unitBatches) {
+        for (const version of batch.versions) {
+          if (version.outputVersion.invalidatedAt || version.outputVersion.status !== 'completed') {
+            continue
+          }
+          versionIds.push({
+            id: version.id,
+            outputVersionId: version.outputVersionId,
+            batchId: batch.id,
+          })
+        }
+      }
+      invalidatedCount = versionIds.length
+      if (versionIds.length > 0) {
+        await client.remakeOutputVersion.updateMany({
+          where: { id: { in: versionIds.map((version) => version.outputVersionId) } },
+          data: { invalidatedAt: new Date(), status: 'needs_review' },
+        })
+        const unitTrack = await client.remakeVideoUnitTrack.findUnique({
+          where: { unitId: input.unitId },
+          select: { id: true },
+        })
+        // RemakeInvalidation.shotId is required — anchor on the unit's first
+        // remaining member's shot (resolved via its revision), or the first
+        // removed member's shot when the unit is left empty.
+        const anchorRevision = await client.remakeShotRevision.findFirst({
+          where: {
+            id: { in: submitted.map((member) => member.shotRevisionId) },
+          },
+          select: { shotId: true },
+        })
+        const anchorShotId = anchorRevision?.shotId ?? null
+        for (const version of versionIds) {
+          const existingInvalidation = await client.remakeInvalidation.findFirst({
+            where: {
+              shotId: anchorShotId ?? undefined,
+              unitTrackId: unitTrack?.id ?? null,
+              unitVersionId: version.id,
+              reason: 'unit_members_changed',
+            },
+            select: { id: true },
+          })
+          if (existingInvalidation) continue
+          await client.remakeInvalidation.create({
+            data: {
+              shotId: anchorShotId ?? '',
+              unitTrackId: unitTrack?.id ?? null,
+              unitBatchId: version.batchId,
+              unitVersionId: version.id,
+              reason: 'unit_members_changed',
+              status: 'needs_review',
+            },
+          })
+        }
+      }
     }
 
     return {
@@ -336,7 +403,60 @@ export async function updateVideoUnitMembers(input: {
         where: { unitId: input.unitId },
         orderBy: { ordinal: 'asc' },
       }),
+      invalidated: invalidatedCount,
     }
+  })
+}
+
+/**
+ * D-19 (revised): soft-delete dissolve a unit. Generated assets
+ * (tracks/batches/versions/outputVersions/actionSheets) are ALL preserved and
+ * remain viewable; the unit is marked dissolvedAt and its member associations
+ * are removed so the shots regain single-shot / re-merge capability (D-04
+ * release). A pending/running generation task blocks the dissolve.
+ */
+export async function dissolveVideoUnit(input: {
+  projectId: string
+  userId: string
+  unitId: string
+  reason?: string
+}) {
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    const unit = await client.remakeVideoUnit.findFirst({
+      where: {
+        id: input.unitId,
+        remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+      },
+      select: { id: true, dissolvedAt: true },
+    })
+    if (!unit) throw new Error('REMAKE_VIDEO_UNIT_NOT_FOUND')
+    if (unit.dissolvedAt) {
+      // Idempotent: already dissolved.
+      return { unitId: input.unitId, dissolvedAt: unit.dissolvedAt }
+    }
+
+    const pendingTask = await client.task.findFirst({
+      where: {
+        targetType: 'remake_unit',
+        targetId: input.unitId,
+        status: { in: [TASK_STATUS.QUEUED, TASK_STATUS.PROCESSING] },
+      },
+      select: { id: true },
+    })
+    if (pendingTask) throw new Error('REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT')
+
+    // Release member associations (assets stay in batch inputSnapshot for audit).
+    await client.remakeVideoUnitMember.deleteMany({ where: { unitId: input.unitId } })
+
+    const updated = await client.remakeVideoUnit.update({
+      where: { id: unit.id },
+      data: {
+        dissolvedAt: new Date(),
+        ...(input.reason ? { dissolvedReason: input.reason.slice(0, 2000) } : {}),
+      },
+    })
+    return { unitId: updated.id, dissolvedAt: updated.dissolvedAt }
   })
 }
 
