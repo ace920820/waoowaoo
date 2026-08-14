@@ -105,8 +105,8 @@ async function getCurrentShot(
  * Derive the default video duration for a Shot per D-10 / D-11.
  */
 
-
-function getVideoCapabilityDefinitions(modelKey: string) {
+/** Shared by the unit submission path (Plan 09.1-04) for the D-05 duration policy. */
+export function getVideoCapabilityDefinitions(modelKey: string) {
   const parsed = parseModelKeyStrict(modelKey)
   if (!parsed) return []
   const capabilities = findBuiltinCapabilities('video', parsed.provider, parsed.modelId)
@@ -215,8 +215,11 @@ async function resolveKeyframeReferenceCandidates(params: {
  * Build the asset-library reference candidates (scene / props / characters /
  * character voices), mirroring the shot-group omni-reference priority and
  * usage text. Only explicitly toggled categories with resolvable media are included.
+ *
+ * Exported so the unit submission path (Plan 09.1-04) reuses the exact same
+ * candidate construction across members before dedup.
  */
-function buildAssetReferenceCandidates(input: {
+export function buildAssetReferenceCandidates(input: {
   sceneAssetId: string | null
   characterAssetIds: string[]
   propAssetIds: string[]
@@ -324,6 +327,15 @@ export async function buildVideoGenerationSubmission(input: {
   if (!project) throw new Error('REMAKE_VIDEO_PROJECT_NOT_FOUND')
 
   const current = await getCurrentShot(prisma, input)
+
+  // D-04: a shot that already belongs to a unit is delivered by the unit —
+  // single-shot generation would deliver it twice (service is authoritative;
+  // the UI hides this path in Plan 09.1-06).
+  const unitMember = await prisma.remakeVideoUnitMember.findUnique({
+    where: { shotRevisionId: current.revisionId },
+    select: { id: true },
+  })
+  if (unitMember) throw new Error('REMAKE_VIDEO_SHOT_IN_UNIT')
 
   // D-03: at least one keyframe slot must be selected
   if (input.selectedSlots.length === 0) {

@@ -25,6 +25,8 @@ export { buildUnitReferencePlan, dedupeUnitAssetCandidates } from './reference-p
 
 export type UnitMemberKeyframeCandidate = RemakeReferenceCandidate & {
   ordinal: number
+  /** The keyframe slot that produced this member's single adopted frame (D-06). */
+  slot: RemakeKeyframeSlot
 }
 
 const UNIT_KEYFRAME_ROLE = 'shot_keyframe' as const
@@ -73,6 +75,7 @@ export async function collectUnitMemberKeyframeCandidates(params: {
     ]
 
     let rawMedia: string | null = null
+    let chosenSlot: RemakeKeyframeSlot = preferred
     for (const slot of slotOrder) {
       const track = await prisma.remakeKeyframeTrack.findUnique({
         where: { shotRevisionId_slot: { shotRevisionId: member.shotRevisionId, slot } },
@@ -81,6 +84,7 @@ export async function collectUnitMemberKeyframeCandidates(params: {
       const media = track?.adoptedCandidate?.outputVersion?.mediaId
       if (media) {
         rawMedia = media
+        chosenSlot = slot
         break
       }
     }
@@ -100,6 +104,7 @@ export async function collectUnitMemberKeyframeCandidates(params: {
       label: `镜头 ${member.ordinal} 关键帧`,
       usage: remakeReferenceRoleUsage(UNIT_KEYFRAME_ROLE),
       ordinal: member.ordinal,
+      slot: chosenSlot,
       ...stableMedia,
     })
   }

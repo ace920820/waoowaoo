@@ -73,6 +73,10 @@ const prismaMock = vi.hoisted(() => ({
       }
     }),
   },
+  // D-04 gate: a shot that belongs to a unit cannot be generated singly.
+  remakeVideoUnitMember: {
+    findUnique: vi.fn(async () => null),
+  },
   remakeOutputVersion: {
     findFirst: vi.fn(async () => ({
       id: 'action-sheet-out',
