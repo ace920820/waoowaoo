@@ -160,6 +160,14 @@ export default function RemakeVideoStage({
     setActiveUnitId(unitId)
   }, [])
 
+  // 已选镜头的累计时长（问题 1：多选后显示总时长）
+  const selectedUnitDuration = useMemo(() => {
+    return selectedUnitShotIds.reduce((total, shotId) => {
+      const shot = shots.find((entry) => entry.id === shotId)
+      return total + (shot?.durationSeconds ?? 0)
+    }, 0)
+  }, [selectedUnitShotIds, shots])
+
   return (
     <section
       className="space-y-6 pb-16"
@@ -221,7 +229,8 @@ export default function RemakeVideoStage({
           <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
             <p className="text-sm font-medium text-violet-900">选择要合并为 unit 的镜头</p>
             <p className="mt-1 text-xs text-violet-700">
-              可任意组合（不要求相邻），按勾选顺序生成。已选择 {selectedUnitShotIds.length} 个镜头。
+              可任意组合（不要求相邻），按勾选顺序生成。已选择 {selectedUnitShotIds.length} 个镜头
+              {selectedUnitShotIds.length > 0 && ` · 累计时长 ${selectedUnitDuration.toFixed(1)}s`}。
             </p>
             {selectedUnitShotIds.length >= 2 && (
               <button
@@ -238,9 +247,21 @@ export default function RemakeVideoStage({
                           memberShotRevisionIds: selectedUnitShotIds
                             .map((shotId) => {
                               const shot = snapshot.shots.find((entry) => entry.id === shotId)
-                              return shot?.revisions?.find(
-                                (revision) => revision.lifecycleState === 'active',
-                              )?.id ?? null
+                              if (!shot?.revisions?.length) return null
+                              // 优先取当前 revision（revision === shot.currentRevision），
+                              // 否则回退到第一个 active —— 避免把旧 sourceRevision 的
+                              // revision 传给服务端导致 MEMBER_NOT_CURRENT / INVALID_PARAMS。
+                              const current = shot.revisions.find(
+                                (revision) =>
+                                  revision.revision === shot.currentRevision &&
+                                  revision.lifecycleState === 'active',
+                              )
+                              if (current) return current.id
+                              return (
+                                shot.revisions.find(
+                                  (revision) => revision.lifecycleState === 'active',
+                                )?.id ?? null
+                              )
                             })
                             .filter((id): id is string => Boolean(id)),
                         }),
@@ -277,30 +298,46 @@ export default function RemakeVideoStage({
                   type="button"
                   data-testid={`unit-shot-option-${shot.id}`}
                   onClick={() => toggleUnitShotSelection(shot.id)}
-                  className={`relative rounded-xl border p-3 text-left transition-colors ${
+                  className={`relative overflow-hidden rounded-xl border text-left transition-colors ${
                     checkIndex >= 0
                       ? 'border-violet-400 bg-violet-50'
                       : 'border-slate-200 bg-white hover:border-slate-300'
                   } ${inUnit ? 'opacity-40' : ''}`}
                 >
                   {checkIndex >= 0 && (
-                    <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                    <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
                       {checkIndex + 1}
                     </span>
                   )}
-                  <p className="text-sm font-medium text-slate-800">
-                    {shot.label ?? `镜头${shot.sequence ?? '?'}`}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">{shot.durationSeconds.toFixed(1)}s</p>
-                  {inUnit ? (
-                    <p className="mt-1 text-xs font-medium text-violet-600">已加入其他 unit</p>
-                  ) : (
-                    shot.durationSeconds < 4 && (
-                      <p className="mt-1 text-xs text-amber-600">
-                        镜头过短（&lt; 最短档），建议并入相邻镜头或接受拉长
-                      </p>
-                    )
-                  )}
+                  <div className="relative aspect-video w-full bg-slate-100">
+                    {shot.original.middle.mediaUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={shot.original.middle.mediaUrl}
+                        alt={shot.label ?? `镜头${shot.sequence ?? '?'}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
+                        无中间帧
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="text-sm font-medium text-slate-800">
+                      {shot.label ?? `镜头${shot.sequence ?? '?'}`}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{shot.durationSeconds.toFixed(1)}s</p>
+                    {inUnit ? (
+                      <p className="mt-1 text-xs font-medium text-violet-600">已加入其他 unit</p>
+                    ) : (
+                      shot.durationSeconds < 4 && (
+                        <p className="mt-1 text-xs text-amber-600">
+                          镜头过短（&lt; 最短档），建议并入相邻镜头或接受拉长
+                        </p>
+                      )
+                    )}
+                  </div>
                 </button>
               )
             })}
