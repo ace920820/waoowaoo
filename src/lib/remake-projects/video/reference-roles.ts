@@ -22,6 +22,7 @@ export const VIDEO_REFERENCE_ROLES = [
   'start_keyframe',
   'middle_keyframe',
   'end_keyframe',
+  'shot_keyframe',
   'action_sheet',
   'character_reference',
   'scene_reference',
@@ -39,11 +40,15 @@ export const VIDEO_REFERENCE_ROLE_ORDER: Record<VideoReferenceRole, number> = {
   start_keyframe: 0,
   middle_keyframe: 1,
   end_keyframe: 2,
-  action_sheet: 3,
-  character_reference: 4,
-  scene_reference: 5,
-  prop_reference: 6,
-  character_audio_reference: 7,
+  // D-06/D-10: one per unit member, ordered by member ordinal; sits between the
+  // classic keyframes and the merged action sheet. Persisted rows store role
+  // strings (not order values), so renumbering is safe.
+  shot_keyframe: 3,
+  action_sheet: 4,
+  character_reference: 5,
+  scene_reference: 6,
+  prop_reference: 7,
+  character_audio_reference: 8,
 }
 
 export const orderedVideoReferenceSchema = z.object({

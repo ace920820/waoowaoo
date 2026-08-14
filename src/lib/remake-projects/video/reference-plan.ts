@@ -48,6 +48,8 @@ export function remakeReferenceRoleLabel(role: VideoReferenceRole): string {
       return '主画面参考关键帧 · Middle 中间帧'
     case 'end_keyframe':
       return '主画面参考关键帧 · End 结尾帧'
+    case 'shot_keyframe':
+      return '主画面参考关键帧 · 镜头锚点'
     case 'action_sheet':
       return '动作参考表'
     case 'character_reference':
@@ -69,6 +71,8 @@ export function remakeReferenceRoleUsage(role: VideoReferenceRole): string {
       return '这是整段视频的主画面参考关键帧。以它确定画面构成、美术风格、场景光照、人物形象（身份/发型/服装/年龄感）和景别构图，并锚定动作中段（人物站位、景别与构图按此帧衔接）；整段视频的视觉必须与之一致，不得被其他参考改变。'
     case 'end_keyframe':
       return '这是整段视频的主画面参考关键帧。以它确定画面构成、美术风格、场景光照、人物形象（身份/发型/服装/年龄感）和景别构图，并锚定动作结尾（落点、景别与构图按此帧收束）；整段视频的视觉必须与之一致，不得被其他参考改变。'
+    case 'shot_keyframe':
+      return '这是该镜头时间段的主画面参考关键帧。以它锚定该时间段的画面构成、美术风格、场景光照、人物形象（身份/发型/服装/年龄感）和景别构图；该镜头时间段内的画面必须与之一致，不得被其他参考改变。'
     case 'action_sheet':
       return '这是开始→中间→结束的三段式二维分镜参考，仅用于传达动作发展顺序、事件内容与镜头变化（人物移动、运镜、景别、场面调度、时间节奏）。不要复制它的画面、画风或人物形象；视觉一律以主画面参考关键帧为准。'
     case 'character_reference':
@@ -111,6 +115,17 @@ export function buildRemakeReferencePlan(
  * @Image1..@Image9 / @Audio1..@Audio3 in exact content[] order.
  */
 function isKeyframeRole(role: VideoReferenceRole): boolean {
+  return (
+    role === 'start_keyframe' ||
+    role === 'middle_keyframe' ||
+    role === 'end_keyframe' ||
+    role === 'shot_keyframe'
+  )
+}
+
+/** Classic single-shot keyframe slots; the Start→Middle→End progression rule
+ * only applies to these (unit shot_keyframe refs are ordered by member ordinal). */
+function isClassicKeyframeRole(role: VideoReferenceRole): boolean {
   return role === 'start_keyframe' || role === 'middle_keyframe' || role === 'end_keyframe'
 }
 
@@ -177,8 +192,9 @@ export function buildRemakeReferencePromptSuffix(refs: OrderedVideoReference[]):
 
   const rules: string[] = []
   if (keyframes.length > 0) {
+    const allClassic = keyframes.every((ref) => isClassicKeyframeRole(ref.role))
     rules.push(
-      `画面 / 画风 / 形象 / 构图：以主画面参考关键帧为准${keyframes.length > 1 ? '（多张时按 Start→Middle→End 推进）' : ''}；`,
+      `画面 / 画风 / 形象 / 构图：以主画面参考关键帧为准${keyframes.length > 1 && allClassic ? '（多张时按 Start→Middle→End 推进）' : ''}；`,
     )
   }
   if (actionSheets.length > 0) {

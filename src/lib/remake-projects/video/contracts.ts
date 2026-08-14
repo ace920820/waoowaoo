@@ -73,6 +73,10 @@ export function videoInputFingerprint(snapshot: VideoInputSnapshot): string {
 /**
  * Validate D-03: at least one keyframe reference must be present;
  * action-sheet-only submissions are not allowed.
+ *
+ * The `_keyframe` suffix check deliberately covers the unit member role too:
+ * `shot_keyframe` (D-10) ends with `_keyframe`, so a unit whose only keyframe
+ * role is `shot_keyframe` passes without any special-casing here.
  */
 export function assertVideoReferencesHaveKeyframe(refs: OrderedVideoReference[]) {
   const hasKeyframe = refs.some((ref) => ref.role.endsWith('_keyframe'))
@@ -80,13 +84,18 @@ export function assertVideoReferencesHaveKeyframe(refs: OrderedVideoReference[])
 }
 
 /**
- * Validate D-04: fixed order Start -> Middle -> End -> action-sheet ->
- * characters -> scene -> props -> character audio. Ordinals must be
- * contiguous starting from 1.
+ * Validate D-04: non-decreasing fixed order Start -> Middle -> End ->
+ * (unit members: shot_keyframe...) -> action-sheet -> characters -> scene ->
+ * props -> character audio. Ordinals must be contiguous starting from 1.
+ *
+ * The check is strictly non-decreasing (throws only when a previous role order
+ * is GREATER than the next), which admits N consecutive `shot_keyframe`
+ * references with the same role order while preserving every existing
+ * single-shot ordering guarantee (distinct roles still require increasing order).
  */
 export function assertVideoReferenceOrder(refs: OrderedVideoReference[]) {
   for (let i = 1; i < refs.length; i++) {
-    if (VIDEO_REFERENCE_ROLE_ORDER[refs[i - 1].role] >= VIDEO_REFERENCE_ROLE_ORDER[refs[i].role]) {
+    if (VIDEO_REFERENCE_ROLE_ORDER[refs[i - 1].role] > VIDEO_REFERENCE_ROLE_ORDER[refs[i].role]) {
       throw new Error('REMAKE_VIDEO_REFERENCE_ORDER_INVALID')
     }
     if (refs[i].ordinal !== i + 1) {
