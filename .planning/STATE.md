@@ -5,15 +5,15 @@ milestone_name: AI 视频翻拍工作台整合
 current_phase: 09.1
 current_phase_name: 短镜头合并 unit 视频生成
 status: executing
-stopped_at: Completed 09.1-04-PLAN.md
-last_updated: "2026-08-14T02:49:23.011Z"
+stopped_at: Completed 09.1-05-PLAN.md
+last_updated: "2026-08-14T02:59:19.872Z"
 last_activity: 2026-08-14
 last_activity_desc: Phase 09.1 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 36
-  completed_plans: 31
+  completed_plans: 32
   percent: 38
 ---
 
@@ -142,11 +142,11 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-14 — Phase 09.1 execution started
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 89%
 
 ## Operator Next Steps
 
@@ -157,8 +157,8 @@ Progress: [█████████░] 86%
 
 ## Session
 
-**Last session:** 2026-08-14T02:49:22.998Z
-**Stopped at:** Completed 09.1-04-PLAN.md
+**Last session:** 2026-08-14T02:59:11.786Z
+**Stopped at:** Completed 09.1-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -170,6 +170,7 @@ Progress: [█████████░] 86%
 | Phase 09.1 P02 | 5min | 3 tasks | 7 files |
 | Phase 09.1-unit P03 | 15min | 3 tasks | 9 files |
 | Phase 09.1 P04 | 12min | 2 tasks | 14 files |
+| Phase 09.1 P05 | 8min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -198,3 +199,9 @@ D-05 gate fires on the raw duration sum > model max (capability duration options
 Unit asset toggles hardcoded to single-shot defaults (characters/scene/props on, audio off) since the generate action schema carries no asset toggles
 collectUnitMemberKeyframeCandidates now returns the chosen keyframe slot (needed by the snapshot selectedKeyframe + D-22 currentness re-check)
 createVideoUnit accepts optional userLabel; new updateVideoUnitLabel service fn for the PATCH userLabel route (09.1-03 shipped neither)
+
+- [Phase 09.1]: Shared helper location: src/lib/workers/ark-content-items.ts exports buildArkContentItems + isImageReference + SignedReference; both handlers import it — single-shot output unchanged
+- [Phase 09.1]: Unit reference resolver is a small unit variant (resolveVideoUnitReferenceStorageKeys(snapshot, actionSheetMediaId?)) rather than widening the single-shot signature; the W5 deferred action-sheet marker resolves through the persisted sheet MediaObject
+- [Phase 09.1]: The frozen snapshot is passed unmutated to appendVideoUnitBatch (the deferred marker stays in the persisted orderedReferences); provider references are resolved from a derived copy so the D-22 fingerprint is never invalidated
+- [Phase 09.1]: generationMode forced to normal unconditionally (D-09) — snapshot.options.generationMode is never honored for units (never firstlastframe)
+- [Phase 09.1]: renderAndPersistUnitActionSheet nullable mediaId is guarded in the handler (REMAKE_VIDEO_REFERENCE_UNAVAILABLE) since the schema column is String?
