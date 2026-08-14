@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
@@ -17,38 +18,51 @@ function apiErrorMessage(data: unknown, fallback: string) {
 }
 
 /**
- * D-16/D-17/D-19 unit preview + version panel for the 成片页.
+ * D-16/D-17/D-19 (revised) unit preview + version panel for the 成片页.
  *
  * - Preview is WYSIWYG: imports the same client-safe pure functions the
  *   server freezes (buildUnitSubmissionPreview), so the prompt text /
  *   reference order / total duration shown === what the model receives.
- * - Member edits (reorder/remove) are disabled once a generation task is
- *   pending (queued/processing/running) OR any batch is committed (D-19).
- * - Version loop (play/adopt/note/reconfirm) operates at unit granularity.
+ * - Member edits are blocked ONLY while a generation task is pending
+ *   (queued/processing/running). Committed batches no longer freeze members
+ *   (D-19 revised): a member change invalidates the unit's own old completed
+ *   versions (needs_review) instead.
+ * - Dissolve (soft delete): the unit is stamped dissolvedAt, members are
+ *   released (D-04), but tracks/batches/versions stay viewable. Confirm text
+ *   warns when an adopted version exists.
+ * - Version loop (play/adopt/note/reconfirm) operates at unit granularity
+ *   and is read-only once the unit is dissolved.
+ * - `unitId` = null renders the unit list (进行中 / 已解散 sections).
  */
 export function RemakeVideoUnitPanel({
   projectId,
   snapshot,
   unitId,
   onExit,
+  onOpenUnit,
 }: {
   projectId: string
   snapshot: RemakeSnapshot
-  unitId: string
+  unitId: string | null
   onExit?: () => void
+  onOpenUnit?: (unitId: string) => void
 }) {
   const refresh = useRefreshRemakeProject(projectId)
-  const unit = useMemo(() => adaptRemakeUnit(snapshot, unitId), [snapshot, unitId])
+  const unit = useMemo(() => (unitId ? adaptRemakeUnit(snapshot, unitId) : null), [snapshot, unitId])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [editingMembers, setEditingMembers] = useState(false)
-  const [memberOrder, setMemberOrder] = useState<string[]>([])
+  // Lazy-init so static/SSR renders (no effects) still show ordered members.
+  const [memberOrder, setMemberOrder] = useState<string[]>(() =>
+    unit ? unit.members.map((member) => member.shotRevisionId) : [],
+  )
   const [noteText, setNoteText] = useState('')
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!unit) return
     setMemberOrder(unit.members.map((member) => member.shotRevisionId))
+    setEditingMembers(false)
     const adopted = unit.track?.adoptedVersionId ?? null
     const firstVersion = unit.track?.batches[0]?.versions[0]?.id ?? null
     setSelectedVersionId((current) => {
@@ -63,7 +77,11 @@ export function RemakeVideoUnitPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit?.id, unit?.track?.adoptedVersionId])
 
-  const frozen = Boolean(unit?.hasPendingGeneration || unit?.hasCommittedBatch)
+  // D-19 (revised): only a pending/running generation task freezes the
+  // member set. Committed batches are editable (changes invalidate old versions).
+  const frozen = Boolean(unit?.hasPendingGeneration)
+  const dissolved = Boolean(unit?.dissolvedAt)
+  const readOnly = dissolved
 
   const orderedMembers = useMemo(() => {
     if (!unit) return []
@@ -163,9 +181,43 @@ export function RemakeVideoUnitPanel({
     }
   }, [unit, projectId, preview, refresh])
 
+  const handleDissolve = useCallback(async () => {
+    if (!unit) return
+    const hasAdopted = Boolean(unit.track?.adoptedVersionId)
+    const message = hasAdopted
+      ? '该 unit 已有采用版本。解散后：\n'
+        + '· 已生成的视频、版本与采用记录完整保留（仍可回看）\n'
+        + '· 本 unit 不再生成新版本\n'
+        + '· 成员镜头被释放，可重新用于单镜头生成或并入其他 unit\n\n'
+        + '确定解散该 unit？'
+      : '解散后：\n'
+        + '· 已生成的视频与记录保留\n'
+        + '· 成员镜头被释放，可重新用于单镜头生成或并入其他 unit\n\n'
+        + '确定解散该 unit？'
+    if (!window.confirm(message)) return
+    setSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const res = await fetch(
+        `/api/remake-projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unit.id)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'dissolve' }),
+        },
+      )
+      if (!res.ok) throw new Error(apiErrorMessage(await res.json().catch(() => null), '解散失败'))
+      await refresh()
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : '解散失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [unit, projectId, refresh])
+
   const adoptVersion = useCallback(
     async (versionId: string, confirmReplace = false) => {
-      if (!unit?.track) return
+      if (!unit?.track || readOnly) return
       setErrorMsg(null)
       try {
         const res = await fetch(
@@ -190,11 +242,11 @@ export function RemakeVideoUnitPanel({
         setErrorMsg(err instanceof Error ? err.message : '采用失败')
       }
     },
-    [unit, projectId, refresh],
+    [unit, projectId, refresh, readOnly],
   )
 
   const saveNote = useCallback(async () => {
-    if (!unit?.track || !selectedVersionId) return
+    if (!unit?.track || !selectedVersionId || readOnly) return
     setErrorMsg(null)
     try {
       const res = await fetch(
@@ -210,10 +262,10 @@ export function RemakeVideoUnitPanel({
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '保存备注失败')
     }
-  }, [unit, projectId, selectedVersionId, noteText, refresh])
+  }, [unit, projectId, selectedVersionId, noteText, refresh, readOnly])
 
   const reconfirmVersion = useCallback(async () => {
-    if (!unit?.track || !selectedVersionId) return
+    if (!unit?.track || !selectedVersionId || readOnly) return
     setErrorMsg(null)
     try {
       const res = await fetch(
@@ -229,21 +281,28 @@ export function RemakeVideoUnitPanel({
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '重新确认失败')
     }
-  }, [unit, projectId, selectedVersionId, refresh])
+  }, [unit, projectId, selectedVersionId, refresh, readOnly])
 
-  if (!unit) {
+  // Unit-list mode: manage all units (进行中 / 已解散).
+  if (!unitId || !unit) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-700 p-6 text-center text-sm text-zinc-400">
-        Unit 不存在
-      </div>
+      <RemakeUnitList
+        projectId={projectId}
+        snapshot={snapshot}
+        activeUnitId={unitId}
+        onOpenUnit={onOpenUnit}
+        onExit={onExit}
+      />
     )
   }
 
   const allVersions = unit.track?.batches.flatMap((batch) => batch.versions) ?? []
   const selectedVersion = allVersions.find((version) => version.id === selectedVersionId) ?? null
+  const canEditMembers = !frozen && !readOnly
+  const canGenerate = !frozen && !readOnly && orderedMembers.length >= 2
 
   return (
-    <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+    <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5" data-testid="unit-panel">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -252,14 +311,32 @@ export function RemakeVideoUnitPanel({
           <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
             {unit.members.length} 个镜头 · 总时长约 {Math.round(preview?.totalDurationSeconds ?? 0)}s
           </span>
+          {dissolved && (
+            <span className="rounded-full bg-zinc-700/60 px-2 py-0.5 text-xs text-zinc-400">
+              已解散
+            </span>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onExit}
-          className="text-xs text-zinc-400 hover:text-zinc-200"
-        >
-          返回单镜头
-        </button>
+        <div className="flex items-center gap-3">
+          {!readOnly && (
+            <button
+              type="button"
+              data-testid="dissolve-unit-button"
+              disabled={submitting}
+              onClick={handleDissolve}
+              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+            >
+              解散 unit
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onExit}
+            className="text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            返回
+          </button>
+        </div>
       </div>
 
       {errorMsg && (
@@ -268,13 +345,25 @@ export function RemakeVideoUnitPanel({
         </div>
       )}
 
+      {dissolved && (
+        <div
+          data-testid="unit-dissolved-banner"
+          className="rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-2 text-xs text-zinc-400"
+        >
+          已解散（{new Date(unit.dissolvedAt!).toLocaleString()}）
+          {unit.dissolvedReason ? ` · 原因：${unit.dissolvedReason}` : ''} —— 资产保留、只读，
+          成员镜头已释放可重新使用。
+        </div>
+      )}
+
       {/* Members */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h4 className="text-xs font-medium text-zinc-400">成员镜头</h4>
-          {!frozen && (
+          {canEditMembers && (
             <button
               type="button"
+              data-testid="edit-members-button"
               onClick={() => setEditingMembers((value) => !value)}
               className="text-xs text-violet-300 hover:text-violet-200"
             >
@@ -292,7 +381,7 @@ export function RemakeVideoUnitPanel({
               <span className="text-sm text-zinc-200">{member.label ?? `镜头${member.sequence ?? '?'}`}</span>
               <span className="text-xs text-zinc-500">{member.durationSeconds.toFixed(1)}s</span>
               <div className="ml-auto flex items-center gap-1">
-                {editingMembers && !frozen && (
+                {editingMembers && canEditMembers && (
                   <>
                     <button
                       type="button"
@@ -323,7 +412,7 @@ export function RemakeVideoUnitPanel({
             </div>
           ))}
         </div>
-        {editingMembers && !frozen && (
+        {editingMembers && canEditMembers && (
           <button
             type="button"
             onClick={persistMembers}
@@ -333,8 +422,13 @@ export function RemakeVideoUnitPanel({
           </button>
         )}
         {frozen && (
-          <p className="mt-2 text-xs text-zinc-500">
-            成员已冻结（{unit.hasPendingGeneration ? '生成任务进行中' : '已生成版本'}），不可编辑
+          <p className="mt-2 text-xs text-zinc-500" data-testid="members-frozen-hint">
+            生成任务进行中，成员暂不可编辑
+          </p>
+        )}
+        {!frozen && unit.hasCommittedBatch && !readOnly && (
+          <p className="mt-2 text-xs text-amber-400/80" data-testid="members-invalidate-hint">
+            已生成过版本 —— 保存成员变更后，旧版本将标记为「需复核」
           </p>
         )}
       </div>
@@ -354,19 +448,22 @@ export function RemakeVideoUnitPanel({
         </div>
       )}
 
-      {/* Generate */}
-      {orderedMembers.length >= 2 && !frozen && (
+      {/* Generate / regenerate */}
+      {canGenerate && (
         <button
           type="button"
+          data-testid="generate-unit-button"
           disabled={submitting}
           onClick={handleGenerate}
           className="w-full rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
         >
-          {submitting ? '提交中…' : `生成 unit 视频（${preview?.totalDurationSeconds ?? '?'}s）`}
+          {submitting
+            ? '提交中…'
+            : `${unit.hasCommittedBatch ? '重新生成' : '生成'} unit 视频（${preview?.totalDurationSeconds ?? '?'}s）`}
         </button>
       )}
 
-      {/* Version list (D-17) */}
+      {/* Version list (D-17) — read-only when dissolved */}
       {allVersions.length > 0 && (
         <div>
           <h4 className="mb-2 text-xs font-medium text-zinc-400">版本</h4>
@@ -399,7 +496,7 @@ export function RemakeVideoUnitPanel({
                     >
                       详情
                     </button>
-                    {version.id !== unit.track?.adoptedVersionId && (
+                    {!readOnly && version.id !== unit.track?.adoptedVersionId && (
                       <button
                         type="button"
                         onClick={() => adoptVersion(version.id)}
@@ -408,7 +505,7 @@ export function RemakeVideoUnitPanel({
                         采用
                       </button>
                     )}
-                    {version.id === unit.track?.adoptedVersionId && version.invalidated && (
+                    {!readOnly && version.id === unit.track?.adoptedVersionId && version.invalidated && (
                       <button
                         type="button"
                         onClick={reconfirmVersion}
@@ -423,8 +520,8 @@ export function RemakeVideoUnitPanel({
             ))}
           </div>
 
-          {/* Note editor */}
-          {selectedVersion && (
+          {/* Note editor — hidden for dissolved units */}
+          {selectedVersion && !readOnly && (
             <div className="mt-3 flex items-start gap-2">
               <input
                 value={noteText}
@@ -441,6 +538,123 @@ export function RemakeVideoUnitPanel({
               </button>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Unit management list: 进行中 / 已解散 sections (D-19 revised).
+ * Rendered by the panel when unitId is null, and embedded on the storyboard
+ * page. `onOpenUnit` opens a unit's detail view; `onExit` returns to the
+ * enclosing mode (single-shot) when the panel is used as a full view.
+ */
+export function RemakeUnitList({
+  projectId,
+  snapshot,
+  activeUnitId,
+  onOpenUnit,
+  onExit,
+}: {
+  projectId: string
+  snapshot: RemakeSnapshot
+  activeUnitId?: string | null
+  onOpenUnit?: (unitId: string) => void
+  onExit?: () => void
+}) {
+  const units = useMemo(() => {
+    return (snapshot.units ?? [])
+      .map((entry) => adaptRemakeUnit(snapshot, entry.id))
+      .filter((unit): unit is NonNullable<typeof unit> => Boolean(unit))
+  }, [snapshot])
+
+  const activeUnits = units.filter((unit) => !unit.dissolvedAt)
+  const dissolvedUnits = units.filter((unit) => Boolean(unit.dissolvedAt))
+
+  const renderRow = (unit: NonNullable<typeof units[number]>) => {
+    const totalDuration = unit.members.reduce((sum, member) => sum + member.durationSeconds, 0)
+    const versionCount = unit.track?.batches.reduce((sum, batch) => sum + batch.versions.length, 0) ?? 0
+    return (
+      <div
+        key={unit.id}
+        data-testid={`unit-row-${unit.id}`}
+        className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
+          unit.id === activeUnitId
+            ? 'border-violet-500/40 bg-violet-500/10'
+            : 'border-zinc-800 bg-zinc-950/40'
+        }`}
+      >
+        <AppIcon name="layers" className="size-3.5 shrink-0 text-zinc-500" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-zinc-200">
+            {unit.userLabel ?? `Unit ${unit.id.slice(0, 8)}`}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {unit.members.length} 个镜头 · 约 {Math.round(totalDuration)}s
+            {versionCount > 0 && ` · ${versionCount} 个版本`}
+          </p>
+        </div>
+        {unit.track?.adoptedVersionId && (
+          <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] text-violet-300">
+            已采用
+          </span>
+        )}
+        {unit.track?.hasInvalidated && (
+          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">
+            需复核
+          </span>
+        )}
+        {unit.dissolvedAt && (
+          <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[10px] text-zinc-400">
+            已解散
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onOpenUnit?.(unit.id)}
+          className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-200 hover:bg-zinc-700"
+        >
+          打开
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5" data-testid="unit-list">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <AppIcon name="layers" className="size-4 text-zinc-400" />
+          <h3 className="text-sm font-semibold text-zinc-100">合并 unit 管理</h3>
+          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+            {units.length} 个
+          </span>
+        </div>
+        {onExit && (
+          <button type="button" onClick={onExit} className="text-xs text-zinc-400 hover:text-zinc-200">
+            返回
+          </button>
+        )}
+      </div>
+
+      {units.length === 0 && (
+        <p className="text-center text-xs text-zinc-500" data-testid="unit-list-empty">
+          还没有合并 unit —— 在「合并 unit 模式」中勾选镜头创建。
+        </p>
+      )}
+
+      {activeUnits.length > 0 && (
+        <div data-testid="unit-list-active">
+          <h4 className="mb-2 text-xs font-medium text-zinc-400">进行中</h4>
+          <div className="space-y-2">{activeUnits.map(renderRow)}</div>
+        </div>
+      )}
+
+      {dissolvedUnits.length > 0 && (
+        <div data-testid="unit-list-dissolved">
+          <h4 className="mb-2 text-xs font-medium text-zinc-500">已解散（只读）</h4>
+          <div className="space-y-2">{dissolvedUnits.map(renderRow)}</div>
         </div>
       )}
     </div>

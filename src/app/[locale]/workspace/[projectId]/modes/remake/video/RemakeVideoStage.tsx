@@ -16,7 +16,7 @@ import {
 } from '@/lib/remake-projects/keyframes/video-inputs'
 import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
-import { RemakeVideoUnitPanel } from './RemakeVideoUnitPanel'
+import { RemakeVideoUnitPanel, RemakeUnitList } from './RemakeVideoUnitPanel'
 import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
 import { canSelectShotForUnit, filterSelectableUnitShots } from '@/lib/remake-projects/unit/selection'
 import {
@@ -224,9 +224,18 @@ export default function RemakeVideoStage({
           snapshot={snapshot}
           unitId={activeUnitId}
           onExit={() => setActiveUnitId(null)}
+          onOpenUnit={setActiveUnitId}
         />
       ) : unitMode ? (
         <div className="space-y-4">
+          {(snapshot.units ?? []).length > 0 && (
+            <RemakeUnitList
+              projectId={projectId}
+              snapshot={snapshot}
+              activeUnitId={activeUnitId}
+              onOpenUnit={setActiveUnitId}
+            />
+          )}
           <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
             <p className="text-sm font-medium text-violet-900">选择要合并为 unit 的镜头</p>
             <p className="mt-1 text-xs text-violet-700">
