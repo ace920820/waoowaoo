@@ -4,6 +4,7 @@ import {
   Play, 
   RefreshCw, 
   Download, 
+  FileJson, 
   Undo2, 
   Redo2, 
   Film, 
@@ -20,6 +21,8 @@ import { formatDuration, formatFileSize } from '../utils/timecode';
 
 interface HeaderProps {
   embedded?: boolean;
+  /** embedded 模式下是否开放「导出结果」（runtime.canExport） */
+  canExport?: boolean;
   status: AnalysisStatus;
   metadata: VideoMetadata | null;
   shots: Shot[];
@@ -34,10 +37,13 @@ interface HeaderProps {
   isProjectDirty: boolean;
   onProjectClick: () => void;
   onExportClick: () => void;
+  /** embedded：导入切分点/关键帧选择文件 */
+  onImportClick?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   embedded = false,
+  canExport = false,
   status,
   metadata,
   shots,
@@ -52,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   isProjectDirty,
   onProjectClick,
   onExportClick,
+  onImportClick,
 }) => {
   const [showSampleDropdown, setShowSampleDropdown] = React.useState(false);
 
@@ -227,7 +234,9 @@ export const Header: React.FC<HeaderProps> = ({
               {isProjectDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
             </button>}
 
-            {!embedded && <button
+            {(!embedded || canExport) && <button
+              type="button"
+              data-testid="scenedetect-export-button"
               onClick={onExportClick}
               disabled={shots.length === 0}
               className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors"
@@ -235,6 +244,20 @@ export const Header: React.FC<HeaderProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>导出结果</span>
             </button>}
+
+            {/* Import Shot Boundaries / Keyframe Selection (embedded) */}
+            {embedded && onImportClick && (
+              <button
+                type="button"
+                data-testid="scenedetect-import-button"
+                onClick={onImportClick}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                title="导入之前导出的切分点与关键帧选择 (.scenedetect.json)"
+              >
+                <FileJson className="w-3.5 h-3.5 text-cyan-400" />
+                <span>导入切分点</span>
+              </button>
+            )}
 
           </div>
         </div>

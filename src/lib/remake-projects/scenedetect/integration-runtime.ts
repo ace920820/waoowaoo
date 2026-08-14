@@ -22,7 +22,8 @@ export type SceneDetectIntegrationRuntime = {
   reloadProject: (projectId: string) => Promise<SceneDetectProject | null>
   exportProject?: (project: SceneDetectProject) => Promise<never>
   canEnterProject: (projectId: string) => boolean
-  canExport: () => false
+  /** embedded 是否开放「导出结果」（CSV/JSON/项目配置/关键帧 ZIP 纯前端导出） */
+  canExport: () => boolean
 }
 
 export type SceneDetectNativeTypes = {

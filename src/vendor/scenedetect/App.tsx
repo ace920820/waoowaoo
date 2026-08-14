@@ -45,7 +45,8 @@ import {
 import { 
   frameToTimecode 
 } from './utils/timecode';
-import { exportSceneDetectProject } from './utils/export';
+import { exportSceneDetectProject, readSceneDetectProject } from './utils/export';
+import { validateImportedSceneDetectProject } from './utils/importValidation';
 import {
   createProject,
   deleteRecentProject,
@@ -105,6 +106,11 @@ export default function App({ embedded = false, initialProject = null, runtime =
 
   // Hidden File Input Ref
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Embedded: import shot boundaries / keyframe selection file input
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Embedded import error banner
+  const [importError, setImportError] = useState<string | null>(null);
 
   const currentProject = React.useMemo(
     () => metadata
@@ -221,6 +227,75 @@ export default function App({ embedded = false, initialProject = null, runtime =
     setProjectRecord(nextProject);
     setProjectName(nextProject.project.name);
     setIsProjectDirty(true);
+  };
+
+  // Import previously exported shot boundaries + keyframe selection
+  // (embedded only, Phase: 镜头分析页导出/加载). Parses + validates the
+  // `.scenedetect.json` file, then persists through the existing canonical
+  // save channel (PUT /project) so the mutation pipeline (new revision,
+  // keyframe/prompt invalidation, needs_review) applies unchanged.
+  const handleImportProjectFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setImportError(null);
+    try {
+      const imported = await readSceneDetectProject(file);
+      const validation = validateImportedSceneDetectProject(imported, {
+        totalFrames: metadata?.totalFrames,
+      });
+      if (!validation.ok) {
+        setImportError(validation.reason);
+        return;
+      }
+      if (!embedded || !runtime) {
+        setImportError('当前环境不支持导入');
+        return;
+      }
+      const total = imported.shots.length;
+      const confirmed = window.confirm(
+        `导入将用文件中的 ${total} 个镜头覆盖当前切分点与关键帧选择（原结果会保留在版本历史中，可重新分析回退）。\n` +
+        `建议先「导出结果 → 项目配置」备份当前切分点。\n\n确定导入？`,
+      );
+      if (!confirmed) return;
+
+      // 目标项目：id 沿用宿主项目；媒体/源视频来自服务端当前 source；
+      // 镜头边界与关键帧选择（keyframeFrames/mediaIds）来自导入文件。
+      const nextProject: SceneDetectProject = {
+        ...imported,
+        project: {
+          ...imported.project,
+          id: projectRecord?.project.id ?? imported.project.id,
+          updatedAt: new Date().toISOString(),
+        },
+        source: currentProject?.source ?? imported.source,
+        analysis: { ...imported.analysis, status: 'analyzed_review' },
+        view: { currentFrame: 0, activeShotId: imported.shots[0]?.id ?? null },
+      };
+      await runtime.saveProject(nextProject.project.id, nextProject, {
+        operationKey: `import:${Date.now()}`,
+      });
+      const reloaded = await runtime.reloadProject(nextProject.project.id);
+      if (reloaded) {
+        setProjectRecord(reloaded);
+        setProjectName(reloaded.project.name);
+        setMetadata(projectToMetadata(reloaded, reloaded.source.videoUrl || ''));
+        setShots(reloaded.shots);
+        setActiveShotId(reloaded.view.activeShotId);
+        setCurrentFrame(0);
+        setStatus(reloaded.analysis.status);
+        setUndoStack([]);
+        setRedoStack([]);
+        setIsProjectDirty(false);
+      }
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status;
+      setImportError(
+        status === 409
+          ? '导入冲突：项目已被其他操作修改，请刷新页面后重试。'
+          : (error instanceof Error ? error.message : '导入失败，请检查文件格式'),
+      );
+    }
   };
 
   // Start Scene Detection Analysis Process
@@ -708,9 +783,22 @@ export default function App({ embedded = false, initialProject = null, runtime =
         className="hidden"
       />
 
+      {/* Hidden Import Input (embedded: .scenedetect.json) */}
+      {embedded && (
+        <input
+          ref={importFileInputRef}
+          id="scenedetect-import"
+          type="file"
+          accept="application/json,.json,.scenedetect.json"
+          onChange={handleImportProjectFile}
+          className="hidden"
+        />
+      )}
+
       {/* Header Navigation */}
       <Header
         embedded={embedded}
+        canExport={Boolean(runtime?.canExport())}
         status={status}
         metadata={metadata}
         shots={shots}
@@ -725,6 +813,7 @@ export default function App({ embedded = false, initialProject = null, runtime =
         isProjectDirty={isProjectDirty}
         onProjectClick={() => setIsProjectManagerOpen(true)}
         onExportClick={() => setIsExportModalOpen(true)}
+        onImportClick={embedded ? () => importFileInputRef.current?.click() : undefined}
       />
 
       {/* Main Workspace Layout */}
@@ -840,8 +929,26 @@ export default function App({ embedded = false, initialProject = null, runtime =
         </div>
       )}
 
+      {/* Import error banner (embedded) */}
+      {importError && (
+        <div className="fixed bottom-20 right-5 z-50 max-w-md rounded-xl border border-amber-500/40 bg-amber-950/95 px-4 py-3 text-sm text-amber-100 shadow-2xl">
+          <div className="flex items-start gap-3">
+            <span className="font-semibold text-amber-300">导入切分点失败</span>
+            <button
+              type="button"
+              onClick={() => setImportError(null)}
+              className="ml-auto text-amber-300 hover:text-white"
+              aria-label="关闭错误提示"
+            >
+              ×
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-amber-200/80">{importError}</p>
+        </div>
+      )}
+
       {/* Export Modal */}
-      {!embedded && <ExportModal
+      {(!embedded || Boolean(runtime?.canExport())) && <ExportModal
         isOpen={isExportModalOpen}
         shots={shots}
         metadata={metadata}

@@ -83,6 +83,7 @@ export function createSceneDetectRuntime(projectId: string): SceneDetectIntegrat
     submitExtractKeyframes: async () => { throw new Error('SceneDetect keyframe extraction endpoint is not available') },
     onTaskUpdate: (taskId, listener) => { const set = listeners.get(taskId) || new Set(); set.add(listener); listeners.set(taskId, set); if (!pollers.has(taskId)) { void poll(taskId); pollers.set(taskId, setInterval(() => void poll(taskId), 1000)) } return () => { set.delete(listener); if (!set.size) { listeners.delete(taskId); stop(taskId) } } },
     canEnterProject: () => true,
-    canExport: () => false,
+    // Embedded 导出走 vendor 纯前端通道（CSV/JSON/项目配置/关键帧 ZIP），无需服务端端点。
+    canExport: () => true,
   }
 }
