@@ -4,7 +4,7 @@ import type { OrderedVideoReference } from '@/lib/remake-projects/video/contract
 import { buildUnitSubmissionPreview } from '@/lib/remake-projects/unit/preview'
 import { unitActionSheetFingerprint } from '@/lib/remake-projects/keyframes/action-sheet'
 import { getAdoptedPromptForGeneration } from '@/lib/remake-projects/prompt/service'
-import { ensureMediaObjectFromStorageKey, resolveMediaRef } from '@/lib/media/service'
+import { resolveMediaRef } from '@/lib/media/service'
 
 /**
  * Phase 09.1-04 unit submission service (D-02/D-04/D-05/D-21/D-22/W5):

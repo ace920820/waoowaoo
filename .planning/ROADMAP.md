@@ -191,14 +191,14 @@ Plans:
   3. unit 有独立版本列表，沿用 batch/version/采用/备注/失效语义；成员在单 shot 视图显示"由 unit 交付"并可跳回。
   4. 任一成员缺少已采用关键帧/已批准 Video Prompt/合法参数时阻止生成并逐成员说明；上游变化通过 invalidation 传播到 unit 版本复核状态。
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 
 - [x] 09.1-01-PLAN.md
 - [x] 09.1-02-PLAN.md
 - [x] 09.1-03-PLAN.md
-- [ ] 09.1-04-PLAN.md
+- [x] 09.1-04-PLAN.md
 - [ ] 09.1-05-PLAN.md
 - [ ] 09.1-06-PLAN.md
 

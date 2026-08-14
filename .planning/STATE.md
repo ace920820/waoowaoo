@@ -5,15 +5,15 @@ milestone_name: AI 视频翻拍工作台整合
 current_phase: 09.1
 current_phase_name: 短镜头合并 unit 视频生成
 status: executing
-stopped_at: Completed 09.1-03-PLAN.md
-last_updated: "2026-08-14T02:31:30.810Z"
+stopped_at: Completed 09.1-04-PLAN.md
+last_updated: "2026-08-14T02:49:23.011Z"
 last_activity: 2026-08-14
 last_activity_desc: Phase 09.1 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 36
-  completed_plans: 30
+  completed_plans: 31
   percent: 38
 ---
 
@@ -142,11 +142,11 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-14 — Phase 09.1 execution started
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 86%
 
 ## Operator Next Steps
 
@@ -157,8 +157,8 @@ Progress: [████████░░] 83%
 
 ## Session
 
-**Last session:** 2026-08-14T02:31:30.799Z
-**Stopped at:** Completed 09.1-03-PLAN.md
+**Last session:** 2026-08-14T02:49:22.998Z
+**Stopped at:** Completed 09.1-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -169,6 +169,7 @@ Progress: [████████░░] 83%
 | Phase 09.1-unit P01 | 30min | 3 tasks | 14 files |
 | Phase 09.1 P02 | 5min | 3 tasks | 7 files |
 | Phase 09.1-unit P03 | 15min | 3 tasks | 9 files |
+| Phase 09.1 P04 | 12min | 2 tasks | 14 files |
 
 ## Decisions
 
@@ -190,3 +191,10 @@ Progress: [████████░░] 83%
 - [Phase ?]: adoptVideoUnitVersion stale check = every frozen member revision still active/current; keyframe media equality stays in append-time assertVideoUnitSubmissionCurrent
 - [Phase ?]: unit outputVersion: shotId/revisionId = first member's, kind video_candidate_unit, fingerprint operationKey:inputFingerprint:1, provenance schema remake-video-unit-generation@1
 - [Phase ?]: invalidateRemakeVideoUnitVersions marks only completed unit versions needs_review (T-091-12) and never touches adoption pointers
+- [Phase 09.1]: Deferred action-sheet marker (W5): the frozen orderedReferences action_sheet entry carries mediaUrl 'unit-action-sheet://deferred/{unitActionSheetFingerprint}' — deterministic and fingerprint-covered; the worker (09.1-05) replaces it with the persisted media ref after render+persist
+
+D-21 PARAMS reason = member's shot-revision payload has no parseable time range at all; partial data falls back to the 3s convention (missing end -> start+3, missing start -> 0) matching memberDurationSeconds
+D-05 gate fires on the raw duration sum > model max (capability duration options max, default 15) BEFORE deriveDefaultVideoDuration, throwing REMAKE_VIDEO_UNIT_TOTAL_TOO_LONG:{sum}:{max} with a Chinese split hint
+Unit asset toggles hardcoded to single-shot defaults (characters/scene/props on, audio off) since the generate action schema carries no asset toggles
+collectUnitMemberKeyframeCandidates now returns the chosen keyframe slot (needed by the snapshot selectedKeyframe + D-22 currentness re-check)
+createVideoUnit accepts optional userLabel; new updateVideoUnitLabel service fn for the PATCH userLabel route (09.1-03 shipped neither)
