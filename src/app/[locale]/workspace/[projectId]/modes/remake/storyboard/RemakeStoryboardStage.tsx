@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
@@ -20,7 +20,7 @@ import {
 import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
 import { RemakeVideoUnitPanel } from '../video/RemakeVideoUnitPanel'
-import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
+import { buildShotToUnitMap, buildShotUnitBadgeMap } from '@/lib/remake-projects/unit/adapter'
 import ShotSemanticsPanel from './ShotSemanticsPanel'
 import KeyframePreviewModal from './KeyframePreviewModal'
 
@@ -75,9 +75,15 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
 
   // Unit lifecycle management (D-19 revised): list + detail panel embed.
   const shotToUnit = useMemo(() => buildShotToUnitMap(snapshot), [snapshot])
+  const shotUnitBadges = useMemo(() => buildShotUnitBadgeMap(snapshot), [snapshot])
   const unitCount = (snapshot.units ?? []).length
   const [unitPanelOpen, setUnitPanelOpen] = useState(false)
   const [unitPanelUnitId, setUnitPanelUnitId] = useState<string | null>(null)
+
+  const jumpToUnit = useCallback((unitId: string) => {
+    setUnitPanelOpen(true)
+    setUnitPanelUnitId(unitId)
+  }, [])
 
   return (
     <section className="space-y-6 pb-16" data-testid="remake-storyboard-stage">
@@ -125,7 +131,8 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
               shots={snapshot.shots}
               selectedShotId={selectedShot?.id ?? ''}
               onSelectShot={setSelectedShotId}
-              shotToUnit={shotToUnit}
+              unitBadges={shotUnitBadges}
+              onJumpToUnit={jumpToUnit}
             />
           </div>
           <div className="min-w-0 lg:col-span-8">

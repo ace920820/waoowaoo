@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 import { useRefreshRemakeProject } from '@/lib/query/hooks'
-import { adaptRemakeUnit } from '@/lib/remake-projects/unit/adapter'
+import { adaptRemakeUnit, unitToneForIndex } from '@/lib/remake-projects/unit/adapter'
+import type { RemakeKeyframeSlotName } from '@/lib/remake-projects/unit/adapter'
 import { buildUnitSubmissionPreview } from '@/lib/remake-projects/unit/preview'
 
 function apiErrorMessage(data: unknown, fallback: string) {
@@ -62,11 +63,14 @@ export function RemakeVideoUnitPanel({
   )
   const [noteText, setNoteText] = useState('')
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  // 编辑成员引用关键帧 slot 的本地草稿（key: shotRevisionId）
+  const [memberSlotDrafts, setMemberSlotDrafts] = useState<Record<string, RemakeKeyframeSlotName>>({})
 
   useEffect(() => {
     if (!unit) return
     setMemberOrder(unit.members.map((member) => member.shotRevisionId))
     setEditingMembers(false)
+    setMemberSlotDrafts({})
     const adopted = unit.track?.adoptedVersionId ?? null
     const firstVersion = unit.track?.batches[0]?.versions[0]?.id ?? null
     setSelectedVersionId((current) => {
@@ -105,7 +109,12 @@ export function RemakeVideoUnitPanel({
       const shot = snapshot.shots.find((entry) => entry.id === member.shotId)
       const adoptedPrompt = shot?.promptTracks?.find((track) => track.targetKey === 'video')
         ?.adoptedVersion?.coreText ?? ''
-      const keyframeMediaRef = { mediaId: null, mediaUrl: null }
+      // 真实引用：该成员当前 slot 的已采用关键帧（Phase 09.2）
+      const activeSlot = member.keyframeSlot ?? 'middle'
+      const activeRef = member.keyframeOptions.find((option) => option.slot === activeSlot) ?? null
+      const keyframeMediaRef = activeRef
+        ? { mediaId: activeRef.mediaId, mediaUrl: activeRef.mediaUrl }
+        : { mediaId: null, mediaUrl: null }
       return { ...member, adoptedPrompt, keyframeMediaRef }
     })
     return buildUnitSubmissionPreview({
@@ -148,17 +157,24 @@ export function RemakeVideoUnitPanel({
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            members: memberOrder.map((shotRevisionId, index) => ({ shotRevisionId, ordinal: index + 1 })),
+            members: memberOrder.map((shotRevisionId, index) => ({
+              shotRevisionId,
+              ordinal: index + 1,
+              ...(shotRevisionId in memberSlotDrafts
+                ? { keyframeSlot: memberSlotDrafts[shotRevisionId] }
+                : {}),
+            })),
           }),
         },
       )
       if (!res.ok) throw new Error(apiErrorMessage(await res.json().catch(() => null), '保存成员失败'))
       setEditingMembers(false)
+      setMemberSlotDrafts({})
       await refresh()
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '保存成员失败')
     }
-  }, [unit, projectId, memberOrder, refresh])
+  }, [unit, projectId, memberOrder, memberSlotDrafts, refresh])
 
   const handleGenerate = useCallback(async () => {
     if (!unit || !preview) return
@@ -343,6 +359,37 @@ export function RemakeVideoUnitPanel({
         </div>
       </div>
 
+      {/* Unit switcher (Phase 09.2): #N chips, same tones as the shot overview */}
+      {(snapshot.units ?? []).length > 1 && (
+        <div
+          data-testid="unit-switcher"
+          className="flex items-center gap-1.5 overflow-x-auto pb-1"
+        >
+          {(snapshot.units ?? []).map((entry, index) => {
+            const tone = unitToneForIndex(index)
+            const current = entry.id === unit.id
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                data-testid={`unit-switcher-${entry.id}`}
+                data-current={current ? 'true' : 'false'}
+                onClick={() => onOpenUnit?.(entry.id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  current
+                    ? 'border-violet-500/50 bg-violet-500/15 text-violet-200'
+                    : 'border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                #{index + 1}
+                {entry.dissolvedAt && <span className="text-[10px] text-zinc-500">已解散</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {errorMsg && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
           {errorMsg}
@@ -363,7 +410,7 @@ export function RemakeVideoUnitPanel({
       {/* Members */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h4 className="text-xs font-medium text-zinc-400">成员镜头</h4>
+          <h4 className="text-xs font-medium text-zinc-400">成员镜头与引用素材</h4>
           {canEditMembers && (
             <button
               type="button"
@@ -371,50 +418,118 @@ export function RemakeVideoUnitPanel({
               onClick={() => setEditingMembers((value) => !value)}
               className="text-xs text-violet-300 hover:text-violet-200"
             >
-              {editingMembers ? '取消编辑' : '调整成员'}
+              {editingMembers ? '取消编辑' : '调整成员/关键帧'}
             </button>
           )}
         </div>
         <div className="space-y-2">
-          {orderedMembers.map((member, index) => (
-            <div
-              key={member.shotRevisionId}
-              className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2"
-            >
-              <span className="w-6 text-xs text-zinc-500">{index + 1}</span>
-              <span className="text-sm text-zinc-200">{member.label ?? `镜头${member.sequence ?? '?'}`}</span>
-              <span className="text-xs text-zinc-500">{member.durationSeconds.toFixed(1)}s</span>
-              <div className="ml-auto flex items-center gap-1">
+          {orderedMembers.map((member, index) => {
+            const activeSlot = memberSlotDrafts[member.shotRevisionId] ?? member.keyframeSlot ?? 'middle'
+            const activeRef = member.keyframeOptions.find((option) => option.slot === activeSlot) ?? null
+            return (
+              <div
+                key={member.shotRevisionId}
+                className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-6 text-xs text-zinc-500">{index + 1}</span>
+                  {/* 当前引用关键帧缩略图（Phase 09.2） */}
+                  <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded border border-zinc-800 bg-black">
+                    {activeRef?.mediaUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={activeRef.mediaUrl}
+                        alt={`${member.label ?? '镜头'} 引用关键帧`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-zinc-600">
+                        无已采用关键帧
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-zinc-200">
+                      {member.label ?? `镜头${member.sequence ?? '?'}`}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {member.durationSeconds.toFixed(1)}s · 引用 {activeSlot} 关键帧
+                    </p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-1">
+                    {editingMembers && canEditMembers && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveMember(index, -1)}
+                          className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === orderedMembers.length - 1}
+                          onClick={() => moveMember(index, 1)}
+                          className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeMember(member.shotRevisionId)}
+                          className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                        >
+                          移除
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {/* 引用关键帧 slot 单选（编辑模式，Phase 09.2） */}
                 {editingMembers && canEditMembers && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => moveMember(index, -1)}
-                      className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === orderedMembers.length - 1}
-                      onClick={() => moveMember(index, 1)}
-                      className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeMember(member.shotRevisionId)}
-                      className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
-                    >
-                      移除
-                    </button>
-                  </>
+                  <div
+                    data-testid={`member-slot-options-${member.shotRevisionId}`}
+                    className="mt-2 flex items-center gap-2 border-t border-zinc-800/60 pt-2"
+                  >
+                    {(['start', 'middle', 'end'] as const).map((slot) => {
+                      const option = member.keyframeOptions.find((entry) => entry.slot === slot) ?? null
+                      const selected = activeSlot === slot
+                      const disabled = !option?.mediaUrl
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          disabled={disabled}
+                          data-testid={`member-slot-${member.shotRevisionId}-${slot}`}
+                          data-selected={selected ? 'true' : 'false'}
+                          onClick={() =>
+                            setMemberSlotDrafts((prev) => ({ ...prev, [member.shotRevisionId]: slot }))
+                          }
+                          className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors ${
+                            selected
+                              ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
+                              : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+                        >
+                          {option?.mediaUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={option.mediaUrl} alt="" className="h-6 w-10 rounded object-cover" />
+                          ) : (
+                            <span className="h-6 w-10 rounded border border-dashed border-zinc-700 text-[9px] leading-6 text-zinc-600">
+                              未采用
+                            </span>
+                          )}
+                          {slot}
+                        </button>
+                      )
+                    })}
+                    <span className="text-[10px] text-zinc-600">切换该镜头引用的已采用关键帧</span>
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         {editingMembers && canEditMembers && (
           <button
@@ -422,7 +537,7 @@ export function RemakeVideoUnitPanel({
             onClick={persistMembers}
             className="mt-2 rounded-lg bg-violet-600/80 px-3 py-1 text-xs text-white hover:bg-violet-600"
           >
-            保存成员顺序
+            保存成员与关键帧
           </button>
         )}
         {frozen && (
@@ -432,7 +547,36 @@ export function RemakeVideoUnitPanel({
         )}
         {!frozen && unit.hasCommittedBatch && !readOnly && (
           <p className="mt-2 text-xs text-amber-400/80" data-testid="members-invalidate-hint">
-            已生成过版本 —— 保存成员变更后，旧版本将标记为「需复核」
+            已生成过版本 —— 保存成员/关键帧变更后，旧版本将标记为「需复核」
+          </p>
+        )}
+      </div>
+
+      {/* 动作表（合并参考图，Phase 09.2） */}
+      <div data-testid="unit-action-sheet-card">
+        <h4 className="mb-2 text-xs font-medium text-zinc-400">动作表（合并参考图）</h4>
+        {unit.actionSheets[0]?.mediaUrl ? (
+          <div className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={unit.actionSheets[0].mediaUrl}
+              alt="合并动作表"
+              className="h-24 w-40 shrink-0 rounded border border-zinc-800 object-contain"
+            />
+            <div className="min-w-0 text-xs text-zinc-500">
+              <p className="text-zinc-300">已完成 · {unit.actionSheets[0].status}</p>
+              <p className="mt-1 break-all">
+                fingerprint：{unit.actionSheets[0].fingerprint?.slice(0, 16) ?? '-'}…
+              </p>
+              <p className="mt-1 text-zinc-600">
+                由成员已采用关键帧自动合并生成；调整成员/关键帧后重新生成即更新。
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-500">
+            尚未生成 —— 生成视频时按成员已采用关键帧自动合并渲染（6/9 宫格动作表），
+            重新生成后此处自动更新。
           </p>
         )}
       </div>

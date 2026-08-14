@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 import { RemakeShotOverview } from '@/app/[locale]/workspace/[projectId]/modes/remake/ShotOverview'
+import { buildShotUnitBadgeMap, type ShotUnitBadge } from '@/lib/remake-projects/unit/adapter'
 
 function snapshotWithTwoShots(): RemakeSnapshot {
   return {
@@ -65,12 +66,17 @@ function snapshotWithTwoShots(): RemakeSnapshot {
   } as RemakeSnapshot
 }
 
-function renderOverview(snapshot: RemakeSnapshot, shotToUnit?: ReadonlyMap<string, string> | null): string {
+function renderOverview(
+  snapshot: RemakeSnapshot,
+  unitBadges?: ReadonlyMap<string, ShotUnitBadge> | null,
+  onJumpToUnit?: (unitId: string) => void,
+): string {
   const overview = createElement(RemakeShotOverview, {
     shots: snapshot.shots,
     selectedShotId: 'shot-1',
     onSelectShot: () => {},
-    shotToUnit,
+    unitBadges,
+    onJumpToUnit,
   })
   return renderToStaticMarkup(overview)
 }
@@ -86,15 +92,56 @@ vi.mock('@/components/ui/icons', () => ({
     createElement('span', { 'data-icon': name, className }),
 }))
 
-describe('RemakeShotOverview unit-membership badge (D-18)', () => {
-  it('shows 由 unit 交付 badge only for member shots', () => {
-    const html = renderOverview(snapshotWithTwoShots(), new Map([['shot-1', 'unit-1']]))
+describe('RemakeShotOverview unit-membership badge (D-18 / Phase 09.2)', () => {
+  function badgeSnapshot() {
+    const snapshot = snapshotWithTwoShots()
+    snapshot.units = [
+      {
+        id: 'unit-1',
+        userLabel: null,
+        dissolvedAt: null,
+        dissolvedReason: null,
+        members: [
+          { shotRevisionId: 'rev-1', ordinal: 1, shotId: 'shot-1', sequence: 1, label: '镜头1', durationSeconds: 1.5 },
+        ],
+        track: null,
+        actionSheets: [],
+      },
+      {
+        id: 'unit-2',
+        userLabel: null,
+        dissolvedAt: null,
+        dissolvedReason: null,
+        members: [
+          { shotRevisionId: 'rev-2', ordinal: 1, shotId: 'shot-2', sequence: 2, label: '镜头2', durationSeconds: 2.5 },
+        ],
+        track: null,
+        actionSheets: [],
+      },
+    ]
+    return snapshot
+  }
+
+  it('shows #N 由 unit 交付 badge with the unit tone, one per member shot', () => {
+    const html = renderOverview(badgeSnapshot(), buildShotUnitBadgeMap(badgeSnapshot()))
     expect(html).toContain('unit-badge-shot-1')
-    expect(html).toContain('由 unit 交付')
-    expect(html).not.toContain('unit-badge-shot-2')
+    expect(html).toContain('unit-badge-shot-2')
+    expect(html).toContain('#1 由 unit 交付')
+    expect(html).toContain('#2 由 unit 交付')
+    // data-unit-number + tone attributes drive the per-unit color
+    expect(html).toContain('data-unit-number="1"')
+    expect(html).toContain('data-unit-tone="sky"')
+    expect(html).toContain('data-unit-tone="amber"')
   })
 
-  it('renders no badge when shotToUnit is not provided', () => {
+  it('adjacent units get different tones (sky / amber / emerald rotation)', () => {
+    const map = buildShotUnitBadgeMap(badgeSnapshot())
+    expect(map.get('shot-1')!.toneKey).not.toBe(map.get('shot-2')!.toneKey)
+    expect(map.get('shot-1')!.unitNumber).toBe(1)
+    expect(map.get('shot-2')!.unitNumber).toBe(2)
+  })
+
+  it('renders no badge when unitBadges is not provided', () => {
     const html = renderOverview(snapshotWithTwoShots(), null)
     expect(html).not.toContain('由 unit 交付')
   })

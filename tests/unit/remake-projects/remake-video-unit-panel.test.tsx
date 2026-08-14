@@ -164,6 +164,54 @@ function renderPanel(
   return renderToStaticMarkup(panel)
 }
 
+/** 给镜头造 keyframeGeneration tracks：middle 有已采用关键帧，start/end 无 */
+function withKeyframeTracks(snapshot: RemakeSnapshot): RemakeSnapshot {
+  for (const shot of snapshot.shots) {
+    const middleId = `c-${shot.id}-m`
+    shot.keyframeGeneration = {
+      tracks: [
+        {
+          id: `t-${shot.id}-start`,
+          slot: 'start',
+          selectedForGeneration: true,
+          adoptedCandidateId: null,
+          eligible: true,
+          batches: [],
+        },
+        {
+          id: `t-${shot.id}-middle`,
+          slot: 'middle',
+          selectedForGeneration: true,
+          adoptedCandidateId: middleId,
+          eligible: true,
+          batches: [
+            {
+              id: `b-${shot.id}`,
+              operationKey: `op-${shot.id}`,
+              requestedCandidateCount: 1,
+              createdAt: '2026-08-14T00:00:00Z',
+              candidates: [
+                { id: middleId, ordinal: 1, mediaId: `kfm-${shot.id}`, mediaUrl: `/kfm/${shot.id}`, eligible: true },
+              ],
+            },
+          ],
+        },
+        {
+          id: `t-${shot.id}-end`,
+          slot: 'end',
+          selectedForGeneration: true,
+          adoptedCandidateId: null,
+          eligible: true,
+          batches: [],
+        },
+      ],
+      actionSheet: { status: 'current', id: `as-${shot.id}`, mediaId: `as-${shot.id}`, fingerprint: 'f' },
+      history: [],
+    }
+  }
+  return snapshot
+}
+
 // ─── Mocks ────────────────────────────────────────────
 
 vi.mock('next-intl', () => ({
@@ -250,9 +298,50 @@ describe('RemakeVideoUnitPanel (D-19 revised lifecycle)', () => {
     expect(html).not.toContain('dissolve-unit-button')
     expect(html).not.toContain('edit-members-button')
     expect(html).not.toContain('generate-unit-button')
-    expect(html).not.toContain('采用')
+    // 无「采用」「重新确认」「保存备注」等写操作按钮（只读）
+    expect(html).not.toMatch(/>采用</)
+    expect(html).not.toContain('重新确认')
     expect(html).not.toContain('保存备注')
     // 版本与视频仍可回看
     expect(html).toContain('/unit-video/1')
+  })
+
+  it('member rows show the adopted keyframe thumbnail and the referenced slot (Phase 09.2)', () => {
+    const html = renderPanel(withKeyframeTracks(unitSnapshot()), 'unit-1')
+    expect(html).toContain('/kfm/shot-1')
+    expect(html).toContain('/kfm/shot-2')
+    expect(html).toContain('引用 middle 关键帧')
+    expect(html).toContain('成员镜头与引用素材')
+  })
+
+  it('action sheet card renders the merged sheet image or a pending explanation (Phase 09.2)', () => {
+    const withSheet = renderPanel(unitSnapshot(), 'unit-1')
+    expect(withSheet).toContain('unit-action-sheet-card')
+    expect(withSheet).toContain('/uas/1')
+    expect(withSheet).toContain('fingerprint')
+
+    const withoutSheet = renderPanel(unitSnapshot({ actionSheets: [] }), 'unit-1')
+    expect(withoutSheet).toContain('尚未生成')
+  })
+
+  it('renders the unit switcher with #N chips and highlights the current unit (Phase 09.2)', () => {
+    const snapshot = unitSnapshot()
+    snapshot.units = [
+      unitEntry({ id: 'unit-1', userLabel: null }),
+      unitEntry({
+        id: 'unit-2',
+        userLabel: null,
+        dissolvedAt: '2026-08-14T09:00:00Z',
+        dissolvedReason: null,
+      }),
+    ]
+    const html = renderPanel(snapshot, 'unit-1')
+    expect(html).toContain('unit-switcher')
+    expect(html).toContain('unit-switcher-unit-1')
+    expect(html).toContain('unit-switcher-unit-2')
+    expect(html).toContain('data-current="true"')
+    expect(html).toContain('#1')
+    expect(html).toContain('#2')
+    expect(html).toContain('已解散')
   })
 })

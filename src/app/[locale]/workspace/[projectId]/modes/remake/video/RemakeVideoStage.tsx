@@ -17,7 +17,7 @@ import {
 import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
 import { RemakeVideoUnitPanel, RemakeUnitList } from './RemakeVideoUnitPanel'
-import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
+import { buildShotToUnitMap, buildShotUnitBadgeMap } from '@/lib/remake-projects/unit/adapter'
 import { canSelectShotForUnit, filterSelectableUnitShots } from '@/lib/remake-projects/unit/selection'
 import {
   normalizeVideoGenerationSelections,
@@ -136,6 +136,7 @@ export default function RemakeVideoStage({
   const [activeUnitId, setActiveUnitId] = useState<string | null>(null)
   const [unitError, setUnitError] = useState<string | null>(null)
   const shotToUnit = useMemo(() => buildShotToUnitMap(snapshot), [snapshot])
+  const shotUnitBadges = useMemo(() => buildShotUnitBadgeMap(snapshot), [snapshot])
 
   const enterUnitMode = useCallback(() => {
     setUnitMode(true)
@@ -373,7 +374,8 @@ export default function RemakeVideoStage({
               shots={snapshot.shots}
               selectedShotId={selectedShot?.id ?? ''}
               onSelectShot={setSelectedShotId}
-              shotToUnit={shotToUnit}
+              unitBadges={shotUnitBadges}
+              onJumpToUnit={jumpToUnit}
             />
           </div>
           <div className="min-w-0 lg:col-span-8">

@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import type { PromptTrackSummary, RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
+import type { ShotUnitBadge } from '@/lib/remake-projects/unit/adapter'
 
 type Filter = 'all' | 'pending_review' | 'approved'
 const slots = ['start', 'middle', 'end'] as const
@@ -27,8 +28,10 @@ type RemakeShotOverviewProps = {
   shots: RemakeSnapshot['shots']
   selectedShotId: string
   onSelectShot: (shotId: string) => void
-  /** shotId -> unitId；命中的镜头显示「由 unit 交付」徽标（D-18） */
-  shotToUnit?: ReadonlyMap<string, string> | null
+  /** shotId -> unit badge（#N + 三色 tone）；命中的镜头显示「#N 由 unit 交付」徽标（Phase 09.2） */
+  unitBadges?: ReadonlyMap<string, ShotUnitBadge> | null
+  /** 点击 unit 徽标跳转到该 unit 管理详情 */
+  onJumpToUnit?: (unitId: string) => void
 }
 
 /**
@@ -36,7 +39,7 @@ type RemakeShotOverviewProps = {
  * 支持搜索与按 Prompt 状态筛选（全部 / 待审核 / 已批准），
  * 每个镜头展示三帧缩略图与已批准 Prompt 数。
  */
-export function RemakeShotOverview({ shots, selectedShotId, onSelectShot, shotToUnit }: RemakeShotOverviewProps) {
+export function RemakeShotOverview({ shots, selectedShotId, onSelectShot, unitBadges, onJumpToUnit }: RemakeShotOverviewProps) {
   const t = useTranslations('remakeWorkbench')
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -89,7 +92,8 @@ export function RemakeShotOverview({ shots, selectedShotId, onSelectShot, shotTo
             key={shot.id}
             shot={shot}
             selected={shot.id === selectedShotId}
-            inUnit={shotToUnit?.has(shot.id) ?? false}
+            badge={unitBadges?.get(shot.id) ?? null}
+            onJumpToUnit={onJumpToUnit}
             onClick={() => onSelectShot(shot.id)}
           />
         ))}
@@ -98,7 +102,19 @@ export function RemakeShotOverview({ shots, selectedShotId, onSelectShot, shotTo
   )
 }
 
-function ShotListItem({ shot, selected, inUnit, onClick }: { shot: RemakeSnapshot['shots'][number]; selected: boolean; inUnit: boolean; onClick: () => void }) {
+function ShotListItem({
+  shot,
+  selected,
+  badge,
+  onJumpToUnit,
+  onClick,
+}: {
+  shot: RemakeSnapshot['shots'][number]
+  selected: boolean
+  badge: ShotUnitBadge | null
+  onJumpToUnit?: (unitId: string) => void
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
@@ -109,12 +125,28 @@ function ShotListItem({ shot, selected, inUnit, onClick }: { shot: RemakeSnapsho
       <div className="mb-1.5 flex justify-between gap-2">
         <span className="line-clamp-2 text-xs font-bold text-slate-900">{shotLabel(shot)}</span>
         <span className="flex shrink-0 items-center gap-1">
-          {inUnit && (
+          {badge && (
             <span
               data-testid={`unit-badge-${shot.id}`}
-              className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700"
+              data-unit-number={badge.unitNumber}
+              data-unit-tone={badge.toneKey}
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation()
+                onJumpToUnit?.(badge.unitId)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onJumpToUnit?.(badge.unitId)
+                }
+              }}
+              className={`flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.badgeClass}`}
             >
-              由 unit 交付
+              <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClass}`} />
+              #{badge.unitNumber} 由 unit 交付
             </span>
           )}
           <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">

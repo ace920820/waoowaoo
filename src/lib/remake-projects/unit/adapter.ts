@@ -10,6 +10,15 @@
 
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 
+export type RemakeKeyframeSlotName = 'start' | 'middle' | 'end'
+
+/** 该成员某个 slot 的已采用关键帧引用（无采用时 mediaId/mediaUrl 为 null）。 */
+export type UnitMemberKeyframeOption = {
+  slot: RemakeKeyframeSlotName
+  mediaId: string | null
+  mediaUrl: string | null
+}
+
 export type UnitMemberView = {
   shotRevisionId: string
   ordinal: number
@@ -17,6 +26,44 @@ export type UnitMemberView = {
   sequence: number | null
   label: string | null
   durationSeconds: number
+  /** 引用的已采用关键帧 slot（null = 默认 middle 策略） */
+  keyframeSlot: RemakeKeyframeSlotName | null
+  /** 每个 slot 的已采用关键帧（用于展示 + 编辑切换） */
+  keyframeOptions: UnitMemberKeyframeOption[]
+}
+
+type UnitSlotTrack = NonNullable<RemakeSnapshot['shots'][number]['keyframeGeneration']>['tracks'][number]
+
+/**
+ * Resolve a slot track's adopted candidate ref from the snapshot projection
+ * (adoptedCandidateId points into batches[].candidates).
+ */
+function adoptedKeyframeRef(track: UnitSlotTrack): { mediaId: string | null; mediaUrl: string | null } {
+  const adoptedId = track.adoptedCandidateId
+  if (!adoptedId) return { mediaId: null, mediaUrl: null }
+  for (const batch of track.batches) {
+    const candidate = batch.candidates.find((entry) => entry.id === adoptedId)
+    if (candidate) {
+      return { mediaId: candidate.mediaId ?? null, mediaUrl: candidate.mediaUrl ?? null }
+    }
+  }
+  return { mediaId: null, mediaUrl: null }
+}
+
+function keyframeOptionsForShot(
+  snapshot: RemakeSnapshot,
+  shotId: string | null,
+): UnitMemberKeyframeOption[] {
+  if (!shotId) return []
+  const shot = snapshot.shots.find((entry) => entry.id === shotId)
+  const tracks = shot?.keyframeGeneration?.tracks ?? []
+  const bySlot = new Map(tracks.map((track) => [track.slot, track]))
+  const slots: RemakeKeyframeSlotName[] = ['start', 'middle', 'end']
+  return slots.map((slot) => {
+    const track = bySlot.get(slot)
+    const ref = track ? adoptedKeyframeRef(track) : { mediaId: null, mediaUrl: null }
+    return { slot, mediaId: ref.mediaId, mediaUrl: ref.mediaUrl }
+  })
 }
 
 export type UnitVersionView = {
@@ -70,7 +117,18 @@ export function adaptRemakeUnit(
   const unit = (snapshot.units ?? []).find((entry) => entry.id === unitId)
   if (!unit) return null
 
-  const members = [...unit.members].sort((left, right) => left.ordinal - right.ordinal)
+  const members = [...unit.members]
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map((member) => ({
+      shotRevisionId: member.shotRevisionId,
+      ordinal: member.ordinal,
+      shotId: member.shotId,
+      sequence: member.sequence,
+      label: member.label,
+      durationSeconds: member.durationSeconds,
+      keyframeSlot: (member.keyframeSlot as RemakeKeyframeSlotName | null | undefined) ?? null,
+      keyframeOptions: keyframeOptionsForShot(snapshot, member.shotId),
+    }))
   const track = unit.track
   const batches = track?.batches ?? []
   const hasCommittedBatch = batches.length > 0
@@ -118,5 +176,54 @@ export function buildShotToUnitMap(snapshot: RemakeSnapshot): Map<string, string
       if (member.shotId) map.set(member.shotId, unit.id)
     }
   }
+  return map
+}
+
+/**
+ * Unit badge tones for the shot overview (Phase 09.2): 浅蓝 / 浅棕 / 浅绿
+ * rotate by unit order (units are createdAt-asc), so adjacent units always
+ * differ. Shared with the unit-management switcher chips.
+ */
+export const UNIT_TONES = [
+  { key: 'sky', badge: 'bg-sky-100 text-sky-700', dot: 'bg-sky-400' },
+  { key: 'amber', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-400' },
+  { key: 'emerald', badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-400' },
+] as const
+
+export type UnitTone = (typeof UNIT_TONES)[number]['key']
+
+export function unitToneForIndex(index: number): (typeof UNIT_TONES)[number] {
+  return UNIT_TONES[index % UNIT_TONES.length]!
+}
+
+export type ShotUnitBadge = {
+  unitId: string
+  unitNumber: number
+  toneKey: UnitTone
+  badgeClass: string
+  dotClass: string
+}
+
+/**
+ * Phase 09.2: shotId -> unit badge info (#N + tone) for the shot overview.
+ * Units are numbered by the server's createdAt-asc order (1-based); dissolved
+ * units have no members, so they produce no entries.
+ */
+export function buildShotUnitBadgeMap(snapshot: RemakeSnapshot): Map<string, ShotUnitBadge> {
+  const map = new Map<string, ShotUnitBadge>()
+  const units = snapshot.units ?? []
+  units.forEach((unit, index) => {
+    const tone = unitToneForIndex(index)
+    const badge: ShotUnitBadge = {
+      unitId: unit.id,
+      unitNumber: index + 1,
+      toneKey: tone.key,
+      badgeClass: tone.badge,
+      dotClass: tone.dot,
+    }
+    for (const member of unit.members) {
+      if (member.shotId) map.set(member.shotId, badge)
+    }
+  })
   return map
 }
