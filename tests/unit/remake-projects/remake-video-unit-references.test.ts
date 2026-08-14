@@ -207,15 +207,15 @@ describe('buildUnitReferencePlan (D-06/D-08 order + caps)', () => {
     const shotKeyframes = plan.filter((item) => item.role === 'shot_keyframe')
     expect(shotKeyframes).toHaveLength(5) // never dropped
     expect(plan.some((item) => item.role === 'action_sheet')).toBe(true)
-    // Lowest-priority images (props, then scene) drop first.
+    // Lowest-priority image (the prop) drops first; scene still fits at image #9.
     expect(plan.some((item) => item.role === 'prop_reference')).toBe(false)
-    expect(plan.some((item) => item.role === 'scene_reference')).toBe(false)
+    expect(plan.some((item) => item.role === 'scene_reference')).toBe(true)
     expect(plan.filter((item) => item.role === 'character_reference')).toHaveLength(2)
-    // 5 kf + sheet + 2 chars = 8 images, audio still present (separate cap).
-    expect(plan.filter((item) => item.mediaType === 'image')).toHaveLength(8)
+    // 5 kf + sheet + 2 chars + scene = 9 images (cap), audio still present (separate cap).
+    expect(plan.filter((item) => item.mediaType === 'image')).toHaveLength(9)
     expect(plan.filter((item) => item.mediaType === 'audio')).toHaveLength(1)
     // Contiguity + order contract still hold after truncation.
-    expect(plan.map((item) => item.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(plan.map((item) => item.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expect(() => assertVideoReferenceOrder(plan)).not.toThrow()
   })
 })
