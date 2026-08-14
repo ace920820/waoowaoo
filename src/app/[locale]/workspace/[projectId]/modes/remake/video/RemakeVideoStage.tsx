@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AppIcon } from '@/components/ui/icons'
@@ -15,6 +16,8 @@ import {
 } from '@/lib/remake-projects/keyframes/video-inputs'
 import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
+import { RemakeVideoUnitPanel } from './RemakeVideoUnitPanel'
+import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
 import {
   normalizeVideoGenerationSelections,
   resolveEffectiveVideoCapabilityDefinitions,
@@ -125,6 +128,38 @@ export default function RemakeVideoStage({
     return byShot
   }, [snapshot.tasks])
 
+  // Unit mode state (D-14/D-15): manual selection, any combination,
+  // check order = submit order. No homogeneity logic anywhere (D-03 cancelled).
+  const [unitMode, setUnitMode] = useState(false)
+  const [selectedUnitShotIds, setSelectedUnitShotIds] = useState<string[]>([])
+  const [activeUnitId, setActiveUnitId] = useState<string | null>(null)
+  const [unitError, setUnitError] = useState<string | null>(null)
+  const shotToUnit = useMemo(() => buildShotToUnitMap(snapshot), [snapshot])
+
+  const enterUnitMode = useCallback(() => {
+    setUnitMode(true)
+    setSelectedUnitShotIds([])
+    setActiveUnitId(null)
+  }, [])
+
+  const exitUnitMode = useCallback(() => {
+    setUnitMode(false)
+    setSelectedUnitShotIds([])
+    setActiveUnitId(null)
+  }, [])
+
+  const toggleUnitShotSelection = useCallback((shotId: string) => {
+    setSelectedUnitShotIds((current) => {
+      if (current.includes(shotId)) return current.filter((id) => id !== shotId)
+      return [...current, shotId]
+    })
+  }, [])
+
+  const jumpToUnit = useCallback((unitId: string) => {
+    setUnitMode(true)
+    setActiveUnitId(unitId)
+  }, [])
+
   return (
     <section
       className="space-y-6 pb-16"
@@ -155,12 +190,121 @@ export default function RemakeVideoStage({
               ? '当前'
               : '缺失'}
           </span>
+          <button
+            type="button"
+            onClick={unitMode ? exitUnitMode : enterUnitMode}
+            data-testid="unit-mode-toggle"
+            className={`rounded-full px-3 py-1 transition-colors ${
+              unitMode
+                ? 'bg-violet-600 text-white hover:bg-violet-500'
+                : 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+            }`}
+          >
+            {unitMode ? '退出合并 unit 模式' : '合并 unit 模式'}
+          </button>
         </div>
       </header>
 
       {cards.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500">
           暂无可生成的 Video 镜头。
+        </div>
+      ) : activeUnitId ? (
+        <RemakeVideoUnitPanel
+          projectId={projectId}
+          snapshot={snapshot}
+          unitId={activeUnitId}
+          onExit={() => setActiveUnitId(null)}
+        />
+      ) : unitMode ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+            <p className="text-sm font-medium text-violet-900">选择要合并为 unit 的镜头</p>
+            <p className="mt-1 text-xs text-violet-700">
+              可任意组合（不要求相邻），按勾选顺序生成。已选择 {selectedUnitShotIds.length} 个镜头。
+            </p>
+            {selectedUnitShotIds.length >= 2 && (
+              <button
+                type="button"
+                data-testid="enter-unit-view"
+                onClick={() => {
+                  void (async () => {
+                    const res = await fetch(
+                      `/api/remake-projects/${encodeURIComponent(projectId)}/units`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          memberShotRevisionIds: selectedUnitShotIds
+                            .map((shotId) => {
+                              const shot = snapshot.shots.find((entry) => entry.id === shotId)
+                              return shot?.revisions?.find(
+                                (revision) => revision.lifecycleState === 'active',
+                              )?.id ?? null
+                            })
+                            .filter((id): id is string => Boolean(id)),
+                        }),
+                      },
+                    )
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null)
+                      throw new Error(apiErrorMessage(data, '创建 unit 失败'))
+                    }
+                    const data = (await res.json()) as { unit: { id: string } }
+                    await refresh()
+                    setActiveUnitId(data.unit.id)
+                  })().catch((err) => {
+                    console.error(err)
+                    setUnitError(String(err instanceof Error ? err.message : err))
+                  })
+                }}
+                className="mt-3 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+              >
+                进入 unit 视图（{selectedUnitShotIds.length} 个镜头）
+              </button>
+            )}
+            {unitError && (
+              <p className="mt-2 text-xs text-red-600">{unitError}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {shots.map((shot) => {
+              const inUnit = shotToUnit.has(shot.id)
+              const checkIndex = selectedUnitShotIds.indexOf(shot.id)
+              return (
+                <button
+                  key={shot.id}
+                  type="button"
+                  data-testid={`unit-shot-option-${shot.id}`}
+                  onClick={() => toggleUnitShotSelection(shot.id)}
+                  className={`relative rounded-xl border p-3 text-left transition-colors ${
+                    checkIndex >= 0
+                      ? 'border-violet-400 bg-violet-50'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  } ${inUnit ? 'opacity-40' : ''}`}
+                >
+                  {checkIndex >= 0 && (
+                    <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                      {checkIndex + 1}
+                    </span>
+                  )}
+                  <p className="text-sm font-medium text-slate-800">
+                    {shot.label ?? `镜头${shot.sequence ?? '?'}`}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{shot.durationSeconds.toFixed(1)}s</p>
+                  {inUnit ? (
+                    <p className="mt-1 text-xs font-medium text-violet-600">已加入其他 unit</p>
+                  ) : (
+                    shot.durationSeconds < 4 && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        镜头过短（&lt; 最短档），建议并入相邻镜头或接受拉长
+                      </p>
+                    )
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -184,6 +328,8 @@ export default function RemakeVideoStage({
                 capabilityOverrides={capabilityOverrides}
                 generationTask={videoTaskByShot.get(selectedCard.shot.id) ?? null}
                 onGenerated={refresh}
+                unitId={shotToUnit.get(selectedCard.shot.id) ?? null}
+                onJumpToUnit={jumpToUnit}
               />
             ) : null}
           </div>
@@ -212,6 +358,8 @@ function VideoShotCard({
   capabilityOverrides,
   generationTask,
   onGenerated,
+  unitId,
+  onJumpToUnit,
 }: {
   projectId: string
   sourceMediaUrl: string | null
@@ -222,6 +370,10 @@ function VideoShotCard({
   capabilityOverrides: Record<string, unknown> | undefined
   generationTask: RemakeSnapshot['tasks'][number] | null
   onGenerated: () => void
+  /** 该镜头所属 unit id（D-18：由 unit 交付时非 null） */
+  unitId?: string | null
+  /** 跳回 unit 视图（D-18） */
+  onJumpToUnit?: (unitId: string) => void
 }) {
   const projectAssets = useProjectAssets(projectId)
   const assetsData = projectAssets.data ?? null
@@ -547,23 +699,55 @@ function VideoShotCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-bold text-slate-900">{shot.label}</h3>
-          <p className="text-xs text-slate-500">
-            时长 {shot.durationSeconds.toFixed(1)} 秒 · 手动选择参考，生成新视频版本
-          </p>
+          {unitId ? (
+            <p className="text-xs font-medium text-violet-600" data-testid="delivered-by-unit">
+              由 unit 交付（本镜头不单独生成视频）
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500">
+                时长 {shot.durationSeconds.toFixed(1)} 秒 · 手动选择参考，生成新视频版本
+                {shot.durationSeconds < 4 && adoptedVersionId && (
+                  <span
+                    className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                    data-testid="stretched-badge"
+                  >
+                    拉长到最短档
+                  </span>
+                )}
+              </p>
+              {shot.durationSeconds < 4 && !adoptedVersionId && (
+                <p className="mt-1 text-xs text-amber-700" data-testid="short-shot-hint">
+                  镜头过短（&lt; 最短档），建议并入相邻镜头或接受拉长
+                </p>
+              )}
+            </>
+          )}
         </div>
-        <button
-          type="button"
-          disabled={!canSubmit || submitting}
-          onClick={handleGenerate}
-          data-testid="generate-button"
-          className={`min-h-11 rounded px-4 py-2 text-xs font-semibold ${
-            canSubmit && !submitting
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-              : 'bg-slate-200 text-slate-500'
-          }`}
-        >
-          {submitting ? '生成中…' : '视频生成'}
-        </button>
+        {unitId ? (
+          <button
+            type="button"
+            onClick={() => onJumpToUnit?.(unitId)}
+            data-testid="jump-to-unit"
+            className="rounded px-4 py-2 text-xs font-semibold bg-violet-50 text-violet-700 hover:bg-violet-100"
+          >
+            查看所属 unit
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={!canSubmit || submitting}
+            onClick={handleGenerate}
+            data-testid="generate-button"
+            className={`min-h-11 rounded px-4 py-2 text-xs font-semibold ${
+              canSubmit && !submitting
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-slate-200 text-slate-500'
+            }`}
+          >
+            {submitting ? '生成中…' : '视频生成'}
+          </button>
+        )}
       </div>
 
       {readinessReasons.length > 0 && (

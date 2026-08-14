@@ -128,6 +128,27 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       remakeProject: {
         include: {
           currentSource: true,
+          units: {
+            include: {
+              members: {
+                include: { unit: false },
+              },
+              tracks: {
+                include: {
+                  batches: {
+                    include: {
+                      versions: { include: { outputVersion: true }, orderBy: { ordinal: 'asc' } },
+                    },
+                    orderBy: { createdAt: 'desc' },
+                  },
+                  adoptionEvents: { orderBy: { createdAt: 'desc' } },
+                  invalidations: true,
+                },
+              },
+              actionSheets: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
           shots: {
             include: {
               outputs: { include: { invalidations: true, provenanceRecords: true } },
@@ -364,6 +385,82 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
       const active = (shot.revisions as Array<{ sourceRevision?: number | null; lifecycleState?: string }> | undefined)
         ?.find((revision) => revision.lifecycleState === 'active' && Number(revision.sourceRevision) === Number(sourceRevision))
       return Boolean(active)
+    }),
+    units: ((remake?.units as Row[] | undefined) ?? []).map((unit) => {
+      const unitMembers = (unit.members as Row[] | undefined) ?? []
+      const unitTracks = (unit.tracks as Row[] | undefined) ?? []
+      const track = unitTracks[0]
+      const batches = ((track?.batches as Row[] | undefined) ?? []).map((batch) => ({
+        id: batch.id,
+        operationKey: batch.operationKey,
+        modelId: batch.modelId ?? null,
+        createdAt: batch.createdAt,
+        versions: ((batch.versions as Row[] | undefined) ?? []).map((version) => {
+          const outputVersion = version.outputVersion as Row | undefined
+          return {
+            id: version.id,
+            ordinal: version.ordinal,
+            mediaUrl: mediaUrl(input.projectId, outputVersion?.mediaId),
+            status: outputVersion?.status ?? 'pending',
+            invalidated: Boolean(outputVersion?.invalidatedAt),
+            note: version.note ?? null,
+          }
+        }),
+      }))
+      const hasInvalidated = batches.some((batch) =>
+        batch.versions.some((version) => version.invalidated),
+      )
+      return {
+        id: unit.id,
+        userLabel: unit.userLabel ?? null,
+        members: unitMembers
+          .sort((left, right) => Number(left.ordinal) - Number(right.ordinal))
+          .map((member) => {
+            // Resolve the owning shot + its active revision for the member's
+            // durationSeconds / sequence / label via the already-loaded shots.
+            const revisionId = String(member.shotRevisionId)
+            const owningShot = ((remake?.shots as Row[] | undefined) ?? []).find((shot) =>
+              ((shot.revisions as Row[] | undefined) ?? []).some(
+                (revision) => String(revision.id) === revisionId,
+              ),
+            )
+            const owningRevision = ((owningShot?.revisions as Row[] | undefined) ?? []).find(
+              (revision) => String(revision.id) === revisionId,
+            )
+            const payload = parseObject(owningRevision?.payload)
+            const start = payload.startTimecode ?? payload.startTime ?? null
+            const end = payload.endTimecode ?? payload.endTime ?? null
+            const startSeconds = typeof start === 'number' ? start : null
+            const endSeconds = typeof end === 'number' ? end : null
+            const durationSeconds =
+              startSeconds !== null && endSeconds !== null
+                ? Math.max(0.1, endSeconds - startSeconds)
+                : 3
+            return {
+              shotRevisionId: member.shotRevisionId,
+              ordinal: Number(member.ordinal),
+              shotId: owningShot?.id ?? null,
+              sequence: owningShot?.sequence ?? null,
+              label: typeof owningShot?.sequence === 'number' ? `镜头${owningShot.sequence}` : null,
+              durationSeconds,
+            }
+          }),
+        track: track
+          ? {
+              id: track.id,
+              adoptedVersionId: track.adoptedVersionId ?? null,
+              hasInvalidated,
+              batches,
+            }
+          : null,
+        actionSheets: ((unit.actionSheets as Row[] | undefined) ?? []).map((sheet) => ({
+          id: sheet.id,
+          mediaId: sheet.mediaId ?? null,
+          mediaUrl: mediaUrl(input.projectId, sheet.mediaId),
+          fingerprint: sheet.fingerprint ?? null,
+          status: sheet.status ?? 'pending',
+        })),
+      }
     }),
     tasks: (tasks as Row[]).map((task) => {
       const { events: _events, ...safeTask } = task

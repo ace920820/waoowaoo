@@ -85,6 +85,44 @@ export type RemakeSnapshot = {
     revisions: Array<{ id: string; revision: number; changeReason: string; sourceRevision?: number | null; lifecycleState?: string; payload?: unknown; keyframeMediaRefs?: unknown }>
     provenance: Array<{ id: string; schema: string; executor: string; capability: string }>
   }>
+  units?: Array<{
+    id: string
+    userLabel: string | null
+    members: Array<{
+      shotRevisionId: string
+      ordinal: number
+      shotId: string | null
+      sequence: number | null
+      label: string | null
+      durationSeconds: number
+    }>
+    track: {
+      id: string
+      adoptedVersionId: string | null
+      hasInvalidated: boolean
+      batches: Array<{
+        id: string
+        operationKey: string
+        modelId?: string | null
+        createdAt?: string
+        versions: Array<{
+          id: string
+          ordinal: number
+          mediaUrl: string | null
+          status: string
+          invalidated: boolean
+          note: string | null
+        }>
+      }>
+    } | null
+    actionSheets: Array<{
+      id: string
+      mediaId: string | null
+      mediaUrl: string | null
+      fingerprint: string | null
+      status: string
+    }>
+  }>
   tasks: Array<{
     id: string
     type: string
@@ -144,12 +182,15 @@ export function remakeSnapshotRefreshInterval(snapshot: RemakeSnapshot | undefin
   const hasActiveVideoTask = snapshot.tasks.some((task) =>
     task.type === 'remake_video_generate' && ['queued', 'processing', 'running'].includes(task.status),
   )
+  const hasActiveUnitVideoTask = snapshot.tasks.some((task) =>
+    task.type === 'remake_video_unit_generate' && ['queued', 'processing', 'running'].includes(task.status),
+  )
   // 关键帧图片生成是异步任务：POST 返回 202 后由 worker 继续生成，
   // 需要持续轮询，直到任务完成/失败且候选已落库，否则分镜页会一直停留在 0 批 / 0 候选。
   const hasActiveKeyframeImageTask = snapshot.tasks.some((task) =>
     task.type === 'remake_keyframe_image_generate' && ['queued', 'processing', 'running'].includes(task.status),
   )
-  if (hasActiveVideoTask) return 3000
+  if (hasActiveVideoTask || hasActiveUnitVideoTask) return 3000
   if (hasPendingKeyframes || hasActivePromptTask || hasActiveKeyframeImageTask) return 1000
   return false
 }
