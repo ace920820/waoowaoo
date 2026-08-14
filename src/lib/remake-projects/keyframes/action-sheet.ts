@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { generateUniqueKey, uploadObject } from '@/lib/storage'
 
 export const ACTION_SHEET_RENDERER_VERSION = 'remake-keyframe-action-sheet@1'
+export const UNIT_ACTION_SHEET_RENDERER_VERSION = 'remake-unit-action-sheet@1'
 export const ACTION_SHEET_SLOTS = ['start', 'middle', 'end'] as const
 export type ActionSheetSlot = typeof ACTION_SHEET_SLOTS[number]
 
@@ -14,6 +15,19 @@ export type ActionSheetSource = {
   timestamp: number
   buffer?: Buffer
 }
+
+/** D-07: one cell per unit member, numbered by member ordinal. */
+export type UnitActionSheetSource = {
+  ordinal: number
+  mediaId: string
+  timestamp: number
+  buffer?: Buffer
+}
+
+const CELL_WIDTH = 640
+const CELL_HEIGHT = 360
+const LABEL_HEIGHT = 34
+const CELL_TOTAL_HEIGHT = CELL_HEIGHT + LABEL_HEIGHT
 
 type Row = Record<string, unknown>
 
@@ -26,6 +40,19 @@ function stableJson(value: unknown): string {
 export function actionSheetFingerprint(input: { revisionId: string; sources: Array<Pick<ActionSheetSource, 'slot' | 'mediaId' | 'timestamp'> > }) {
   const sources = ACTION_SHEET_SLOTS.map((slot) => input.sources.find((source) => source.slot === slot))
   return createHash('sha256').update(stableJson({ renderer: ACTION_SHEET_RENDERER_VERSION, revisionId: input.revisionId, sources })).digest('hex')
+}
+
+/**
+ * D-07: deterministic fingerprint of the merged unit action sheet — hashes the
+ * renderer version, the unit id, and the member ordinal + mediaId list, so any
+ * member change (reorder, keyframe swap) produces a new fingerprint.
+ */
+export function unitActionSheetFingerprint(input: {
+  unitId: string
+  sources: Array<Pick<UnitActionSheetSource, 'ordinal' | 'mediaId'>>
+}) {
+  const sources = [...input.sources].sort((left, right) => left.ordinal - right.ordinal)
+  return createHash('sha256').update(stableJson({ renderer: UNIT_ACTION_SHEET_RENDERER_VERSION, unitId: input.unitId, sources })).digest('hex')
 }
 
 export function prepareActionSheet(input: {
@@ -50,22 +77,57 @@ function labelSvg(width: number, height: number, text: string) {
   return Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#111"/><text x="16" y="${Math.max(20, height - 12)}" fill="#fff" font-family="Arial, sans-serif" font-size="18" font-weight="700">${text.replace(/[<&>\"']/g, '')}</text></svg>`)
 }
 
+/**
+ * Generalized cell renderer: each cell is a 640x360 cover-fit frame with a
+ * 34px label bar, laid left-to-right / top-to-bottom into `columns` columns.
+ * The single-shot path calls this with columns=1 (vertical stack), so the
+ * 3-slot output stays byte-identical to the pre-generalization renderer.
+ */
+async function renderCells(
+  cells: Array<{ buffer: Buffer; label: string }>,
+  columns: number,
+): Promise<Buffer> {
+  const panels = await Promise.all(cells.map(async (cell) => {
+    const image = await sharp(cell.buffer).rotate().resize(CELL_WIDTH, CELL_HEIGHT, { fit: 'cover', position: 'centre' }).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+    const svg = labelSvg(CELL_WIDTH, LABEL_HEIGHT, cell.label)
+    return sharp(image).extend({ top: LABEL_HEIGHT, background: '#111' }).composite([{ input: svg, top: 0, left: 0 }]).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+  }))
+  const rows = Math.ceil(panels.length / columns)
+  const canvasWidth = columns * CELL_WIDTH
+  const canvasHeight = rows * CELL_TOTAL_HEIGHT
+  return sharp({ create: { width: canvasWidth, height: canvasHeight, channels: 3, background: '#111' } }).composite(panels.map((input, index) => ({ input, left: (index % columns) * CELL_WIDTH, top: Math.floor(index / columns) * CELL_TOTAL_HEIGHT }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+}
+
 export async function renderActionSheet(sources: ActionSheetSource[]) {
   const prepared = prepareActionSheet({ revisionId: 'render', confirmed: true, sources })
   if (prepared.status !== 'ready' || sources.some((source) => !source.buffer)) throw new Error('REMAKE_ACTION_SHEET_SOURCE_MISSING')
-  const width = 640
-  const height = 360
-  const panels = await Promise.all((prepared.output.sources as Array<{ slot: ActionSheetSlot; timestamp: number }>).map(async (source) => {
+  const ordered = prepared.output.sources as Array<{ slot: ActionSheetSlot; timestamp: number }>
+  const cells = ordered.map((source) => {
     const original = sources.find((item) => item.slot === source.slot)?.buffer as Buffer
-    const image = await sharp(original).rotate().resize(width, height, { fit: 'cover', position: 'centre' }).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-    return { input: image, label: `${source.slot.toUpperCase()}  ${source.timestamp}` }
+    return { buffer: original, label: `${source.slot.toUpperCase()}  ${source.timestamp}` }
+  })
+  return renderCells(cells, 1)
+}
+
+/**
+ * D-07: render the merged unit action sheet — one 640x360 cover-fit frame per
+ * member (numbered 镜头{N}) in a 2-column grid for 3-6 sources and a 3-column
+ * grid for 7-9 sources. Source count is bounded 2..9 (T-091-07).
+ */
+export async function renderUnitActionSheet(sources: UnitActionSheetSource[]) {
+  if (sources.length < 2 || sources.length > 9) {
+    throw new Error('REMAKE_ACTION_SHEET_SOURCE_COUNT_INVALID')
+  }
+  const ordered = [...sources].sort((left, right) => left.ordinal - right.ordinal)
+  if (ordered.some((source) => !source.buffer || !source.mediaId || !Number.isFinite(source.timestamp))) {
+    throw new Error('REMAKE_ACTION_SHEET_SOURCE_MISSING')
+  }
+  const cells = ordered.map((source) => ({
+    buffer: source.buffer as Buffer,
+    label: `镜头 ${source.ordinal}`,
   }))
-  const labelHeight = 34
-  const labeled = await Promise.all(panels.map(async (panel) => {
-    const svg = labelSvg(width, labelHeight, panel.label)
-    return sharp(panel.input).extend({ top: labelHeight, background: '#111' }).composite([{ input: svg, top: 0, left: 0 }]).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-  }))
-  return sharp({ create: { width, height: (height + labelHeight) * labeled.length, channels: 3, background: '#111' } }).composite(labeled.map((input, index) => ({ input, left: 0, top: (height + labelHeight) * index }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+  const columns = ordered.length <= 6 ? 2 : 3
+  return renderCells(cells, columns)
 }
 
 export async function persistActionSheet(input: {
