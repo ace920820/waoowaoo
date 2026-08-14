@@ -5,11 +5,12 @@ import {
   type RemakeKeyframeSlot,
 } from '../keyframes/adapter'
 import {
-  buildRemakeReferencePlan,
-  remakeReferenceRoleLabel,
+  buildUnitReferencePlan,
+  dedupeUnitAssetCandidates,
+} from './reference-plan'
+import {
   remakeReferenceRoleUsage,
   type RemakeReferenceCandidate,
-  type RemakeReferencePlanItem,
 } from '../video/reference-plan'
 
 /**
@@ -19,17 +20,12 @@ import {
  *    collection — exactly ONE keyframe per unit member (default middle slot,
  *    falling back to the only adopted slot), resolved to a stable media
  *    reference, returned in ordinal order. DB-backed; mocked in unit tests.
- *  - `dedupeUnitAssetCandidates`: cross-member asset dedup keyed by
- *    (role, assetId) keeping the first occurrence — the same character/scene/
- *    prop/voice appearing in several members is included exactly once.
- *  - `buildUnitReferencePlan`: assembles candidates in the order
- *    shot_keyframes (ordinal) -> action_sheet -> characters -> scene -> props ->
- *    audio and delegates sorting/truncation to the existing
- *    `buildRemakeReferencePlan`, so the 9-image / 3-audio caps and the
- *    keyframe > action sheet > characters > scene > props > voice degrade are
- *    single-sourced (T-091-05: member keyframes are emitted before assets, so
- *    degrade never drops a required frame).
+ *  - `dedupeUnitAssetCandidates` / `buildUnitReferencePlan`: pure helpers
+ *    extracted to `unit/reference-plan.ts` (client-safe, re-exported here so
+ *    this module keeps the full reference-merge API).
  */
+
+export { buildUnitReferencePlan, dedupeUnitAssetCandidates } from './reference-plan'
 
 export type UnitMemberKeyframeCandidate = RemakeReferenceCandidate & {
   ordinal: number
@@ -37,15 +33,6 @@ export type UnitMemberKeyframeCandidate = RemakeReferenceCandidate & {
 
 const UNIT_KEYFRAME_ROLE = 'shot_keyframe' as const
 const DEFAULT_PREFERRED_SLOT: RemakeKeyframeSlot = 'middle'
-
-function referenceMediaFields(
-  mediaId: string | null | undefined,
-  url: string | null | undefined,
-): Pick<RemakeReferenceCandidate, 'mediaId' | 'mediaUrl'> {
-  if (mediaId) return { mediaId }
-  if (url) return { mediaUrl: url }
-  return {}
-}
 
 /**
  * Normalize a raw media reference (MediaObject uuid OR storage key / COS url)
@@ -121,86 +108,4 @@ export async function collectUnitMemberKeyframeCandidates(params: {
     })
   }
   return candidates
-}
-
-/**
- * D-08: collapse the same asset id across members to one candidate per
- * (role, assetId) — a character contributes one `character_reference` AND one
- * `character_audio_reference` (two distinct roles, same asset), while the same
- * character/scene/prop/voice appearing in several members is included once.
- * Candidates without an asset id (keyframes / action sheet) pass through.
- */
-export function dedupeUnitAssetCandidates(
-  candidates: RemakeReferenceCandidate[],
-): RemakeReferenceCandidate[] {
-  const seen = new Set<string>()
-  const result: RemakeReferenceCandidate[] = []
-  for (const candidate of candidates) {
-    if (!candidate.assetId) {
-      result.push(candidate)
-      continue
-    }
-    const key = `${candidate.role}:${candidate.assetId}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(candidate)
-  }
-  return result
-}
-
-/**
- * D-06/D-08: build the unit reference plan.
- *
- * Candidates are assembled in priority order — member shot_keyframes (by
- * ordinal), the merged action sheet, then the deduped assets — and delegated
- * to `buildRemakeReferencePlan` for stable sorting, contiguous ordinals and
- * the 9-image / 3-audio caps. Member keyframes sort before every asset role,
- * so cap truncation can never drop a required member frame (T-091-05).
- */
-export function buildUnitReferencePlan(input: {
-  memberKeyframes: Array<{
-    ordinal: number
-    mediaId?: string | null
-    mediaUrl?: string | null
-  }>
-  actionSheetMediaRef?: { mediaId?: string | null; mediaUrl?: string | null } | null
-  assetCandidates: RemakeReferenceCandidate[]
-}): RemakeReferencePlanItem[] {
-  const candidates: RemakeReferenceCandidate[] = []
-
-  const orderedKeyframes = [...input.memberKeyframes].sort(
-    (left, right) => left.ordinal - right.ordinal,
-  )
-  for (const member of orderedKeyframes) {
-    const media = referenceMediaFields(member.mediaId, member.mediaUrl)
-    if (!media.mediaId && !media.mediaUrl) continue
-    candidates.push({
-      role: UNIT_KEYFRAME_ROLE,
-      mediaType: 'image',
-      sourceType: UNIT_KEYFRAME_ROLE,
-      label: `镜头 ${member.ordinal} 关键帧`,
-      usage: remakeReferenceRoleUsage(UNIT_KEYFRAME_ROLE),
-      ...media,
-    })
-  }
-
-  if (input.actionSheetMediaRef) {
-    const media = referenceMediaFields(
-      input.actionSheetMediaRef.mediaId,
-      input.actionSheetMediaRef.mediaUrl,
-    )
-    if (media.mediaId || media.mediaUrl) {
-      candidates.push({
-        role: 'action_sheet',
-        mediaType: 'image',
-        sourceType: 'action_sheet',
-        label: remakeReferenceRoleLabel('action_sheet'),
-        usage: remakeReferenceRoleUsage('action_sheet'),
-        ...media,
-      })
-    }
-  }
-
-  candidates.push(...input.assetCandidates)
-  return buildRemakeReferencePlan(candidates)
 }

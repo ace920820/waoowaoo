@@ -4,8 +4,9 @@ import {
   dedupeUnitAssetCandidates,
   collectUnitMemberKeyframeCandidates,
 } from '@/lib/remake-projects/unit/references'
-import type { RemakeReferenceCandidate } from '@/lib/remake-projects/video/reference-plan'
+import type { RemakeReferenceCandidate, RemakeReferencePlanItem } from '@/lib/remake-projects/video/reference-plan'
 import { assertVideoReferenceOrder } from '@/lib/remake-projects/video/contracts'
+import type { OrderedVideoReference } from '@/lib/remake-projects/video/contracts'
 
 /**
  * Unit reference-merge layer (D-06 / D-08 / D-10):
@@ -20,6 +21,22 @@ import { assertVideoReferenceOrder } from '@/lib/remake-projects/video/contracts
  *    buildRemakeReferencePlan 9-image / 3-audio caps (keyframe > action sheet >
  *    characters > scene > props > voice priority).
  */
+
+/** Map a plan item to the strict ordered-reference shape the service freezes
+ * (drops null media fields the same way `buildVideoGenerationSubmission` does). */
+function toOrderedRefs(plan: RemakeReferencePlanItem[]): OrderedVideoReference[] {
+  return plan.map((item) => ({
+    role: item.role,
+    ordinal: item.ordinal,
+    mediaType: item.mediaType,
+    sourceType: item.sourceType,
+    label: item.label,
+    usage: item.usage,
+    ...(item.assetId ? { assetId: item.assetId } : {}),
+    ...(item.mediaId ? { mediaId: item.mediaId } : {}),
+    ...(item.mediaUrl ? { mediaUrl: item.mediaUrl } : {}),
+  }))
+}
 
 const prismaMock = vi.hoisted(() => {
   const findUnique = vi.fn()
@@ -186,7 +203,7 @@ describe('buildUnitReferencePlan (D-06/D-08 order + caps)', () => {
       .toEqual(['镜头 1 关键帧', '镜头 2 关键帧', '镜头 3 关键帧'])
     // Contiguous ordinals from 1 -> the plan satisfies the reference order contract.
     expect(plan.map((item) => item.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    expect(() => assertVideoReferenceOrder(plan)).not.toThrow()
+    expect(() => assertVideoReferenceOrder(toOrderedRefs(plan))).not.toThrow()
   })
 
   it('truncates past the 9-image cap by priority and never drops the member keyframes', () => {
@@ -216,6 +233,6 @@ describe('buildUnitReferencePlan (D-06/D-08 order + caps)', () => {
     expect(plan.filter((item) => item.mediaType === 'audio')).toHaveLength(1)
     // Contiguity + order contract still hold after truncation.
     expect(plan.map((item) => item.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    expect(() => assertVideoReferenceOrder(plan)).not.toThrow()
+    expect(() => assertVideoReferenceOrder(toOrderedRefs(plan))).not.toThrow()
   })
 })
