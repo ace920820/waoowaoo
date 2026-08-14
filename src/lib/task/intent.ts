@@ -72,6 +72,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.REMAKE_KEYFRAME_IMAGE_GENERATE]: 'generate',
   [TASK_TYPE.REMAKE_KEYFRAME_ACTION_SHEET]: 'process',
   [TASK_TYPE.REMAKE_VIDEO_GENERATE]: 'generate',
+  [TASK_TYPE.REMAKE_VIDEO_UNIT_GENERATE]: 'generate',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {
