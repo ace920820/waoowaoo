@@ -5,10 +5,11 @@ import { isErrorResponse, requireProjectAuthLight } from '@/lib/api-auth'
 import { updateVideoUnitMembers } from '@/lib/remake-projects/unit/service'
 
 /**
- * Unit member mutation route (D-19). PATCH add/remove/reorder succeeds only
- * before freeze: while no queued/processing generation task exists and no
- * batch is committed, updateVideoUnitMembers diffs the member set (D-04
- * uniqueness re-checked in-transaction). Frozen / in-flight -> 409 CONFLICT.
+ * Unit member mutation route (D-19). PATCH add/remove/reorder/keyframe-slot
+ * succeeds only while no queued/processing generation task exists;
+ * updateVideoUnitMembers diffs the member set (D-04 uniqueness re-checked
+ * in-transaction) and invalidates the unit's old versions on any change.
+ * In-flight -> 409 CONFLICT.
  */
 
 const idSchema = z.string().uuid()
@@ -18,6 +19,7 @@ const membersSchema = z.object({
     z.object({
       shotRevisionId: z.string().uuid(),
       ordinal: z.number().int().min(1),
+      keyframeSlot: z.enum(['start', 'middle', 'end']).optional().nullable(),
     }).strict(),
   ).min(2),
 }).strict()

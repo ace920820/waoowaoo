@@ -158,8 +158,20 @@ export async function buildVideoUnitSubmission(input: {
 
     let keyframe: UnitMemberKeyframeCandidate | undefined
     try {
+      // Phase 09.2: the member's pinned keyframeSlot (start|middle|end) is the
+      // preferred slot; null keeps the default middle-first fallback (D-06).
+      const pinnedSlot =
+        member.keyframeSlot === 'start' || member.keyframeSlot === 'middle' || member.keyframeSlot === 'end'
+          ? member.keyframeSlot
+          : undefined
       const [candidate] = await collectUnitMemberKeyframeCandidates({
-        members: [{ shotRevisionId: member.shotRevisionId, ordinal: member.ordinal }],
+        members: [
+          {
+            shotRevisionId: member.shotRevisionId,
+            ordinal: member.ordinal,
+            preferredSlot: pinnedSlot,
+          },
+        ],
       })
       keyframe = candidate
     } catch {

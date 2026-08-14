@@ -97,6 +97,8 @@ export type RemakeSnapshot = {
       sequence: number | null
       label: string | null
       durationSeconds: number
+      /** 该成员引用哪个 slot 的已采用关键帧（start|middle|end）；null = 默认 middle 策略 */
+      keyframeSlot?: 'start' | 'middle' | 'end' | null
     }>
     track: {
       id: string

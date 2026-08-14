@@ -39,6 +39,7 @@ const IDS = {
   kf2: 'a2222222-2222-4222-8222-222222222222',
   kf3: 'a3333333-3333-4333-8333-333333333333',
   kf1b: 'a4444444-4444-4444-8444-444444444444',
+  kf1e: 'a5555555-5555-4555-8555-555555555555',
   promptV1: '66666666-6666-4666-8666-666666666661',
   promptV2: '66666666-6666-4666-8666-666666666662',
   promptV3: '66666666-6666-4666-8666-666666666663',
@@ -418,6 +419,40 @@ describe('buildVideoUnitSubmission (D-16/D-22 WYSIWYG freeze + W5 deferred actio
     expect(second.inputFingerprint).not.toBe(first.inputFingerprint)
     expect(second.dedupeKey).not.toBe(first.dedupeKey)
     expect(second.payload.inputSnapshot.members[0]!.selectedKeyframe.mediaId).toBe(IDS.kf1b)
+  })
+
+  it('uses the member keyframeSlot as the preferred slot, falling back when it has no adopted keyframe (Phase 09.2)', async () => {
+    const { buildVideoUnitSubmission } = await import('@/lib/remake-projects/unit/submission')
+
+    // rev1 pins 'end' (adopted); rev2 pins 'start' (no adopted) → falls back to middle.
+    fixture.keyframeMediaBySlot.set(`${IDS.rev1}:end`, IDS.kf1e)
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValue({
+      id: IDS.unitId,
+      remakeProjectId: IDS.remakeProjectId,
+      members: [
+        { id: 'm1', shotRevisionId: IDS.rev1, ordinal: 1, keyframeSlot: 'end' },
+        { id: 'm2', shotRevisionId: IDS.rev2, ordinal: 2, keyframeSlot: 'start' },
+      ],
+      tracks: [],
+    })
+
+    const descriptor = await buildVideoUnitSubmission({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      unitId: IDS.unitId,
+      operationKey: 'gen-slot',
+    })
+
+    const snapshot = descriptor.payload.inputSnapshot
+    expect(snapshot.members[0]!.selectedKeyframe).toEqual({
+      slot: 'end',
+      mediaId: IDS.kf1e,
+    })
+    // 'start' has no adopted keyframe → middle fallback (D-06).
+    expect(snapshot.members[1]!.selectedKeyframe).toEqual({
+      slot: 'middle',
+      mediaId: IDS.kf2,
+    })
   })
 })
 

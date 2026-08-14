@@ -360,6 +360,117 @@ describe('updateVideoUnitMembers (D-19 freeze gate)', () => {
       }),
     ).rejects.toThrow(`REMAKE_VIDEO_UNIT_MEMBER_ALREADY_ASSIGNED:${IDS.member3ShotRevisionId}`)
   })
+
+  it("persists keyframeSlot on added members and updates existing members' slot, invalidating old versions (Phase 09.2)", async () => {
+    const { updateVideoUnitMembers } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1, keyframeSlot: null },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2, keyframeSlot: null },
+    ])
+    prismaMock.remakeVideoUnitMember.deleteMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitMember.findUnique.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.createMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitMember.update.mockResolvedValueOnce({ id: 'm2', keyframeSlot: 'end' })
+    prismaMock.remakeVideoUnitBatch.findMany.mockResolvedValueOnce([
+      {
+        id: 'unit-batch-1',
+        versions: [
+          {
+            id: 'uv-1',
+            outputVersionId: 'ov-1',
+            outputVersion: { status: 'completed', invalidatedAt: null },
+          },
+        ],
+      },
+    ])
+    prismaMock.remakeOutputVersion.updateMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitTrack.findUnique.mockResolvedValueOnce({ id: 'unit-track-1' })
+    prismaMock.remakeShotRevision.findFirst.mockResolvedValueOnce({ shotId: 'shot-2' })
+    prismaMock.remakeInvalidation.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeInvalidation.create.mockResolvedValueOnce({ id: 'inv-1' })
+
+    const result = await updateVideoUnitMembers({
+      ...input,
+      members: [
+        { shotRevisionId: IDS.member2ShotRevisionId, ordinal: 1, keyframeSlot: 'end' },
+        { shotRevisionId: IDS.member3ShotRevisionId, ordinal: 2, keyframeSlot: 'start' },
+      ],
+    })
+
+    // member3 added with its pinned slot; member2's slot updated in place.
+    expect(prismaMock.remakeVideoUnitMember.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          expect.objectContaining({
+            shotRevisionId: IDS.member3ShotRevisionId,
+            ordinal: 2,
+            keyframeSlot: 'start',
+          }),
+        ],
+      }),
+    )
+    expect(prismaMock.remakeVideoUnitMember.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { keyframeSlot: 'end' } }),
+    )
+    // Slot changes count as a member change → prior versions invalidated.
+    expect(prismaMock.remakeOutputVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { invalidatedAt: expect.any(Date), status: 'needs_review' },
+      }),
+    )
+    expect(result.invalidated).toBe(1)
+  })
+
+  it('treats a keyframeSlot-only change as a member change and invalidates old versions (Phase 09.2)', async () => {
+    const { updateVideoUnitMembers } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1, keyframeSlot: null },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2, keyframeSlot: null },
+    ])
+    prismaMock.remakeVideoUnitBatch.findMany.mockResolvedValueOnce([
+      {
+        id: 'unit-batch-1',
+        versions: [
+          {
+            id: 'uv-1',
+            outputVersionId: 'ov-1',
+            outputVersion: { status: 'completed', invalidatedAt: null },
+          },
+        ],
+      },
+    ])
+    prismaMock.remakeOutputVersion.updateMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitTrack.findUnique.mockResolvedValueOnce({ id: 'unit-track-1' })
+    prismaMock.remakeShotRevision.findFirst.mockResolvedValueOnce({ shotId: 'shot-1' })
+    prismaMock.remakeInvalidation.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeInvalidation.create.mockResolvedValueOnce({ id: 'inv-1' })
+
+    const result = await updateVideoUnitMembers({
+      ...input,
+      members: [
+        { shotRevisionId: IDS.member1ShotRevisionId, ordinal: 1, keyframeSlot: 'middle' },
+        { shotRevisionId: IDS.member2ShotRevisionId, ordinal: 2 },
+      ],
+    })
+
+    // Same member set and order — only member1's slot changed.
+    expect(prismaMock.remakeVideoUnitMember.createMany).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnitMember.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.remakeVideoUnitMember.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { keyframeSlot: 'middle' } }),
+    )
+    expect(prismaMock.remakeOutputVersion.updateMany).toHaveBeenCalled()
+    expect(prismaMock.remakeInvalidation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reason: 'unit_members_changed' }),
+      }),
+    )
+    expect(result.invalidated).toBe(1)
+  })
 })
 
 describe('getVideoUnitDetail', () => {

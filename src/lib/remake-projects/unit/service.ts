@@ -254,7 +254,12 @@ export async function updateVideoUnitMembers(input: {
   projectId: string
   userId: string
   unitId: string
-  members: Array<{ shotRevisionId: string; ordinal: number }>
+  members: Array<{
+    shotRevisionId: string
+    ordinal: number
+    /** 该成员引用哪个 slot 的已采用关键帧（start|middle|end）；省略 = 保持原值（新建时 null=默认 middle 策略） */
+    keyframeSlot?: 'start' | 'middle' | 'end' | null
+  }>
 }) {
   return await prisma.$transaction(async (tx) => {
     const client = tx as Client
@@ -287,7 +292,11 @@ export async function updateVideoUnitMembers(input: {
     })
     const submitted = [...input.members]
       .sort((left, right) => left.ordinal - right.ordinal)
-      .map((member, index) => ({ shotRevisionId: member.shotRevisionId, ordinal: index + 1 }))
+      .map((member, index) => ({
+        shotRevisionId: member.shotRevisionId,
+        ordinal: index + 1,
+        keyframeSlot: member.keyframeSlot ?? null,
+      }))
     const submittedIds = new Set(submitted.map((member) => member.shotRevisionId))
     const existingByShot = new Map(existing.map((member) => [member.shotRevisionId, member]))
 
@@ -316,23 +325,35 @@ export async function updateVideoUnitMembers(input: {
           unitId: input.unitId,
           shotRevisionId: member.shotRevisionId,
           ordinal: member.ordinal,
+          keyframeSlot: member.keyframeSlot ?? undefined,
         })),
       })
     }
     let orderChanged = false
+    let slotChanged = false
     for (const member of submitted) {
       const existingMember = existingByShot.get(member.shotRevisionId)
-      if (!existingMember || existingMember.ordinal === member.ordinal) continue
-      orderChanged = true
-      await client.remakeVideoUnitMember.update({
-        where: { id: existingMember.id },
-        data: { ordinal: member.ordinal },
-      })
+      if (!existingMember) continue
+      if (existingMember.ordinal !== member.ordinal) {
+        orderChanged = true
+        await client.remakeVideoUnitMember.update({
+          where: { id: existingMember.id },
+          data: { ordinal: member.ordinal },
+        })
+      }
+      // keyframeSlot change counts as a member change → invalidates old versions
+      if ((existingMember.keyframeSlot ?? null) !== member.keyframeSlot) {
+        slotChanged = true
+        await client.remakeVideoUnitMember.update({
+          where: { id: existingMember.id },
+          data: { keyframeSlot: member.keyframeSlot },
+        })
+      }
     }
 
-    // 成员集合/顺序实际变化时，失效该 unit 自身的旧视频版本（needs_review）。
+    // 成员集合/顺序/引用关键帧实际变化时，失效该 unit 自身的旧视频版本（needs_review）。
     // 只碰 unit batch 里的 versions；成员镜头的关键帧/Prompt/其他产物不受影响。
-    const membersChanged = removed.length > 0 || added.length > 0 || orderChanged
+    const membersChanged = removed.length > 0 || added.length > 0 || orderChanged || slotChanged
     let invalidatedCount = 0
     if (membersChanged) {
       const unitBatches = await client.remakeVideoUnitBatch.findMany({

@@ -441,6 +441,7 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
             return {
               shotRevisionId: member.shotRevisionId,
               ordinal: Number(member.ordinal),
+              keyframeSlot: typeof member.keyframeSlot === 'string' ? member.keyframeSlot : null,
               shotId: owningShot?.id ?? null,
               sequence: owningShot?.sequence ?? null,
               label: typeof owningShot?.sequence === 'number' ? `镜头${owningShot.sequence}` : null,

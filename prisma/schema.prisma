@@ -886,6 +886,8 @@ model RemakeVideoUnitMember {
   unitId         String
   shotRevisionId String
   ordinal        Int
+  /** 该成员引用哪个 slot 的已采用关键帧（start|middle|end）；null = 默认 middle 优先 + fallback */
+  keyframeSlot   String?
   createdAt      DateTime              @default(now())
   unit           RemakeVideoUnit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
