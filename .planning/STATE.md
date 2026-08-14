@@ -5,15 +5,15 @@ milestone_name: AI 视频翻拍工作台整合
 current_phase: 09.1
 current_phase_name: 短镜头合并 unit 视频生成
 status: executing
-stopped_at: Completed 09.1-02-PLAN.md
-last_updated: "2026-08-14T02:14:01.783Z"
+stopped_at: Completed 09.1-03-PLAN.md
+last_updated: "2026-08-14T02:31:30.810Z"
 last_activity: 2026-08-14
 last_activity_desc: Phase 09.1 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 36
-  completed_plans: 29
+  completed_plans: 30
   percent: 38
 ---
 
@@ -142,11 +142,11 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 ## Current Position
 
 Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-08-14 — Phase 09.1 execution started
 
-Progress: [████████░░] 81%
+Progress: [████████░░] 83%
 
 ## Operator Next Steps
 
@@ -157,8 +157,8 @@ Progress: [████████░░] 81%
 
 ## Session
 
-**Last session:** 2026-08-14T02:13:33.162Z
-**Stopped at:** Completed 09.1-02-PLAN.md
+**Last session:** 2026-08-14T02:31:30.799Z
+**Stopped at:** Completed 09.1-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -168,6 +168,7 @@ Progress: [████████░░] 81%
 | Phase 07-prompt P03 | 10h 29m | 3 tasks | 28 files |
 | Phase 09.1-unit P01 | 30min | 3 tasks | 14 files |
 | Phase 09.1 P02 | 5min | 3 tasks | 7 files |
+| Phase 09.1-unit P03 | 15min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -184,3 +185,8 @@ Progress: [████████░░] 81%
 - [Phase ?]: buildUnitSubmissionPreview derives total duration via deriveDefaultVideoDuration(sum, definitions ?? []) only when totalDurationSeconds is not supplied; preview promptText/orderedReferences are byte-identical to buildUnitTimedPrompt / buildUnitReferencePlan (D-16 WYSIWYG)
 - [Phase ?]: renderUnitActionSheet bounds sources 2..9 and rejects outside (T-091-07)
 - [Phase ?]: Pure reference-plan helpers extracted to a prisma-free module (unit/reference-plan.ts) so the D-16 preview stays client-safe; references.ts re-exports them
+- [Phase ?]: Open Question 1 resolution: unit batch promptVersionId = first member's promptVersionId; per-member promptVersionIds stay in the frozen snapshot members[]
+- [Phase ?]: RemakeVideoUnitMember.shotRevisionId is a plain column (no FK) — D-04 uniqueness enforced by @@unique([shotRevisionId])
+- [Phase ?]: adoptVideoUnitVersion stale check = every frozen member revision still active/current; keyframe media equality stays in append-time assertVideoUnitSubmissionCurrent
+- [Phase ?]: unit outputVersion: shotId/revisionId = first member's, kind video_candidate_unit, fingerprint operationKey:inputFingerprint:1, provenance schema remake-video-unit-generation@1
+- [Phase ?]: invalidateRemakeVideoUnitVersions marks only completed unit versions needs_review (T-091-12) and never touches adoption pointers

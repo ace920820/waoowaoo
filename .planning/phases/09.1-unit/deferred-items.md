@@ -20,3 +20,24 @@ pre-existing issues in unrelated files are NOT auto-fixed here).
   Prisma's aligned output, or normalize the schema with `prisma format` and
   update the assertion. Owner: Phase 9 keyframe plan or a lint/format cleanup
   plan.
+
+## 2. Environmental failure: `keyframe-action-sheet-worker.test.ts` needs seeded local storage
+
+- **Found during:** 09.1-03 final regression sweep (post-Task 3)
+- **Issue:** `tests/integration/remake-projects/keyframe-action-sheet-worker.test.ts`
+  ("routes through the existing image queue and delegates durable writes")
+  fails with `ENOENT: data/uploads/start-media` — the worker handler
+  (`handleRemakeKeyframeActionSheetTask` → `resolveSourceBuffer` →
+  `LocalStorageProvider.getObjectBuffer`) treats the literal `mediaId:
+  'start-media'` from the test payload as a storage key and no file / DB media
+  row exists. Verified environmental: the test file is unmodified by plan
+  09.1-03 (`git diff f468a9f..HEAD` empty for it; last touched by phase-08
+  commit `45664ea`), no repo code creates the file, and `npm run storage:init`
+  only creates the `data/uploads/{e2e,images,voice}` directories.
+- **Impact:** 1 integration test fails unless a real `data/uploads/start-media`
+  file (or MinIO/S3 object + DB media row) is present. Unrelated to the unit
+  video work; all 36 focused 09.1-03 tests, Task 1-3 verifies, and typecheck
+  pass.
+- **Suggested fix (future):** seed the media fixture in the test's setup (write
+  a placeholder file under `data/uploads/` or mock the storage provider).
+  Owner: Phase 08 action-sheet plan or a test-fixture cleanup plan.
