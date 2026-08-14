@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  unitInputFingerprint,
+  type VideoUnitInputSnapshot,
+} from '@/lib/remake-projects/unit/contracts'
 
 /**
  * Unit CRUD / freeze-gate / currentness service tests (D-04 / D-19 / D-22),
@@ -40,7 +44,35 @@ const prismaMock = vi.hoisted(() => ({
     deleteMany: vi.fn(),
     update: vi.fn(),
   },
-  remakeVideoUnitBatch: { findFirst: vi.fn() },
+  remakeVideoUnitTrack: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  remakeVideoUnitBatch: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+  },
+  remakeVideoUnitVersion: {
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
+  remakeVideoUnitAdoptionEvent: {
+    create: vi.fn(),
+  },
+  remakeOutputVersion: {
+    updateMany: vi.fn(),
+    update: vi.fn(),
+  },
+  remakeInvalidation: {
+    updateMany: vi.fn(),
+  },
+  remakeProvenanceRecord: {
+    create: vi.fn(),
+  },
   task: { findFirst: vi.fn() },
   remakeKeyframeTrack: { findUnique: vi.fn() },
 }))
@@ -60,7 +92,7 @@ function activeCurrentRevision(shotRevisionId: string, remakeProjectId = IDS.rem
   }
 }
 
-const unitSnapshot = {
+const unitSnapshot: VideoUnitInputSnapshot = {
   projectId: IDS.projectId,
   remakeProjectId: IDS.remakeProjectId,
   unitId: IDS.unitId,
@@ -446,5 +478,377 @@ describe('assertVideoUnitSubmissionCurrent (D-22)', () => {
     await expect(assertVideoUnitSubmissionCurrent(unitSnapshot)).rejects.toThrow(
       'REMAKE_VIDEO_UNIT_INPUT_STALE',
     )
+  })
+})
+
+describe('appendVideoUnitBatch (D-17/D-22)', () => {
+  const appendInput = {
+    taskId: 'task-1',
+    operationKey: 'op-unit-001-v1',
+    inputSnapshot: unitSnapshot,
+    inputFingerprint: unitInputFingerprint(unitSnapshot),
+    mediaId: 'media-result-1',
+  }
+
+  it('rejects a fingerprint mismatch before any write', async () => {
+    const { appendVideoUnitBatch } = await import('@/lib/remake-projects/unit/service')
+    await expect(
+      appendVideoUnitBatch({ ...appendInput, inputFingerprint: 'f'.repeat(64) }),
+    ).rejects.toThrow('REMAKE_VIDEO_UNIT_FINGERPRINT_INVALID')
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('creates track/batch/version/provenance once and is idempotent on trackId_operationKey retry', async () => {
+    const { appendVideoUnitBatch } = await import('@/lib/remake-projects/unit/service')
+    // D-22 currentness assertion (runs inside the transaction on every append)
+    prismaMock.remakeVideoUnit.findUnique.mockResolvedValue({
+      id: IDS.unitId,
+      remakeProjectId: IDS.remakeProjectId,
+    })
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValue(
+      unitSnapshot.members.map((member) => ({
+        id: `row-${member.ordinal}`,
+        unitId: IDS.unitId,
+        shotRevisionId: member.shotRevisionId,
+        ordinal: member.ordinal,
+      })),
+    )
+    prismaMock.remakeShotRevision.findUnique.mockResolvedValue({
+      id: IDS.member1ShotRevisionId,
+      revision: 1,
+      lifecycleState: 'active',
+      shotId: 'shot-1',
+      shot: { currentRevision: 1 },
+    })
+    prismaMock.remakeKeyframeTrack.findUnique
+      .mockResolvedValueOnce({ adoptedCandidate: { outputVersion: { mediaId: IDS.member1KeyframeMediaId } } })
+      .mockResolvedValueOnce({ adoptedCandidate: { outputVersion: { mediaId: IDS.member2KeyframeMediaId } } })
+      .mockResolvedValueOnce({ adoptedCandidate: { outputVersion: { mediaId: IDS.member1KeyframeMediaId } } })
+      .mockResolvedValueOnce({ adoptedCandidate: { outputVersion: { mediaId: IDS.member2KeyframeMediaId } } })
+    // track: first call creates, retry reuses
+    prismaMock.remakeVideoUnitTrack.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'unit-track-1' })
+    prismaMock.remakeVideoUnitTrack.create.mockResolvedValue({ id: 'unit-track-1' })
+    // batch: first call creates, retry returns the existing rows
+    prismaMock.remakeVideoUnitBatch.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'existing-batch', versions: [{ id: 'existing-uv' }] })
+    prismaMock.remakeVideoUnitBatch.create.mockResolvedValue({ id: 'unit-batch-1' })
+    prismaMock.remakeVideoUnitVersion.findMany.mockResolvedValue([{ id: 'uv-1' }])
+    prismaMock.remakeProvenanceRecord.create.mockResolvedValue({ id: 'prov-1' })
+
+    const first = await appendVideoUnitBatch(appendInput)
+    expect(first).toEqual({ batchId: 'unit-batch-1', versionIds: ['uv-1'] })
+
+    const retry = await appendVideoUnitBatch(appendInput)
+    expect(retry).toEqual({ batchId: 'existing-batch', versionIds: ['existing-uv'] })
+
+    // no duplicated output / provenance rows
+    expect(prismaMock.remakeVideoUnitBatch.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.remakeVideoUnitTrack.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.remakeProvenanceRecord.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.remakeVideoUnitBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          trackId: 'unit-track-1',
+          operationKey: 'op-unit-001-v1',
+          promptVersionId: IDS.member1PromptVersionId, // Open Question 1: first member's promptVersionId
+          versions: expect.objectContaining({
+            create: expect.objectContaining({
+              ordinal: 1,
+              outputVersion: expect.objectContaining({
+                create: expect.objectContaining({
+                  shotId: 'shot-1',
+                  revisionId: IDS.member1ShotRevisionId,
+                  kind: 'video_candidate_unit',
+                  fingerprint: `op-unit-001-v1:${appendInput.inputFingerprint}:1`,
+                  status: 'completed',
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    )
+  })
+})
+
+describe('adoptVideoUnitVersion (D-17)', () => {
+  const adoptInput = {
+    projectId: IDS.projectId,
+    userId: IDS.userId,
+    trackId: 'unit-track-1',
+    versionId: 'uv-1',
+  }
+
+  it('sets the unit-track adoption pointer and writes an adoption event', async () => {
+    const { adoptVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: null,
+    })
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce({
+      id: 'uv-1',
+      outputVersionId: 'ov-1',
+      outputVersion: { status: 'completed', invalidatedAt: null },
+      batch: { inputSnapshot: unitSnapshot },
+    })
+    prismaMock.remakeShotRevision.findUnique.mockResolvedValue({
+      id: IDS.member1ShotRevisionId,
+      revision: 1,
+      lifecycleState: 'active',
+      shot: { currentRevision: 1 },
+    })
+    prismaMock.remakeVideoUnitTrack.update.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-1',
+    })
+    prismaMock.remakeVideoUnitAdoptionEvent.create.mockResolvedValueOnce({ id: 'event-1' })
+
+    const result = await adoptVideoUnitVersion(adoptInput)
+    expect(result.adoptedVersionId).toBe('uv-1')
+    expect(prismaMock.remakeVideoUnitAdoptionEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          trackId: 'unit-track-1',
+          previousVersionId: null,
+          nextVersionId: 'uv-1',
+          reviewerId: IDS.userId,
+        }),
+      }),
+    )
+  })
+
+  it('requires explicit confirmReplace when replacing the adopted version', async () => {
+    const { adoptVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-1',
+    })
+    await expect(
+      adoptVideoUnitVersion({ ...adoptInput, versionId: 'uv-2' }),
+    ).rejects.toThrow('REMAKE_VIDEO_UNIT_REPLACE_CONFIRM_REQUIRED')
+
+    // with confirmation the replacement proceeds
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-1',
+    })
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce({
+      id: 'uv-2',
+      outputVersionId: 'ov-2',
+      outputVersion: { status: 'completed', invalidatedAt: null },
+      batch: { inputSnapshot: unitSnapshot },
+    })
+    prismaMock.remakeShotRevision.findUnique.mockResolvedValue({
+      id: IDS.member1ShotRevisionId,
+      revision: 1,
+      lifecycleState: 'active',
+      shot: { currentRevision: 1 },
+    })
+    prismaMock.remakeVideoUnitTrack.update.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-2',
+    })
+    prismaMock.remakeVideoUnitAdoptionEvent.create.mockResolvedValueOnce({ id: 'event-2' })
+    const result = await adoptVideoUnitVersion({
+      ...adoptInput,
+      versionId: 'uv-2',
+      confirmReplace: true,
+    })
+    expect(result.adoptedVersionId).toBe('uv-2')
+  })
+
+  it('rejects non-completed or invalidated versions', async () => {
+    const { adoptVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: null,
+    })
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce(null)
+    await expect(adoptVideoUnitVersion(adoptInput)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND',
+    )
+  })
+
+  it('rejects stale inputs with REMAKE_VIDEO_UNIT_INPUT_STALE', async () => {
+    const { adoptVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: null,
+    })
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce({
+      id: 'uv-1',
+      outputVersionId: 'ov-1',
+      outputVersion: { status: 'completed', invalidatedAt: null },
+      batch: { inputSnapshot: unitSnapshot },
+    })
+    prismaMock.remakeShotRevision.findUnique.mockResolvedValueOnce({
+      id: IDS.member1ShotRevisionId,
+      revision: 1,
+      lifecycleState: 'archived',
+      shot: { currentRevision: 2 },
+    })
+    await expect(adoptVideoUnitVersion(adoptInput)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_INPUT_STALE',
+    )
+  })
+})
+
+describe('setVideoUnitReviewNote (D-17)', () => {
+  it('writes the review note on an owned unit version', async () => {
+    const { setVideoUnitReviewNote } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce({ id: 'uv-1' })
+    prismaMock.remakeVideoUnitVersion.update.mockResolvedValueOnce({
+      id: 'uv-1',
+      note: '需要调整运镜',
+    })
+    const result = await setVideoUnitReviewNote({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      versionId: 'uv-1',
+      note: '需要调整运镜',
+    })
+    expect(result.note).toBe('需要调整运镜')
+    expect(prismaMock.remakeVideoUnitVersion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ note: '需要调整运镜', reviewerId: IDS.userId }),
+      }),
+    )
+  })
+
+  it('throws REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND for a version outside the user project', async () => {
+    const { setVideoUnitReviewNote } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce(null)
+    await expect(
+      setVideoUnitReviewNote({
+        projectId: IDS.projectId,
+        userId: IDS.userId,
+        versionId: 'uv-x',
+        note: 'x',
+      }),
+    ).rejects.toThrow('REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND')
+  })
+})
+
+describe('reconfirmVideoUnitVersion (D-17)', () => {
+  const input = {
+    projectId: IDS.projectId,
+    userId: IDS.userId,
+    trackId: 'unit-track-1',
+    versionId: 'uv-1',
+  }
+
+  it('clears needs_review invalidation rows and the output invalidatedAt idempotently', async () => {
+    const { reconfirmVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-1',
+    })
+    prismaMock.remakeVideoUnitVersion.findFirst.mockResolvedValueOnce({
+      id: 'uv-1',
+      outputVersionId: 'ov-1',
+      outputVersion: { invalidatedAt: new Date(), status: 'needs_review' },
+    })
+    prismaMock.remakeInvalidation.updateMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeOutputVersion.update.mockResolvedValueOnce({
+      id: 'ov-1',
+      invalidatedAt: null,
+      status: 'completed',
+    })
+    prismaMock.remakeVideoUnitAdoptionEvent.create.mockResolvedValueOnce({ id: 'event-reconfirm' })
+
+    const result = await reconfirmVideoUnitVersion(input)
+    expect(result.reconfirmed).toBe(true)
+    expect(prismaMock.remakeInvalidation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ unitVersionId: 'uv-1', status: 'needs_review' }),
+      }),
+    )
+    expect(prismaMock.remakeOutputVersion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ov-1' },
+        data: expect.objectContaining({ invalidatedAt: null, status: 'completed' }),
+      }),
+    )
+  })
+
+  it('rejects reconfirming a version that is not the adopted one', async () => {
+    const { reconfirmVideoUnitVersion } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      adoptedVersionId: 'uv-9',
+    })
+    await expect(reconfirmVideoUnitVersion(input)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_RECONFIRM_NOT_ADOPTED',
+    )
+  })
+})
+
+describe('getVideoUnitTrackDetail', () => {
+  it('returns the track with batches/versions and adoption events, ownership-scoped', async () => {
+    const { getVideoUnitTrackDetail } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce({
+      id: 'unit-track-1',
+      unit: { id: IDS.unitId },
+      adoptedVersionId: 'uv-1',
+      batches: [
+        {
+          id: 'unit-batch-1',
+          taskId: 'task-1',
+          operationKey: 'op-1',
+          modelId: 'video-model-v1',
+          modelOptions: { resolution: '720p' },
+          orderedReferences: [
+            { role: 'shot_keyframe', ordinal: 1, mediaId: IDS.member1KeyframeMediaId },
+          ],
+          createdAt: new Date('2026-08-14T00:00:00Z'),
+          versions: [
+            {
+              id: 'uv-1',
+              ordinal: 1,
+              outputVersionId: 'ov-1',
+              outputVersion: { mediaId: 'media-1', status: 'completed', invalidatedAt: null },
+            },
+          ],
+        },
+      ],
+      adoptionEvents: [
+        {
+          id: 'event-1',
+          previousVersionId: null,
+          nextVersionId: 'uv-1',
+          createdAt: new Date('2026-08-14T00:00:00Z'),
+        },
+      ],
+    })
+    const result = await getVideoUnitTrackDetail({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      trackId: 'unit-track-1',
+    })
+    expect(result?.track).toMatchObject({
+      id: 'unit-track-1',
+      unitId: IDS.unitId,
+      adoptedVersionId: 'uv-1',
+    })
+    expect(result?.history[0].versions[0]).toMatchObject({
+      id: 'uv-1',
+      mediaId: 'media-1',
+      status: 'completed',
+    })
+    expect(result?.adoptionEvents[0].nextVersionId).toBe('uv-1')
+  })
+
+  it('returns null when the track is not owned by the user', async () => {
+    const { getVideoUnitTrackDetail } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnitTrack.findFirst.mockResolvedValueOnce(null)
+    const result = await getVideoUnitTrackDetail({
+      projectId: IDS.projectId,
+      userId: IDS.userId,
+      trackId: 'unit-track-1',
+    })
+    expect(result).toBeNull()
   })
 })
