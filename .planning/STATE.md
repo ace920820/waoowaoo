@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: AI 视频翻拍工作台整合
-current_phase: 08
-current_phase_name: keyframe-generation
+current_phase: 09.1
+current_phase_name: 短镜头合并 unit 视频生成
 status: executing
-stopped_at: Phase 09.1 context gathered
-last_updated: "2026-08-13T16:30:00.646Z"
-last_activity: 2026-08-11
-last_activity_desc: Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
+stopped_at: Completed 09.1-01-PLAN.md
+last_updated: "2026-08-14T02:03:14.726Z"
+last_activity: 2026-08-14
+last_activity_desc: Phase 09.1 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 36
-  completed_plans: 27
+  completed_plans: 28
   percent: 38
 ---
 
@@ -24,7 +24,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-08-07)
 
 **Core value:** 用户只做镜头判断、Prompt 修订和版本选择等高价值决策，系统自动完成从原始视频到可编辑 Shot 视频素材之间的重复生产工作，并保证所有中间状态可追踪、可回退、可重试。
-**Current focus:** Phase 08 — keyframe-generation
+**Current focus:** Phase 09.1 — 短镜头合并 unit 视频生成
 
 ## Current Roadmap Status
 
@@ -141,12 +141,12 @@ Items acknowledged and deferred at v1.0 milestone close on 2026-08-07. These are
 
 ## Current Position
 
-Phase: 08 (keyframe-generation) — EXECUTING
-Plan: 8 of 8
+Phase: 09.1 (短镜头合并 unit 视频生成) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-08-11 — Wave 08 complete; automated acceptance green (unit 1067, guards, E2E 10/10)
+Last activity: 2026-08-14 — Phase 09.1 execution started
 
-Progress: [██████████] 100%
+Progress: [████████░░] 78%
 
 ## Operator Next Steps
 
@@ -157,18 +157,23 @@ Progress: [██████████] 100%
 
 ## Session
 
-**Last session:** 2026-08-13T15:49:57.433Z
-**Stopped at:** Phase 09.1 context gathered
-**Resume file:** .planning/phases/09.1-unit/09.1-CONTEXT.md
+**Last session:** 2026-08-14T02:03:14.715Z
+**Stopped at:** Completed 09.1-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 07-prompt P03 | 10h 29m | 3 tasks | 28 files |
+| Phase 09.1-unit P01 | 30min | 3 tasks | 14 files |
 
 ## Decisions
 
 - [Phase ?]: Prompt full output is fetched only from authorized track detail, not the snapshot.
 - [Phase ?]: Image analysis is per-frame; Video analysis is project-level only.
 - [Phase ?]: The standalone Prompt reference remains untracked and excluded from root TypeScript compilation.
+- [Phase 09.1-unit]: shot_keyframe role ordered between end_keyframe and action_sheet; persisted rows store role strings so renumbering is safe
+- [Phase 09.1-unit]: assertVideoReferenceOrder relaxed from strictly-increasing to non-decreasing (equal role order allowed) - admits N consecutive member keyframes, preserves single-shot guarantees
+- [Phase 09.1-unit]: unit input snapshot is strict/frozen with promptText = D-09 timed prompt + reference suffix; members carry per-member promptVersionId (batch-level promptVersionId = first member's, resolved in 09.1-03 T3 per Open Question 1)
+- [Phase 09.1-unit]: unit task dedupe key remake-video-unit:{projectId}:{operationKey}:{fingerprint}; parseVideoUnitTaskPayload re-verifies fingerprint after stripping runtime keys (D-22)

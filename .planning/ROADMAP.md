@@ -195,7 +195,7 @@ Plans:
 
 Plans:
 
-- [ ] `09.1-01-PLAN.md` — tracer：时间码→秒投影 + 时间锚点提示词 + shot_keyframe 角色扩展 + unit 快照/指纹（Wave 1）
+- [x] `09.1-01-PLAN.md` — tracer：时间码→秒投影 + 时间锚点提示词 + shot_keyframe 角色扩展 + unit 快照/指纹（Wave 1）
 - [ ] `09.1-02-PLAN.md` — 参考归并：每镜头 1 帧 + 6/9 宫格动作表渲染器 + 资产去重 + WYSIWYG 预览装配（Wave 2）
 - [ ] `09.1-03-PLAN.md` — Prisma unit/member 模型 + unit 版本/采用/失效服务 + 提交即冻结门禁（Wave 2）
 - [ ] `09.1-04-PLAN.md` — unit 提交服务（逐成员缺项门禁）+ unit API 路由 + 预览 on-demand 渲染（Wave 3）
