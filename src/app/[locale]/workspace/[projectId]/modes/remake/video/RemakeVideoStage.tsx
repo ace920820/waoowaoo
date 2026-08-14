@@ -271,9 +271,9 @@ export default function RemakeVideoStage({
                       const data = await res.json().catch(() => null)
                       throw new Error(apiErrorMessage(data, '创建 unit 失败'))
                     }
-                    const data = (await res.json()) as { unit: { id: string } }
+                    const data = (await res.json()) as { unitId: string }
                     await refresh()
-                    setActiveUnitId(data.unit.id)
+                    setActiveUnitId(data.unitId)
                   })().catch((err) => {
                     console.error(err)
                     setUnitError(String(err instanceof Error ? err.message : err))
