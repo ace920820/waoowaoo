@@ -29,6 +29,7 @@ import {
 import { buildShotGroupVideoPrompt } from '@/lib/shot-group/prompt'
 import { parseShotGroupDraftMetadata, type ShotGroupAssetBindingReference } from '@/lib/shot-group/draft-metadata'
 import { handleRemakeVideoTask } from './handlers/remake-video'
+import { handleRemakeVideoUnitTask } from './handlers/remake-video-unit'
 import { getShotGroupTemplateSpec } from '@/lib/shot-group/template-registry'
 import {
   deriveShotGroupModeFlags,
@@ -848,6 +849,8 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handleLipSyncTask(job)
     case TASK_TYPE.REMAKE_VIDEO_GENERATE:
       return await handleRemakeVideoTask(job)
+    case TASK_TYPE.REMAKE_VIDEO_UNIT_GENERATE:
+      return await handleRemakeVideoUnitTask(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }

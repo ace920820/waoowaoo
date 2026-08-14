@@ -214,7 +214,8 @@ describe('handleRemakeVideoUnitTask', () => {
     ])
 
     // Progress stages cover the full task flow.
-    const stages = progress.mock.calls.map((call) => (call[1] as { stage?: string } | undefined)?.stage)
+    const stages = (progress.mock.calls as unknown as Array<[unknown, number, { stage?: string } | undefined]>)
+      .map((call) => call[2]?.stage)
     expect(stages).toEqual(expect.arrayContaining([
       'preparing_references',
       'rendering_action_sheet',
@@ -308,9 +309,10 @@ describe('handleRemakeVideoUnitTask', () => {
   it('rejects a tampered payload whose fingerprint no longer matches (D-22)', async () => {
     const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
     const job = buildJob()
+    const rawPayload = job.data.payload as Record<string, unknown>
     job.data.payload = {
-      ...job.data.payload,
-      inputSnapshot: { ...job.data.payload.inputSnapshot, durationSeconds: 9 },
+      ...rawPayload,
+      inputSnapshot: { ...(rawPayload.inputSnapshot as Record<string, unknown>), durationSeconds: 9 },
     }
 
     await expect(handleRemakeVideoUnitTask(job)).rejects.toThrow('REMAKE_VIDEO_UNIT_FINGERPRINT_INVALID')

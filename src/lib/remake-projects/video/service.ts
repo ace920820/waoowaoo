@@ -37,6 +37,10 @@ import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
 import { resolveEffectiveVideoCapabilityDefinitions } from '@/lib/model-capabilities/video-effective'
 import { supportsShotGroupMultiReferenceModes } from '@/lib/shot-group/video-config'
+import {
+  videoUnitInputSnapshotSchema,
+  type VideoUnitInputSnapshot,
+} from '../unit/contracts'
 
 type Client = typeof prisma
 
@@ -514,6 +518,50 @@ export async function resolveVideoReferenceStorageKeys(snapshot: VideoInputSnaps
   videoInputSnapshotSchema.parse(snapshot)
   const refs = await Promise.all(
     snapshot.orderedReferences.map(async (ref) => {
+      // Assets without a MediaObject freeze a raw storage key / URL.
+      if (!ref.mediaId && ref.mediaUrl) {
+        const signedUrl = keyToSignedUrl(ref.mediaUrl, 3600)
+        if (!signedUrl) throw new Error('REMAKE_VIDEO_REFERENCE_UNAVAILABLE')
+        return { ...ref, signedUrl }
+      }
+      const media = await resolveMediaRef(ref.mediaId, ref.mediaUrl ?? null)
+      if (media?.storageKey) {
+        return { ...ref, signedUrl: getSignedUrl(media.storageKey, 3600) }
+      }
+      if (ref.mediaUrl) {
+        const signedUrl = keyToSignedUrl(ref.mediaUrl, 3600)
+        if (signedUrl) return { ...ref, signedUrl }
+      }
+      throw new Error('REMAKE_VIDEO_REFERENCE_UNAVAILABLE')
+    }),
+  )
+  return refs
+}
+
+/**
+ * Unit variant of `resolveVideoReferenceStorageKeys` (Plan 09.1-05): resolves
+ * the frozen unit snapshot's orderedReferences to signed URLs. The deferred
+ * action-sheet entry (`unit-action-sheet://deferred/{fingerprint}`, W5) is
+ * resolved through the persisted merged sheet's MediaObject id returned by
+ * `renderAndPersistUnitActionSheet` — the worker passes it explicitly. The
+ * frozen snapshot itself is never mutated, so the D-22 fingerprint stays
+ * intact for `appendVideoUnitBatch`.
+ */
+export async function resolveVideoUnitReferenceStorageKeys(
+  snapshot: VideoUnitInputSnapshot,
+  actionSheetMediaId?: string,
+) {
+  videoUnitInputSnapshotSchema.parse(snapshot)
+  const refs = await Promise.all(
+    snapshot.orderedReferences.map(async (ref) => {
+      // W5 deferred marker: resolve through the persisted merged sheet.
+      if (ref.role === 'action_sheet' && actionSheetMediaId) {
+        const media = await resolveMediaRef(actionSheetMediaId, null)
+        if (media?.storageKey) {
+          return { ...ref, signedUrl: getSignedUrl(media.storageKey, 3600) }
+        }
+        throw new Error('REMAKE_VIDEO_REFERENCE_UNAVAILABLE')
+      }
       // Assets without a MediaObject freeze a raw storage key / URL.
       if (!ref.mediaId && ref.mediaUrl) {
         const signedUrl = keyToSignedUrl(ref.mediaUrl, 3600)
