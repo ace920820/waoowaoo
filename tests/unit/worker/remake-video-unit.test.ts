@@ -161,3 +161,160 @@ describe('shared Ark content-items helper (single-shot parity)', () => {
     expect(source).not.toMatch(/async function buildArkContentItems/)
   })
 })
+
+describe('handleRemakeVideoUnitTask', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('routes REMAKE_VIDEO_UNIT_GENERATE in the processVideoTask switch', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'src/lib/workers/video.worker.ts'),
+      'utf8',
+    )
+    expect(source).toMatch(/case TASK_TYPE\.REMAKE_VIDEO_UNIT_GENERATE/)
+    expect(source).toMatch(/handleRemakeVideoUnitTask/)
+  })
+
+  it('re-verifies fingerprint/currentness, renders+persists the merged sheet, resolves refs, and builds Ark contentItems in ordinal order (W5/D-07/D-22)', async () => {
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job = buildJob()
+
+    await handleRemakeVideoUnitTask(job)
+
+    // D-22: currentness + preflight BEFORE any provider work.
+    expect(unitService.assertVideoUnitSubmissionCurrent).toHaveBeenCalled()
+    expect(generation.assertTaskActive).toHaveBeenNthCalledWith(1, job, 'remake_video_unit_preflight')
+
+    // W5/D-07: the merged sheet is rendered+persisted inside the task flow
+    // from the frozen member sources, deduped by unitActionSheetFingerprint.
+    expect(actionSheet.renderAndPersistUnitActionSheet).toHaveBeenCalledWith({
+      projectId: baseSnapshot.remakeProjectId,
+      unitId: baseSnapshot.unitId,
+      sources: [
+        { ordinal: 1, mediaId: IDS.keyframeMedia1, timestamp: 1000 },
+        { ordinal: 2, mediaId: IDS.keyframeMedia2, timestamp: 2000 },
+      ],
+    })
+
+    // Reference resolution for the unit snapshot; the deferred action-sheet
+    // entry resolves through the persisted sheet's mediaId.
+    expect(videoService.resolveVideoUnitReferenceStorageKeys).toHaveBeenCalledWith(
+      expect.objectContaining({ unitId: IDS.unitId }),
+      IDS.sheetMediaId,
+    )
+
+    // Ark content[] in ordinal order (image refs -> base64 data URLs).
+    const call = generation.resolveVideoSourceFromGeneration.mock.calls[0] as unknown as
+      [unknown, { options: { contentItems?: Array<Record<string, unknown>> } }]
+    expect(call[1].options.contentItems).toEqual([
+      { type: 'image_url', image_url: { url: 'base64:https://cdn/member1.png' }, role: 'reference_image' },
+      { type: 'image_url', image_url: { url: 'base64:https://cdn/member2.png' }, role: 'reference_image' },
+      { type: 'image_url', image_url: { url: 'base64:https://cdn/sheet.jpg' }, role: 'reference_image' },
+    ])
+
+    // Progress stages cover the full task flow.
+    const stages = progress.mock.calls.map((call) => (call[1] as { stage?: string } | undefined)?.stage)
+    expect(stages).toEqual(expect.arrayContaining([
+      'preparing_references',
+      'rendering_action_sheet',
+      'submitting_to_provider',
+      'uploading_result',
+      'persisting_result',
+    ]))
+  })
+
+  it('rejects when no image reference exists', async () => {
+    videoService.resolveVideoUnitReferenceStorageKeys.mockResolvedValueOnce([] as never)
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job = buildJob()
+
+    await expect(handleRemakeVideoUnitTask(job)).rejects.toThrow('REMAKE_VIDEO_NO_REFERENCES')
+    expect(generation.resolveVideoSourceFromGeneration).not.toHaveBeenCalled()
+    expect(unitService.appendVideoUnitBatch).not.toHaveBeenCalled()
+  })
+
+  it('generates with the frozen promptText + durationSeconds in normal mode, uploads to remake/{projectId}/videos, and appends via appendVideoUnitBatch', async () => {
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job = buildJob()
+
+    const result = await handleRemakeVideoUnitTask(job)
+
+    const call = generation.resolveVideoSourceFromGeneration.mock.calls[0] as unknown as
+      [unknown, { modelId: string; userId: string; options: Record<string, unknown> }]
+    expect(call[1].modelId).toBe('video-model-v1')
+    expect(call[1].userId).toBe(IDS.userId)
+    expect(call[1].options.prompt).toBe(baseSnapshot.promptText)
+    expect(call[1].options.duration).toBe(5)
+    // D-09: generationMode is forced to normal — never firstlastframe.
+    expect(call[1].options.generationMode).toBe('normal')
+    expect(call[1].options.generationMode).not.toBe('firstlastframe')
+
+    expect(generation.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      'https://provider.example.com/unit.mp4',
+      `remake/${IDS.remakeProjectId}/videos`,
+      IDS.taskId,
+      undefined,
+    )
+    expect(media.ensureMediaObjectFromStorageKey).toHaveBeenCalledWith(
+      'remake/generated/unit-video-1.mp4',
+      expect.objectContaining({ mimeType: 'video/mp4' }),
+    )
+    expect(generation.assertTaskActive).toHaveBeenLastCalledWith(job, 'remake_video_unit_persist')
+    expect(unitService.appendVideoUnitBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: IDS.taskId,
+        operationKey: 'unit-gen-001',
+        inputFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+        mediaId: expect.stringContaining('media-remake/generated/unit-video-1.mp4'),
+      }),
+    )
+    expect(result).toMatchObject({ batchId: 'batch-unit-1', versionIds: ['version-unit-1'] })
+  })
+
+  it('returns the existing batch/version on retry (appendVideoUnitBatch idempotent dedupe path)', async () => {
+    unitService.appendVideoUnitBatch
+      .mockResolvedValueOnce({ batchId: 'batch-unit-1', versionIds: ['version-unit-1'] })
+      .mockResolvedValueOnce({ batchId: 'batch-unit-1', versionIds: ['version-unit-1'] })
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job1 = buildJob()
+    const job2 = buildJob()
+
+    const r1 = await handleRemakeVideoUnitTask(job1)
+    const r2 = await handleRemakeVideoUnitTask(job2)
+
+    // T-091-21: trackId_operationKey idempotency surfaces the existing
+    // batch/version — never a duplicate persisted version.
+    expect(r1.batchId).toBe(r2.batchId)
+    expect(r2.versionIds).toEqual(['version-unit-1'])
+    const calls = unitService.appendVideoUnitBatch.mock.calls as unknown as
+      Array<[{ operationKey: string; inputFingerprint: string }]>
+    expect(calls[0][0].operationKey).toBe('unit-gen-001')
+    expect(calls[1][0].operationKey).toBe('unit-gen-001')
+    expect(calls[0][0].inputFingerprint).toBe(calls[1][0].inputFingerprint)
+  })
+
+  it('fails before provider work when the unit input is stale (member changed)', async () => {
+    unitService.assertVideoUnitSubmissionCurrent.mockRejectedValueOnce(new Error('REMAKE_VIDEO_UNIT_INPUT_STALE'))
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job = buildJob()
+
+    await expect(handleRemakeVideoUnitTask(job)).rejects.toThrow('REMAKE_VIDEO_UNIT_INPUT_STALE')
+    expect(generation.resolveVideoSourceFromGeneration).not.toHaveBeenCalled()
+    expect(actionSheet.renderAndPersistUnitActionSheet).not.toHaveBeenCalled()
+    expect(unitService.appendVideoUnitBatch).not.toHaveBeenCalled()
+  })
+
+  it('rejects a tampered payload whose fingerprint no longer matches (D-22)', async () => {
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const job = buildJob()
+    job.data.payload = {
+      ...job.data.payload,
+      inputSnapshot: { ...job.data.payload.inputSnapshot, durationSeconds: 9 },
+    }
+
+    await expect(handleRemakeVideoUnitTask(job)).rejects.toThrow('REMAKE_VIDEO_UNIT_FINGERPRINT_INVALID')
+    expect(generation.resolveVideoSourceFromGeneration).not.toHaveBeenCalled()
+    expect(unitService.appendVideoUnitBatch).not.toHaveBeenCalled()
+  })
+})
