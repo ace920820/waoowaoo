@@ -191,7 +191,7 @@ Plans:
   3. unit 有独立版本列表，沿用 batch/version/采用/备注/失效语义；成员在单 shot 视图显示"由 unit 交付"并可跳回。
   4. 任一成员缺少已采用关键帧/已批准 Video Prompt/合法参数时阻止生成并逐成员说明；上游变化通过 invalidation 传播到 unit 版本复核状态。
 
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 
@@ -200,7 +200,7 @@ Plans:
 - [x] 09.1-03-PLAN.md
 - [x] 09.1-04-PLAN.md
 - [x] 09.1-05-PLAN.md
-- [ ] 09.1-06-PLAN.md
+- [x] 09.1-06-PLAN.md
 
 - [x] `09.1-01-PLAN.md` — tracer：时间码→秒投影 + 时间锚点提示词 + shot_keyframe 角色扩展 + unit 快照/指纹（Wave 1）
 - [ ] `09.1-02-PLAN.md` — 参考归并：每镜头 1 帧 + 6/9 宫格动作表渲染器 + 资产去重 + WYSIWYG 预览装配（Wave 2）
