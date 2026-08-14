@@ -456,6 +456,7 @@ model RemakeProject {
   shots             RemakeShot[]
   promptTracks      RemakePromptTrack[]
   promptRuns        RemakePromptRun[]
+  units             RemakeVideoUnit[]
 
   @@map("remake_projects")
 }
@@ -563,6 +564,7 @@ model RemakeOutputVersion {
   revision          RemakeShotRevision?      @relation(fields: [revisionId], references: [id], onDelete: SetNull)
   candidate         RemakeKeyframeCandidate?
   videoVersion      RemakeVideoVersion?
+  unitVersion       RemakeVideoUnitVersion?
   provenanceRecords RemakeProvenanceRecord[]
   invalidations     RemakeInvalidation[]
 
@@ -588,11 +590,14 @@ model RemakeProvenanceRecord {
   keyframeBatch   RemakeKeyframeBatch? @relation(fields: [keyframeBatchId], references: [id], onDelete: SetNull)
   videoBatchId    String?
   videoBatch      RemakeVideoBatch?    @relation(fields: [videoBatchId], references: [id], onDelete: SetNull)
+  unitBatchId     String?
+  unitBatch       RemakeVideoUnitBatch? @relation(fields: [unitBatchId], references: [id], onDelete: SetNull)
 
   @@index([shotId])
   @@index([outputVersionId])
   @@index([keyframeBatchId])
   @@index([videoBatchId])
+  @@index([unitBatchId])
   @@map("remake_provenance_records")
 }
 
@@ -620,6 +625,12 @@ model RemakeInvalidation {
   videoTrack          RemakeVideoTrack?        @relation(fields: [videoTrackId], references: [id], onDelete: SetNull)
   videoBatch          RemakeVideoBatch?        @relation(fields: [videoBatchId], references: [id], onDelete: SetNull)
   videoVersion        RemakeVideoVersion?      @relation(fields: [videoVersionId], references: [id], onDelete: SetNull)
+  unitTrackId         String?
+  unitBatchId         String?
+  unitVersionId       String?
+  unitTrack           RemakeVideoUnitTrack?    @relation(fields: [unitTrackId], references: [id], onDelete: SetNull)
+  unitBatch           RemakeVideoUnitBatch?    @relation(fields: [unitBatchId], references: [id], onDelete: SetNull)
+  unitVersion         RemakeVideoUnitVersion?  @relation(fields: [unitVersionId], references: [id], onDelete: SetNull)
 
   @@index([shotId])
   @@index([revisionId])
@@ -631,6 +642,9 @@ model RemakeInvalidation {
   @@index([videoTrackId])
   @@index([videoBatchId])
   @@index([videoVersionId])
+  @@index([unitTrackId])
+  @@index([unitBatchId])
+  @@index([unitVersionId])
   @@map("remake_invalidations")
 }
 
@@ -681,6 +695,7 @@ model RemakePromptVersion {
   invalidations              RemakeInvalidation[]
   keyframeBatches            RemakeKeyframeBatch[]
   videoBatches               RemakeVideoBatch[]
+  unitBatches                RemakeVideoUnitBatch[]
 
   @@unique([trackId, versionNumber])
   @@index([runId])
@@ -847,6 +862,129 @@ model RemakeVideoAdoptionEvent {
   @@index([previousVersionId])
   @@index([nextVersionId])
   @@map("remake_video_adoption_events")
+}
+
+model RemakeVideoUnit {
+  id               String                       @id @default(uuid())
+  remakeProjectId  String
+  userLabel        String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @default(now()) @updatedAt
+  remakeProject    RemakeProject                @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)
+  members          RemakeVideoUnitMember[]
+  tracks           RemakeVideoUnitTrack[]
+  actionSheets     RemakeVideoUnitActionSheet[]
+
+  @@index([remakeProjectId])
+  @@map("remake_video_units")
+}
+
+model RemakeVideoUnitMember {
+  id             String                @id @default(uuid())
+  unitId         String
+  shotRevisionId String
+  ordinal        Int
+  createdAt      DateTime              @default(now())
+  unit           RemakeVideoUnit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, ordinal])
+  @@unique([shotRevisionId])
+  @@index([unitId])
+  @@map("remake_video_unit_members")
+}
+
+model RemakeVideoUnitTrack {
+  id               String                      @id @default(uuid())
+  unitId           String
+  adoptedVersionId String?                     @unique
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @default(now()) @updatedAt
+  unit             RemakeVideoUnit             @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  batches          RemakeVideoUnitBatch[]
+  adoptedVersion   RemakeVideoUnitVersion?     @relation("RemakeVideoUnitTrackAdoptedVersion", fields: [adoptedVersionId], references: [id], onDelete: SetNull)
+  adoptionEvents   RemakeVideoUnitAdoptionEvent[]
+  invalidations    RemakeInvalidation[]
+
+  @@unique([unitId])
+  @@map("remake_video_unit_tracks")
+}
+
+model RemakeVideoUnitBatch {
+  id                String                   @id @default(uuid())
+  trackId           String
+  promptVersionId   String?
+  taskId            String?
+  operationKey      String
+  inputFingerprint  String
+  inputSnapshot     Json
+  modelId           String
+  modelOptions      Json
+  orderedReferences Json
+  createdAt         DateTime                 @default(now())
+  track             RemakeVideoUnitTrack     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  promptVersion     RemakePromptVersion?     @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  versions          RemakeVideoUnitVersion[]
+  provenanceRecords RemakeProvenanceRecord[]
+  invalidations     RemakeInvalidation[]
+
+  @@unique([trackId, operationKey])
+  @@index([promptVersionId])
+  @@index([taskId])
+  @@index([inputFingerprint])
+  @@map("remake_video_unit_batches")
+}
+
+model RemakeVideoUnitVersion {
+  id                String                         @id @default(uuid())
+  batchId           String
+  outputVersionId   String                         @unique
+  ordinal           Int
+  note              String?                        @db.Text
+  reviewerId        String?
+  createdAt         DateTime                       @default(now())
+  batch             RemakeVideoUnitBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  outputVersion     RemakeOutputVersion            @relation(fields: [outputVersionId], references: [id], onDelete: Cascade)
+  adoptedByTrack    RemakeVideoUnitTrack?          @relation("RemakeVideoUnitTrackAdoptedVersion")
+  previousAdoptions RemakeVideoUnitAdoptionEvent[] @relation("RemakeVideoUnitAdoptionPreviousVersion")
+  nextAdoptions     RemakeVideoUnitAdoptionEvent[] @relation("RemakeVideoUnitAdoptionNextVersion")
+  invalidations     RemakeInvalidation[]
+
+  @@unique([batchId, ordinal])
+  @@index([batchId, createdAt])
+  @@map("remake_video_unit_versions")
+}
+
+model RemakeVideoUnitAdoptionEvent {
+  id                String                    @id @default(uuid())
+  trackId           String
+  previousVersionId String?
+  nextVersionId     String?
+  reviewerId        String?
+  createdAt         DateTime                  @default(now())
+  track             RemakeVideoUnitTrack      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  previousVersion   RemakeVideoUnitVersion?   @relation("RemakeVideoUnitAdoptionPreviousVersion", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersion       RemakeVideoUnitVersion?   @relation("RemakeVideoUnitAdoptionNextVersion", fields: [nextVersionId], references: [id], onDelete: SetNull)
+
+  @@index([trackId, createdAt])
+  @@index([previousVersionId])
+  @@index([nextVersionId])
+  @@map("remake_video_unit_adoption_events")
+}
+
+model RemakeVideoUnitActionSheet {
+  id          String             @id @default(uuid())
+  unitId      String
+  fingerprint String
+  mediaId     String?
+  sources     Json
+  taskId      String?
+  status      String             @default("pending")
+  createdAt   DateTime           @default(now())
+  unit        RemakeVideoUnit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, fingerprint])
+  @@index([unitId])
+  @@map("remake_video_unit_action_sheets")
 }
 
 model RemakePromptRun {
