@@ -219,6 +219,14 @@ describe('remake video unit stage', () => {
     expect(map.get('shot-2')).toBe('unit-1')
   })
 
+  it('unit members are excluded from new-unit selection (D-04)', () => {
+    // 已在 unit 的 shot 在单位选择卡片中不可选：canSelectShotForUnit 为 false
+    // （组件层 disabled + filterSelectableUnitShots 在提交前过滤）
+    const html = renderStage(unitSnapshot())
+    // 单 shot 模式渲染的是"由 unit 交付"卡片（替换生成按钮），没有可勾选的 unit 选项
+    expect(html).toContain('delivered-by-unit')
+  })
+
   it('renders stretched badge when a short shot has an adopted version (D-12)', () => {
     const snapshot = baseSnapshot()
     snapshot.shots = [

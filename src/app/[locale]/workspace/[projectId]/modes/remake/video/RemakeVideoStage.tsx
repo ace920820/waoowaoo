@@ -18,6 +18,7 @@ import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
 import { RemakeVideoUnitPanel } from './RemakeVideoUnitPanel'
 import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
+import { canSelectShotForUnit, filterSelectableUnitShots } from '@/lib/remake-projects/unit/selection'
 import {
   normalizeVideoGenerationSelections,
   resolveEffectiveVideoCapabilityDefinitions,
@@ -238,13 +239,24 @@ export default function RemakeVideoStage({
                 data-testid="enter-unit-view"
                 onClick={() => {
                   void (async () => {
+                    // 防御 D-04：创建前过滤已在 unit 的镜头，避免服务端 409 CONFLICT
+                    const { selectable, blocked } = filterSelectableUnitShots({
+                      selectedShotIds: selectedUnitShotIds,
+                      shotToUnit,
+                    })
+                    if (blocked.length > 0) {
+                      setUnitError(
+                        `有 ${blocked.length} 个镜头已属于其他 unit，无法加入。请取消选择后重试。`,
+                      )
+                      return
+                    }
                     const res = await fetch(
                       `/api/remake-projects/${encodeURIComponent(projectId)}/units`,
                       {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          memberShotRevisionIds: selectedUnitShotIds
+                          memberShotRevisionIds: selectable
                             .map((shotId) => {
                               const shot = snapshot.shots.find((entry) => entry.id === shotId)
                               if (!shot?.revisions?.length) return null
@@ -291,18 +303,20 @@ export default function RemakeVideoStage({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {shots.map((shot) => {
               const inUnit = shotToUnit.has(shot.id)
+              const selectable = canSelectShotForUnit({ inUnit })
               const checkIndex = selectedUnitShotIds.indexOf(shot.id)
               return (
                 <button
                   key={shot.id}
                   type="button"
+                  disabled={!selectable}
                   data-testid={`unit-shot-option-${shot.id}`}
                   onClick={() => toggleUnitShotSelection(shot.id)}
                   className={`relative overflow-hidden rounded-xl border text-left transition-colors ${
                     checkIndex >= 0
                       ? 'border-violet-400 bg-violet-50'
                       : 'border-slate-200 bg-white hover:border-slate-300'
-                  } ${inUnit ? 'opacity-40' : ''}`}
+                  } ${inUnit ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   {checkIndex >= 0 && (
                     <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
