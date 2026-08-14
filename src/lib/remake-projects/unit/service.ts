@@ -379,3 +379,334 @@ export async function assertVideoUnitSubmissionCurrent(
 /** Fingerprint helper re-export so callers freeze the same D-22 hash. */
 export { unitInputFingerprint }
 export type { VideoUnitInputSnapshot }
+
+/**
+ * D-17/D-22: append an immutable unit batch/version after generation,
+ * mirroring appendVideoGenerationBatch: fingerprint re-verification, unit
+ * currentness re-assertion, track ensure-on-first-batch, trackId_operationKey
+ * idempotent dedup, and a unitBatchId-linked provenance record.
+ */
+export async function appendVideoUnitBatch(input: {
+  taskId: string
+  operationKey: string
+  inputSnapshot: VideoUnitInputSnapshot
+  inputFingerprint: string
+  mediaId: string
+}) {
+  const snapshot = videoUnitInputSnapshotSchema.parse(input.inputSnapshot)
+  if (input.inputFingerprint !== unitInputFingerprint(snapshot)) {
+    throw new Error('REMAKE_VIDEO_UNIT_FINGERPRINT_INVALID')
+  }
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    await assertVideoUnitSubmissionCurrent(snapshot, client)
+
+    const existingTrack = await client.remakeVideoUnitTrack.findUnique({
+      where: { unitId: snapshot.unitId },
+      select: { id: true },
+    })
+    const track =
+      existingTrack ??
+      (await client.remakeVideoUnitTrack.create({
+        data: { unitId: snapshot.unitId },
+      }))
+
+    const existing = await client.remakeVideoUnitBatch.findUnique({
+      where: {
+        trackId_operationKey: { trackId: track.id, operationKey: input.operationKey },
+      },
+      include: { versions: { orderBy: { ordinal: 'asc' }, select: { id: true } } },
+    })
+    if (existing) {
+      return { batchId: existing.id, versionIds: existing.versions.map((v) => v.id) }
+    }
+
+    // Open Question 1 resolution: batch promptVersionId = first member's.
+    const firstMember = snapshot.members[0]
+    const firstRevision = await client.remakeShotRevision.findUnique({
+      where: { id: firstMember.shotRevisionId },
+      select: { shotId: true },
+    })
+    if (!firstRevision) throw new Error('REMAKE_VIDEO_UNIT_INPUT_STALE')
+
+    const batch = await client.remakeVideoUnitBatch.create({
+      data: {
+        trackId: track.id,
+        promptVersionId: firstMember.promptVersionId,
+        taskId: input.taskId,
+        operationKey: input.operationKey,
+        inputFingerprint: input.inputFingerprint,
+        inputSnapshot: JSON.parse(JSON.stringify(snapshot)),
+        modelId: snapshot.model.id,
+        modelOptions: JSON.parse(JSON.stringify(snapshot.options)),
+        orderedReferences: JSON.parse(JSON.stringify(snapshot.orderedReferences)),
+        versions: {
+          create: {
+            ordinal: 1,
+            outputVersion: {
+              create: {
+                shotId: firstRevision.shotId,
+                revisionId: firstMember.shotRevisionId,
+                mediaId: input.mediaId,
+                kind: 'video_candidate_unit',
+                fingerprint: `${input.operationKey}:${input.inputFingerprint}:1`,
+                taskId: input.taskId,
+                inputSnapshot: JSON.parse(JSON.stringify(snapshot)),
+                status: 'completed',
+              },
+            },
+          },
+        },
+      },
+    })
+    const versions = await client.remakeVideoUnitVersion.findMany({
+      where: { batchId: batch.id },
+      orderBy: { ordinal: 'asc' },
+      select: { id: true },
+    })
+    await client.remakeProvenanceRecord.create({
+      data: {
+        shotId: firstRevision.shotId,
+        unitBatchId: batch.id,
+        schema: 'remake-video-unit-generation@1',
+        executor: 'video-worker',
+        payload: JSON.stringify({
+          inputFingerprint: input.inputFingerprint,
+          model: snapshot.model.id,
+          durationSeconds: snapshot.durationSeconds,
+          referenceCount: snapshot.orderedReferences.length,
+        }),
+      },
+    })
+    return { batchId: batch.id, versionIds: versions.map((v) => v.id) }
+  })
+}
+
+/**
+ * D-17: adopt a unit version — sets the unit-track adoption pointer, writes an
+ * append-only adoption event, requires explicit confirmReplace when replacing,
+ * rejects non-completed/invalidated versions, and re-checks input currentness
+ * (every frozen member revision must still be active/current).
+ */
+export async function adoptVideoUnitVersion(input: {
+  projectId: string
+  userId: string
+  trackId: string
+  versionId: string
+  confirmReplace?: boolean
+}) {
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    const track = await client.remakeVideoUnitTrack.findFirst({
+      where: {
+        id: input.trackId,
+        unit: {
+          remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+        },
+      },
+      include: { adoptedVersion: true },
+    })
+    if (!track) throw new Error('REMAKE_VIDEO_UNIT_TRACK_NOT_FOUND')
+
+    // Replacing an existing adoption requires explicit confirmation (D-15)
+    if (track.adoptedVersionId && track.adoptedVersionId !== input.versionId && !input.confirmReplace) {
+      throw new Error('REMAKE_VIDEO_UNIT_REPLACE_CONFIRM_REQUIRED')
+    }
+
+    const version = await client.remakeVideoUnitVersion.findFirst({
+      where: {
+        id: input.versionId,
+        batch: { trackId: track.id },
+        outputVersion: { invalidatedAt: null, status: 'completed' },
+      },
+      include: { batch: true, outputVersion: true },
+    })
+    if (!version) throw new Error('REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND')
+
+    // D-17 stale-input check: every frozen member revision still active/current
+    const snapshot = videoUnitInputSnapshotSchema.parse(version.batch.inputSnapshot)
+    for (const member of snapshot.members) {
+      const revision = await client.remakeShotRevision.findUnique({
+        where: { id: member.shotRevisionId },
+        include: { shot: { select: { currentRevision: true } } },
+      })
+      if (
+        !revision ||
+        revision.lifecycleState !== 'active' ||
+        revision.shot.currentRevision !== revision.revision
+      ) {
+        throw new Error('REMAKE_VIDEO_UNIT_INPUT_STALE')
+      }
+    }
+
+    // No-op if already adopted
+    if (track.adoptedVersionId === version.id) {
+      return { id: track.id, adoptedVersionId: track.adoptedVersionId }
+    }
+
+    const previousId = track.adoptedVersionId
+    const updated = await client.remakeVideoUnitTrack.update({
+      where: { id: track.id },
+      data: { adoptedVersionId: version.id },
+    })
+    await client.remakeVideoUnitAdoptionEvent.create({
+      data: {
+        trackId: track.id,
+        previousVersionId: previousId,
+        nextVersionId: version.id,
+        reviewerId: input.userId,
+      },
+    })
+    return { id: updated.id, adoptedVersionId: updated.adoptedVersionId }
+  })
+}
+
+/** D-17: attach/replace the review note on an owned unit version. */
+export async function setVideoUnitReviewNote(input: {
+  projectId: string
+  userId: string
+  versionId: string
+  note: string
+}) {
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    const version = await client.remakeVideoUnitVersion.findFirst({
+      where: {
+        id: input.versionId,
+        batch: {
+          track: {
+            unit: {
+              remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+            },
+          },
+        },
+      },
+    })
+    if (!version) throw new Error('REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND')
+    const updated = await client.remakeVideoUnitVersion.update({
+      where: { id: version.id },
+      data: { note: input.note.slice(0, 2000), reviewerId: input.userId },
+    })
+    return { id: updated.id, note: updated.note }
+  })
+}
+
+/** D-17: reconfirm the adopted unit version — clears needs_review unit
+ * invalidation rows and the output invalidatedAt idempotently, and records an
+ * append-only reconfirmation event. */
+export async function reconfirmVideoUnitVersion(input: {
+  projectId: string
+  userId: string
+  trackId: string
+  versionId: string
+}) {
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    const track = await client.remakeVideoUnitTrack.findFirst({
+      where: {
+        id: input.trackId,
+        unit: {
+          remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+        },
+      },
+      include: { adoptedVersion: true },
+    })
+    if (!track) throw new Error('REMAKE_VIDEO_UNIT_TRACK_NOT_FOUND')
+
+    // Only the currently adopted version can be reconfirmed (D-19)
+    if (track.adoptedVersionId !== input.versionId) {
+      throw new Error('REMAKE_VIDEO_UNIT_RECONFIRM_NOT_ADOPTED')
+    }
+
+    const version = await client.remakeVideoUnitVersion.findFirst({
+      where: { id: input.versionId, batch: { trackId: track.id } },
+      include: { outputVersion: true },
+    })
+    if (!version) throw new Error('REMAKE_VIDEO_UNIT_VERSION_NOT_FOUND')
+
+    await client.remakeInvalidation.updateMany({
+      where: { unitVersionId: version.id, status: 'needs_review' },
+      data: { status: 'reconfirmed' },
+    })
+
+    if (version.outputVersion.invalidatedAt) {
+      await client.remakeOutputVersion.update({
+        where: { id: version.outputVersionId },
+        data: { invalidatedAt: null, status: 'completed' },
+      })
+    }
+
+    await client.remakeVideoUnitAdoptionEvent.create({
+      data: {
+        trackId: track.id,
+        previousVersionId: version.id,
+        nextVersionId: version.id,
+        reviewerId: input.userId,
+      },
+    })
+
+    return { id: track.id, adoptedVersionId: track.adoptedVersionId, reconfirmed: true }
+  })
+}
+
+/**
+ * Track-scoped unit version history (ownership-filtered), mirroring
+ * getVideoTrackDetail's shape for the unit variants.
+ */
+export async function getVideoUnitTrackDetail(input: {
+  projectId: string
+  userId: string
+  trackId: string
+}) {
+  const track = await prisma.remakeVideoUnitTrack.findFirst({
+    where: {
+      id: input.trackId,
+      unit: {
+        remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+      },
+    },
+    include: {
+      adoptedVersion: true,
+      batches: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          versions: { orderBy: { ordinal: 'asc' }, include: { outputVersion: true } },
+        },
+      },
+      adoptionEvents: { orderBy: { createdAt: 'desc' } },
+      unit: { select: { id: true } },
+    },
+  })
+  if (!track) return null
+  return {
+    track: {
+      id: track.id,
+      unitId: track.unit.id,
+      adoptedVersionId: track.adoptedVersionId,
+    },
+    history: track.batches.map((batch) => ({
+      id: batch.id,
+      taskId: batch.taskId,
+      operationKey: batch.operationKey,
+      modelId: batch.modelId,
+      options: batch.modelOptions,
+      orderedReferences: batch.orderedReferences,
+      createdAt: batch.createdAt,
+      versions: batch.versions.map((version) => ({
+        id: version.id,
+        ordinal: version.ordinal,
+        outputVersionId: version.outputVersionId,
+        mediaId: version.outputVersion.mediaId,
+        status: version.outputVersion.status,
+        invalidated: Boolean(version.outputVersion.invalidatedAt),
+        note: version.note ?? null,
+      })),
+    })),
+    adoptionEvents: track.adoptionEvents.map((event) => ({
+      id: event.id,
+      previousVersionId: event.previousVersionId,
+      nextVersionId: event.nextVersionId,
+      createdAt: event.createdAt,
+    })),
+  }
+}

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { invalidateRemakeVideoVersions } from '../video/invalidation'
+import { invalidateRemakeVideoUnitVersions } from '../unit/invalidation'
 import type { Prisma } from '@prisma/client'
 
 
@@ -64,6 +65,21 @@ export async function invalidateKeyframeOutputsForRevision(input: {
       revisionId: input.revisionId,
       reason: input.reason,
     })
+
+    // D-22: a member keyframe/action-sheet change must also review the owning
+    // unit's versions. Guarded so unit propagation never breaks keyframe
+    // invalidation when the shot belongs to no unit (the unit path itself
+    // no-ops on empty membership; this is defense in depth).
+    try {
+      await invalidateRemakeVideoUnitVersions({
+        tx,
+        shotId: input.shotId,
+        revisionId: input.revisionId,
+        reason: input.reason,
+      })
+    } catch {
+      // never let unit propagation break the keyframe invalidation path
+    }
 
     return { invalidated: created }
   }
