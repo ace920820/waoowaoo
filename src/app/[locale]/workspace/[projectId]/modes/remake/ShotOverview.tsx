@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
@@ -26,6 +27,8 @@ type RemakeShotOverviewProps = {
   shots: RemakeSnapshot['shots']
   selectedShotId: string
   onSelectShot: (shotId: string) => void
+  /** shotId -> unitId；命中的镜头显示「由 unit 交付」徽标（D-18） */
+  shotToUnit?: ReadonlyMap<string, string> | null
 }
 
 /**
@@ -33,7 +36,7 @@ type RemakeShotOverviewProps = {
  * 支持搜索与按 Prompt 状态筛选（全部 / 待审核 / 已批准），
  * 每个镜头展示三帧缩略图与已批准 Prompt 数。
  */
-export function RemakeShotOverview({ shots, selectedShotId, onSelectShot }: RemakeShotOverviewProps) {
+export function RemakeShotOverview({ shots, selectedShotId, onSelectShot, shotToUnit }: RemakeShotOverviewProps) {
   const t = useTranslations('remakeWorkbench')
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -86,6 +89,7 @@ export function RemakeShotOverview({ shots, selectedShotId, onSelectShot }: Rema
             key={shot.id}
             shot={shot}
             selected={shot.id === selectedShotId}
+            inUnit={shotToUnit?.has(shot.id) ?? false}
             onClick={() => onSelectShot(shot.id)}
           />
         ))}
@@ -94,7 +98,7 @@ export function RemakeShotOverview({ shots, selectedShotId, onSelectShot }: Rema
   )
 }
 
-function ShotListItem({ shot, selected, onClick }: { shot: RemakeSnapshot['shots'][number]; selected: boolean; onClick: () => void }) {
+function ShotListItem({ shot, selected, inUnit, onClick }: { shot: RemakeSnapshot['shots'][number]; selected: boolean; inUnit: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -104,8 +108,18 @@ function ShotListItem({ shot, selected, onClick }: { shot: RemakeSnapshot['shots
     >
       <div className="mb-1.5 flex justify-between gap-2">
         <span className="line-clamp-2 text-xs font-bold text-slate-900">{shotLabel(shot)}</span>
-        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-          {String(shot.timeRange?.start ?? '-')}
+        <span className="flex shrink-0 items-center gap-1">
+          {inUnit && (
+            <span
+              data-testid={`unit-badge-${shot.id}`}
+              className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700"
+            >
+              由 unit 交付
+            </span>
+          )}
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+            {String(shot.timeRange?.start ?? '-')}
+          </span>
         </span>
       </div>
       <div className="my-2 grid grid-cols-3 gap-1.5">

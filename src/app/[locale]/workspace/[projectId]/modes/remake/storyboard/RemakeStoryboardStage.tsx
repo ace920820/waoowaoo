@@ -19,6 +19,8 @@ import {
 } from '@/lib/query/mutations/remake-keyframe-mutations'
 import { RemakeProductionTools } from '../RemakeProductionTools'
 import { RemakeShotOverview } from '../ShotOverview'
+import { RemakeVideoUnitPanel } from '../video/RemakeVideoUnitPanel'
+import { buildShotToUnitMap } from '@/lib/remake-projects/unit/adapter'
 import ShotSemanticsPanel from './ShotSemanticsPanel'
 import KeyframePreviewModal from './KeyframePreviewModal'
 
@@ -71,6 +73,12 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
   }
   const selectedShot = shots.find((shot) => shot.id === currentSelectedShotId) ?? shots[0]
 
+  // Unit lifecycle management (D-19 revised): list + detail panel embed.
+  const shotToUnit = useMemo(() => buildShotToUnitMap(snapshot), [snapshot])
+  const unitCount = (snapshot.units ?? []).length
+  const [unitPanelOpen, setUnitPanelOpen] = useState(false)
+  const [unitPanelUnitId, setUnitPanelUnitId] = useState<string | null>(null)
+
   return (
     <section className="space-y-6 pb-16" data-testid="remake-storyboard-stage">
       <RemakeProductionTools projectId={projectId} />
@@ -78,7 +86,36 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
         <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Remake Storyboard</p>
         <h2 className="mt-1 text-xl font-bold text-slate-900">分镜</h2>
         <p className="mt-1 text-sm text-slate-500">保留原始动作证据，在明确选择后生成新的画面版本。</p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {unitCount > 0 && (
+            <button
+              type="button"
+              data-testid="storyboard-unit-panel-toggle"
+              onClick={() => setUnitPanelOpen((value) => !value)}
+              className={`rounded-full px-3 py-1 transition-colors ${
+                unitPanelOpen
+                  ? 'bg-violet-600 text-white hover:bg-violet-500'
+                  : 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+              }`}
+            >
+              {unitPanelOpen ? '收起 unit 管理' : `合并 unit 管理（${unitCount}）`}
+            </button>
+          )}
+        </div>
       </header>
+      {unitPanelOpen && (
+        <RemakeVideoUnitPanel
+          projectId={projectId}
+          snapshot={snapshot}
+          unitId={unitPanelUnitId}
+          onExit={() => setUnitPanelUnitId(null)}
+          onCloseList={() => {
+            setUnitPanelUnitId(null)
+            setUnitPanelOpen(false)
+          }}
+          onOpenUnit={setUnitPanelUnitId}
+        />
+      )}
       {shots.length === 0 ? (
         <EmptyState text="暂无可用 Shot" />
       ) : (
@@ -88,6 +125,7 @@ export default function RemakeStoryboardStage({ projectId, snapshot, selectedSho
               shots={snapshot.shots}
               selectedShotId={selectedShot?.id ?? ''}
               onSelectShot={setSelectedShotId}
+              shotToUnit={shotToUnit}
             />
           </div>
           <div className="min-w-0 lg:col-span-8">

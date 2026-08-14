@@ -39,4 +39,15 @@ describe('Remake 2×3 storyboard layout contract', () => {
     // Checkbox handler uses the select mutation separately
     expect(source).toContain('onToggleGenerate')
   })
+
+  it('embeds the unit lifecycle panel with a management toggle (D-19 revised)', () => {
+    const source = readFileSync(stagePath, 'utf8')
+    // Full panel (list + detail) embedded on the storyboard page
+    expect(source).toContain('RemakeVideoUnitPanel')
+    expect(source).toContain('storyboard-unit-panel-toggle')
+    expect(source).toContain('unitPanelOpen')
+    // Shot overview badges unit membership (D-18)
+    expect(source).toContain('buildShotToUnitMap')
+    expect(source).toContain('shotToUnit={shotToUnit}')
+  })
 })
