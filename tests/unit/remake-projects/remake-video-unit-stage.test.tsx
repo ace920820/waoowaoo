@@ -92,6 +92,8 @@ function unitSnapshot(): RemakeSnapshot {
       {
         id: 'unit-1',
         userLabel: null,
+        dissolvedAt: null,
+        dissolvedReason: null,
         members: [
           { shotRevisionId: 'rev-1', ordinal: 1, shotId: 'shot-1', sequence: 1, label: '镜头1', durationSeconds: 1.5 },
           { shotRevisionId: 'rev-2', ordinal: 2, shotId: 'shot-2', sequence: 2, label: '镜头2', durationSeconds: 2.5 },
