@@ -90,6 +90,16 @@ export type RemakeSnapshot = {
     userLabel: string | null
     dissolvedAt: string | null
     dissolvedReason: string | null
+    /** Phase 09.3: 动作表 x 宫格布局（含渲染用 mediaUrl） */
+    actionSheetGrid?: {
+      columns: number
+      cells: Array<{
+        shotNumber: number
+        slot: 'start' | 'middle' | 'end'
+        mediaId: string | null
+        mediaUrl: string | null
+      }>
+    } | null
     members: Array<{
       shotRevisionId: string
       ordinal: number

@@ -473,6 +473,160 @@ describe('updateVideoUnitMembers (D-19 freeze gate)', () => {
   })
 })
 
+describe('updateVideoUnitLayout (Phase 09.3 action-sheet grid)', () => {
+  const layoutInput = {
+    projectId: IDS.projectId,
+    userId: IDS.userId,
+    unitId: IDS.unitId,
+    actionSheetGrid: {
+      columns: 3,
+      cells: [
+        { shotNumber: 3, slot: 'start', mediaId: IDS.member1KeyframeMediaId },
+        { shotNumber: 3, slot: 'middle', mediaId: IDS.member2KeyframeMediaId },
+      ],
+    },
+  }
+
+  it('persists the grid and invalidates old versions with the layout reason', async () => {
+    const { updateVideoUnitLayout } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({
+      id: IDS.unitId,
+      actionSheetGrid: null,
+    })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId },
+    ])
+    prismaMock.remakeShotRevision.findMany.mockResolvedValueOnce([
+      {
+        id: IDS.member1ShotRevisionId,
+        keyframeMediaRefs: JSON.stringify({ first: IDS.member1KeyframeMediaId, middle: null, last: null }),
+        keyframeTracks: [],
+      },
+      {
+        id: IDS.member2ShotRevisionId,
+        keyframeMediaRefs: '{}',
+        keyframeTracks: [
+          {
+            adoptedCandidate: {
+              outputVersion: { mediaId: IDS.member2KeyframeMediaId },
+            },
+          },
+        ],
+      },
+    ])
+    prismaMock.remakeVideoUnit.update.mockResolvedValueOnce({ id: IDS.unitId })
+    prismaMock.remakeVideoUnitBatch.findMany.mockResolvedValueOnce([
+      {
+        id: 'unit-batch-1',
+        versions: [
+          {
+            id: 'uv-1',
+            outputVersionId: 'ov-1',
+            outputVersion: { status: 'completed', invalidatedAt: null },
+          },
+        ],
+      },
+    ])
+    prismaMock.remakeOutputVersion.updateMany.mockResolvedValueOnce({ count: 1 })
+    prismaMock.remakeVideoUnitTrack.findUnique.mockResolvedValueOnce({ id: 'unit-track-1' })
+    prismaMock.remakeShotRevision.findFirst.mockResolvedValueOnce({ shotId: 'shot-1' })
+    prismaMock.remakeInvalidation.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeInvalidation.create.mockResolvedValueOnce({ id: 'inv-1' })
+
+    const result = await updateVideoUnitLayout(layoutInput)
+
+    expect(result.changed).toBe(true)
+    expect(prismaMock.remakeVideoUnit.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ actionSheetGrid: layoutInput.actionSheetGrid }),
+      }),
+    )
+    expect(prismaMock.remakeOutputVersion.updateMany).toHaveBeenCalled()
+    expect(prismaMock.remakeInvalidation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reason: 'unit_action_sheet_layout_changed' }),
+      }),
+    )
+    expect(result.invalidated).toBe(1)
+  })
+
+  it('rejects cells whose media does not belong to the unit members', async () => {
+    const { updateVideoUnitLayout } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId, actionSheetGrid: null })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId },
+    ])
+    prismaMock.remakeShotRevision.findMany.mockResolvedValueOnce([
+      {
+        id: IDS.member1ShotRevisionId,
+        keyframeMediaRefs: '{}',
+        keyframeTracks: [],
+      },
+    ])
+
+    await expect(
+      updateVideoUnitLayout({
+        ...layoutInput,
+        actionSheetGrid: {
+          columns: 3,
+          cells: [{ shotNumber: 1, slot: 'start', mediaId: '99999999-9999-4999-8999-999999999999' }],
+        },
+      }),
+    ).rejects.toThrow('REMAKE_VIDEO_UNIT_ACTION_SHEET_GRID_INVALID')
+    expect(prismaMock.remakeVideoUnit.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks while a generation task is pending', async () => {
+    const { updateVideoUnitLayout } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({ id: IDS.unitId, actionSheetGrid: null })
+    prismaMock.task.findFirst.mockResolvedValueOnce({ id: 'task-1' })
+
+    await expect(updateVideoUnitLayout(layoutInput)).rejects.toThrow(
+      'REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT',
+    )
+    expect(prismaMock.remakeVideoUnit.update).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op when the saved grid is unchanged', async () => {
+    const { updateVideoUnitLayout } = await import('@/lib/remake-projects/unit/service')
+    prismaMock.remakeVideoUnit.findFirst.mockResolvedValueOnce({
+      id: IDS.unitId,
+      actionSheetGrid: layoutInput.actionSheetGrid,
+    })
+    prismaMock.task.findFirst.mockResolvedValueOnce(null)
+    prismaMock.remakeVideoUnitMember.findMany.mockResolvedValueOnce([
+      { id: 'm1', unitId: IDS.unitId, shotRevisionId: IDS.member1ShotRevisionId },
+      { id: 'm2', unitId: IDS.unitId, shotRevisionId: IDS.member2ShotRevisionId },
+    ])
+    prismaMock.remakeShotRevision.findMany.mockResolvedValueOnce([
+      {
+        id: IDS.member1ShotRevisionId,
+        keyframeMediaRefs: JSON.stringify({ first: IDS.member1KeyframeMediaId, middle: null, last: null }),
+        keyframeTracks: [],
+      },
+      {
+        id: IDS.member2ShotRevisionId,
+        keyframeMediaRefs: '{}',
+        keyframeTracks: [
+          {
+            adoptedCandidate: {
+              outputVersion: { mediaId: IDS.member2KeyframeMediaId },
+            },
+          },
+        ],
+      },
+    ])
+
+    const result = await updateVideoUnitLayout(layoutInput)
+
+    expect(result).toEqual({ unitId: IDS.unitId, changed: false, invalidated: 0 })
+    expect(prismaMock.remakeVideoUnit.update).not.toHaveBeenCalled()
+  })
+})
+
 describe('getVideoUnitDetail', () => {
   it('returns members (ordinal + shot info + durationSeconds), track batches/versions and adoption events', async () => {
     const { getVideoUnitDetail } = await import('@/lib/remake-projects/unit/service')

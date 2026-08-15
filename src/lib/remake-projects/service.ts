@@ -415,6 +415,21 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
         userLabel: unit.userLabel ?? null,
         dissolvedAt: unit.dissolvedAt ?? null,
         dissolvedReason: unit.dissolvedReason ?? null,
+        actionSheetGrid: (() => {
+          const grid = parseObject(unit.actionSheetGrid)
+          const cells = Array.isArray(grid.cells) ? grid.cells : []
+          return {
+            columns: typeof grid.columns === 'number' ? grid.columns : 3,
+            cells: cells.map((cell: Row) => ({
+              shotNumber: typeof cell.shotNumber === 'number' ? cell.shotNumber : 0,
+              slot: cell.slot === 'start' || cell.slot === 'middle' || cell.slot === 'end'
+                ? cell.slot
+                : 'middle',
+              mediaId: typeof cell.mediaId === 'string' ? cell.mediaId : null,
+              mediaUrl: mediaUrl(input.projectId, typeof cell.mediaId === 'string' ? cell.mediaId : null),
+            })),
+          }
+        })(),
         members: unitMembers
           .sort((left, right) => Number(left.ordinal) - Number(right.ordinal))
           .map((member) => {

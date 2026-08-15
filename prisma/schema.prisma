@@ -870,6 +870,8 @@ model RemakeVideoUnit {
   userLabel        String?
   dissolvedAt      DateTime?
   dissolvedReason  String?                      @db.Text
+  /** 动作表 x 宫格布局：{ columns, cells: [{shotNumber, slot, mediaId, timestamp}] }；null = 默认自动布局 */
+  actionSheetGrid  Json?
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @default(now()) @updatedAt
   remakeProject    RemakeProject                @relation(fields: [remakeProjectId], references: [id], onDelete: Cascade)

@@ -6,21 +6,23 @@ import {
   dissolveVideoUnit,
   getVideoUnitDetail,
   updateVideoUnitLabel,
+  updateVideoUnitLayout,
 } from '@/lib/remake-projects/unit/service'
 import { buildVideoUnitSubmission } from '@/lib/remake-projects/unit/submission'
 import { submitTask } from '@/lib/task/submitter'
 
 /**
- * Unit detail / label / generate route (D-02/D-14/D-19/D-21/D-22).
+ * Unit detail / label / layout / generate route (D-02/D-14/D-19/D-21/D-22).
  *
  * The generate action is pinned to THIS file (there is NO separate
  * `[unitId]/generate/route.ts` — I1 from the plan checker): POST with
  * `{ action: 'generate', operationKey, model?, options? }` runs
  * buildVideoUnitSubmission (per-member gate + WYSIWYG freeze) and enqueues the
  * fingerprinted task (submitTask is queue-independent; the worker lands in
- * Plan 09.1-05). Error mapping mirrors the single-shot video route:
- * STALE/MISSING/NOT_APPROVED -> CONFLICT, NOT_FOUND -> 404,
- * INVALID/TOO_LONG/MISMATCH -> INVALID_PARAMS.
+ * Plan 09.1-05). `{ action: 'save-layout', actionSheetGrid }` persists the
+ * draggable action-sheet x-grid (Phase 09.3). Error mapping mirrors the
+ * single-shot video route: STALE/MISSING/NOT_APPROVED -> CONFLICT,
+ * NOT_FOUND -> 404, INVALID/TOO_LONG/MISMATCH -> INVALID_PARAMS.
  */
 
 const idSchema = z.string().uuid()
@@ -41,7 +43,12 @@ const dissolveSchema = z.object({
   reason: z.string().trim().max(2000).optional(),
 }).strict()
 
-const actionSchema = z.discriminatedUnion('action', [generateSchema, dissolveSchema])
+const saveLayoutSchema = z.object({
+  action: z.literal('save-layout'),
+  actionSheetGrid: z.unknown(),
+}).strict()
+
+const actionSchema = z.discriminatedUnion('action', [generateSchema, dissolveSchema, saveLayoutSchema])
 
 export const GET = apiHandler(
   async (_request: NextRequest, context: { params: Promise<{ projectId: string; unitId: string }> }) => {
@@ -106,6 +113,16 @@ export const POST = apiHandler(
           userId: auth.session.user.id,
           unitId,
           ...(body.data.reason ? { reason: body.data.reason } : {}),
+        })
+        return NextResponse.json(result)
+      }
+
+      if (body.data.action === 'save-layout') {
+        const result = await updateVideoUnitLayout({
+          projectId,
+          userId: auth.session.user.id,
+          unitId,
+          actionSheetGrid: body.data.actionSheetGrid,
         })
         return NextResponse.json(result)
       }

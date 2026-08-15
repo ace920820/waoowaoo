@@ -88,6 +88,16 @@ export type UnitView = {
   userLabel: string | null
   dissolvedAt: string | null
   dissolvedReason: string | null
+  /** Phase 09.3: 动作表 x 宫格布局（含渲染用 mediaUrl） */
+  actionSheetGrid: {
+    columns: number
+    cells: Array<{
+      shotNumber: number
+      slot: RemakeKeyframeSlotName
+      mediaId: string | null
+      mediaUrl: string | null
+    }>
+  } | null
   members: UnitMemberView[]
   track: {
     id: string
@@ -146,6 +156,17 @@ export function adaptRemakeUnit(
     userLabel: unit.userLabel,
     dissolvedAt: unit.dissolvedAt ?? null,
     dissolvedReason: unit.dissolvedReason ?? null,
+    actionSheetGrid: unit.actionSheetGrid
+      ? {
+          columns: unit.actionSheetGrid.columns,
+          cells: unit.actionSheetGrid.cells.map((cell) => ({
+            shotNumber: cell.shotNumber,
+            slot: cell.slot,
+            mediaId: cell.mediaId,
+            mediaUrl: cell.mediaUrl,
+          })),
+        }
+      : null,
     members,
     track: track
       ? {

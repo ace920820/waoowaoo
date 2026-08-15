@@ -44,14 +44,26 @@ export async function handleRemakeVideoUnitTask(job: Job<TaskJobData>) {
   // submission path and the preview endpoint never call the persist helper,
   // and the fingerprint dedup makes re-renders idempotent.
   await reportTaskProgress(job, 15, { stage: 'rendering_action_sheet' })
+  // Phase 09.3: render from the frozen action-sheet grid when present;
+  // legacy snapshots (no grid) fall back to one cell per member.
+  const grid = snapshot.actionSheetGrid
+  const sheetSources = grid
+    ? grid.cells.map((cell, index) => ({
+        ordinal: index + 1,
+        mediaId: cell.mediaId,
+        timestamp: index * 1000,
+        label: `镜头${cell.shotNumber}·${cell.slot === 'start' ? '首' : cell.slot === 'end' ? '尾' : '中'}`,
+      }))
+    : snapshot.members.map((member) => ({
+        ordinal: member.ordinal,
+        mediaId: member.selectedKeyframe.mediaId,
+        timestamp: member.ordinal * 1000,
+      }))
   const sheet = await renderAndPersistUnitActionSheet({
     projectId: snapshot.remakeProjectId,
     unitId: snapshot.unitId,
-    sources: snapshot.members.map((member) => ({
-      ordinal: member.ordinal,
-      mediaId: member.selectedKeyframe.mediaId,
-      timestamp: member.ordinal * 1000,
-    })),
+    sources: sheetSources,
+    ...(grid ? { columns: grid.columns } : {}),
   })
 
   // Resolve references and normalize for the video gateway. The frozen

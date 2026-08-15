@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { generateUniqueKey, uploadObject } from '@/lib/storage'
 
 export const ACTION_SHEET_RENDERER_VERSION = 'remake-keyframe-action-sheet@1'
-export const UNIT_ACTION_SHEET_RENDERER_VERSION = 'remake-unit-action-sheet@1'
+export const UNIT_ACTION_SHEET_RENDERER_VERSION = 'remake-unit-action-sheet@2'
 export const ACTION_SHEET_SLOTS = ['start', 'middle', 'end'] as const
 export type ActionSheetSlot = typeof ACTION_SHEET_SLOTS[number]
 
@@ -16,12 +16,14 @@ export type ActionSheetSource = {
   buffer?: Buffer
 }
 
-/** D-07: one cell per unit member, numbered by member ordinal. */
+/** Phase 09.3: one cell of the draggable unit action-sheet grid. */
 export type UnitActionSheetSource = {
   ordinal: number
   mediaId: string
   timestamp: number
   buffer?: Buffer
+  /** 格子标签（如 镜头3·中）；缺省 镜头{ordinal} */
+  label?: string
 }
 
 const CELL_WIDTH = 640
@@ -43,16 +45,17 @@ export function actionSheetFingerprint(input: { revisionId: string; sources: Arr
 }
 
 /**
- * D-07: deterministic fingerprint of the merged unit action sheet — hashes the
- * renderer version, the unit id, and the member ordinal + mediaId list, so any
- * member change (reorder, keyframe swap) produces a new fingerprint.
+ * Phase 09.3: deterministic fingerprint of the merged unit action-sheet grid —
+ * hashes the renderer version, the unit id, and the ordered cell mediaId
+ * list (positional semantics: reordering or swapping a cell changes the
+ * fingerprint). Any layout change produces a new sheet.
  */
 export function unitActionSheetFingerprint(input: {
   unitId: string
-  sources: Array<Pick<UnitActionSheetSource, 'ordinal' | 'mediaId'>>
+  cells: Array<{ mediaId: string }>
 }) {
-  const sources = [...input.sources].sort((left, right) => left.ordinal - right.ordinal)
-  return createHash('sha256').update(stableJson({ renderer: UNIT_ACTION_SHEET_RENDERER_VERSION, unitId: input.unitId, sources })).digest('hex')
+  const cells = input.cells.map((cell) => cell.mediaId)
+  return createHash('sha256').update(stableJson({ renderer: UNIT_ACTION_SHEET_RENDERER_VERSION, unitId: input.unitId, cells })).digest('hex')
 }
 
 export function prepareActionSheet(input: {
@@ -110,12 +113,16 @@ export async function renderActionSheet(sources: ActionSheetSource[]) {
 }
 
 /**
- * D-07: render the merged unit action sheet — one 640x360 cover-fit frame per
- * member (numbered 镜头{N}) in a 2-column grid for 3-6 sources and a 3-column
- * grid for 7-9 sources. Source count is bounded 2..9 (T-091-07).
+ * Phase 09.3: render the merged unit action-sheet x-grid — one 640x360
+ * cover-fit frame per cell (labeled 镜头{N} or a custom label), in a grid of
+ * `options.columns` columns (default: 2 for <=6 cells, 3 for 7-16).
+ * Cell count bounded 2..16.
  */
-export async function renderUnitActionSheet(sources: UnitActionSheetSource[]) {
-  if (sources.length < 2 || sources.length > 9) {
+export async function renderUnitActionSheet(
+  sources: UnitActionSheetSource[],
+  options: { columns?: number } = {},
+) {
+  if (sources.length < 2 || sources.length > 16) {
     throw new Error('REMAKE_ACTION_SHEET_SOURCE_COUNT_INVALID')
   }
   const ordered = [...sources].sort((left, right) => left.ordinal - right.ordinal)
@@ -124,9 +131,9 @@ export async function renderUnitActionSheet(sources: UnitActionSheetSource[]) {
   }
   const cells = ordered.map((source) => ({
     buffer: source.buffer as Buffer,
-    label: `镜头 ${source.ordinal}`,
+    label: source.label ?? `镜头 ${source.ordinal}`,
   }))
-  const columns = ordered.length <= 6 ? 2 : 3
+  const columns = options.columns ?? (ordered.length <= 6 ? 2 : 3)
   return renderCells(cells, columns)
 }
 

@@ -37,6 +37,18 @@ export const videoUnitInputSnapshotSchema = z.object({
   /** Actual provider references: one shot_keyframe per member + merged action
    * sheet + deduped assets (D-06/D-08), already sorted + capped. */
   orderedReferences: z.array(orderedVideoReferenceSchema).min(1),
+  /** Phase 09.3: the frozen action-sheet x-grid layout (cells carry the media
+   * ids that compose the merged sheet; timestamp is worker-filled). */
+  actionSheetGrid: z.object({
+    columns: z.number().int().min(1).max(4),
+    cells: z.array(
+      z.object({
+        shotNumber: z.number().int().positive(),
+        slot: z.enum(['start', 'middle', 'end']),
+        mediaId: z.string().uuid(),
+      }).strict(),
+    ).min(1).max(16),
+  }).strict().optional(),
   model: z.object({ id: z.string().min(1), provider: z.string().min(1).optional() }).strict(),
   options: z.record(z.unknown()).default({}),
   referenceMode: videoReferenceModeSchema.optional(),

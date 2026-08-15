@@ -147,11 +147,13 @@ vi.mock('@/lib/media/service', () => ({
     id: '99999999-9999-4999-8999-999999999999',
     storageKey,
   })),
+  getMediaObjectById: vi.fn(async (mediaId: string) => ({ id: mediaId, storageKey: `storage/${mediaId}` })),
 }))
 
 vi.mock('@/lib/storage', () => ({
   generateUniqueKey: vi.fn((prefix: string, ext: string) => `${prefix}/unit-sheet-1.${ext}`),
   uploadObject: vi.fn(async (_body: unknown, key: string) => key),
+  getObjectBuffer: vi.fn(async () => Buffer.from('fake-frame-jpeg')),
 }))
 
 vi.mock('@/lib/remake-projects/keyframes/action-sheet', async (importOriginal) => {
@@ -363,13 +365,20 @@ describe('buildVideoUnitSubmission (D-16/D-22 WYSIWYG freeze + W5 deferred actio
     expect(snapshot.members[0]!.selectedKeyframe.mediaId).toBe(IDS.kf1)
     expect(snapshot.members[1]!.selectedKeyframe.mediaId).toBe(IDS.kf2)
 
+    // Phase 09.3: the default action-sheet grid is frozen (members have no
+    // original keyframeMediaRefs here → adopted keyframes fill the cells).
+    expect(snapshot.actionSheetGrid).toEqual({
+      columns: 3,
+      cells: [
+        { shotNumber: 1, slot: 'middle', mediaId: IDS.kf1 },
+        { shotNumber: 2, slot: 'middle', mediaId: IDS.kf2 },
+      ],
+    })
+
     // WYSIWYG: the frozen snapshot equals the preview for the same inputs (D-16).
     const deferredFingerprint = unitActionSheetFingerprint({
       unitId: IDS.unitId,
-      sources: [
-        { ordinal: 1, mediaId: IDS.kf1 },
-        { ordinal: 2, mediaId: IDS.kf2 },
-      ],
+      cells: [{ mediaId: IDS.kf1 }, { mediaId: IDS.kf2 }],
     })
     const deferredRef = { mediaUrl: `unit-action-sheet://deferred/${deferredFingerprint}` }
     const preview = buildUnitSubmissionPreview({
@@ -548,7 +557,10 @@ describe('D-04 single-shot membership gate + merged-sheet persist helper', () =>
 
     const first = await renderAndPersistUnitActionSheet({ projectId: IDS.projectId, unitId: IDS.unitId, sources })
 
-    expect(renderUnitActionSheet).toHaveBeenCalledWith(expect.arrayContaining(sources))
+    expect(renderUnitActionSheet).toHaveBeenCalledWith(
+      expect.arrayContaining(sources.map((source) => expect.objectContaining(source))),
+      undefined,
+    )
     expect(generateUniqueKey).toHaveBeenCalledWith(`remake/${IDS.projectId}/action-sheets`, 'jpg')
     expect(uploadObject).toHaveBeenCalledWith(expect.any(Buffer), expect.any(String), 1, 'image/jpeg')
     expect(ensureMediaObjectFromStorageKey).toHaveBeenCalled()

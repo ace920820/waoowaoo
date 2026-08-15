@@ -181,7 +181,6 @@ describe('handleRemakeVideoUnitTask', () => {
     const job = buildJob()
 
     await handleRemakeVideoUnitTask(job)
-
     // D-22: currentness + preflight BEFORE any provider work.
     expect(unitService.assertVideoUnitSubmissionCurrent).toHaveBeenCalled()
     expect(generation.assertTaskActive).toHaveBeenNthCalledWith(1, job, 'remake_video_unit_preflight')
@@ -223,6 +222,39 @@ describe('handleRemakeVideoUnitTask', () => {
       'uploading_result',
       'persisting_result',
     ]))
+  })
+
+  it('renders the merged sheet from the frozen action-sheet grid with columns and labels (Phase 09.3)', async () => {
+    const { handleRemakeVideoUnitTask } = await import('@/lib/workers/handlers/remake-video-unit')
+    const { unitInputFingerprint } = await import('@/lib/remake-projects/unit/contracts')
+    const job = buildJob()
+    const payload = job.data.payload as {
+      inputSnapshot: Record<string, unknown>
+      inputFingerprint: string
+    }
+    payload.inputSnapshot = {
+      ...baseSnapshot,
+      actionSheetGrid: {
+        columns: 3,
+        cells: [
+          { shotNumber: 3, slot: 'start', mediaId: IDS.keyframeMedia1 },
+          { shotNumber: 3, slot: 'middle', mediaId: IDS.keyframeMedia2 },
+        ],
+      },
+    }
+    payload.inputFingerprint = unitInputFingerprint(payload.inputSnapshot as never)
+
+    await handleRemakeVideoUnitTask(job)
+
+    expect(actionSheet.renderAndPersistUnitActionSheet).toHaveBeenCalledWith({
+      projectId: baseSnapshot.remakeProjectId,
+      unitId: baseSnapshot.unitId,
+      sources: [
+        { ordinal: 1, mediaId: IDS.keyframeMedia1, timestamp: 0, label: '镜头3·首' },
+        { ordinal: 2, mediaId: IDS.keyframeMedia2, timestamp: 1000, label: '镜头3·中' },
+      ],
+      columns: 3,
+    })
   })
 
   it('rejects when no image reference exists', async () => {

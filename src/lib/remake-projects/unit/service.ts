@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { TASK_STATUS } from '@/lib/task/types'
 import { parseTimecodeSeconds } from './timecode'
 import {
@@ -6,6 +7,10 @@ import {
   videoUnitInputSnapshotSchema,
   type VideoUnitInputSnapshot,
 } from './contracts'
+import {
+  validateActionSheetGridShape,
+  type ActionSheetGrid,
+} from './action-sheet-layout'
 
 type Client = typeof prisma
 
@@ -354,69 +359,13 @@ export async function updateVideoUnitMembers(input: {
     // 成员集合/顺序/引用关键帧实际变化时，失效该 unit 自身的旧视频版本（needs_review）。
     // 只碰 unit batch 里的 versions；成员镜头的关键帧/Prompt/其他产物不受影响。
     const membersChanged = removed.length > 0 || added.length > 0 || orderChanged || slotChanged
-    let invalidatedCount = 0
-    if (membersChanged) {
-      const unitBatches = await client.remakeVideoUnitBatch.findMany({
-        where: { track: { unitId: input.unitId } },
-        include: { versions: { include: { outputVersion: true } } },
-      })
-      const versionIds: Array<{ id: string; outputVersionId: string; batchId: string }> = []
-      for (const batch of unitBatches) {
-        for (const version of batch.versions) {
-          if (version.outputVersion.invalidatedAt || version.outputVersion.status !== 'completed') {
-            continue
-          }
-          versionIds.push({
-            id: version.id,
-            outputVersionId: version.outputVersionId,
-            batchId: batch.id,
-          })
-        }
-      }
-      invalidatedCount = versionIds.length
-      if (versionIds.length > 0) {
-        await client.remakeOutputVersion.updateMany({
-          where: { id: { in: versionIds.map((version) => version.outputVersionId) } },
-          data: { invalidatedAt: new Date(), status: 'needs_review' },
+    const invalidatedCount = membersChanged
+      ? await invalidateUnitCompletedVersions(client, {
+          unitId: input.unitId,
+          reason: 'unit_members_changed',
+          anchorRevisionIds: submitted.map((member) => member.shotRevisionId),
         })
-        const unitTrack = await client.remakeVideoUnitTrack.findUnique({
-          where: { unitId: input.unitId },
-          select: { id: true },
-        })
-        // RemakeInvalidation.shotId is required — anchor on the unit's first
-        // remaining member's shot (resolved via its revision), or the first
-        // removed member's shot when the unit is left empty.
-        const anchorRevision = await client.remakeShotRevision.findFirst({
-          where: {
-            id: { in: submitted.map((member) => member.shotRevisionId) },
-          },
-          select: { shotId: true },
-        })
-        const anchorShotId = anchorRevision?.shotId ?? null
-        for (const version of versionIds) {
-          const existingInvalidation = await client.remakeInvalidation.findFirst({
-            where: {
-              shotId: anchorShotId ?? undefined,
-              unitTrackId: unitTrack?.id ?? null,
-              unitVersionId: version.id,
-              reason: 'unit_members_changed',
-            },
-            select: { id: true },
-          })
-          if (existingInvalidation) continue
-          await client.remakeInvalidation.create({
-            data: {
-              shotId: anchorShotId ?? '',
-              unitTrackId: unitTrack?.id ?? null,
-              unitBatchId: version.batchId,
-              unitVersionId: version.id,
-              reason: 'unit_members_changed',
-              status: 'needs_review',
-            },
-          })
-        }
-      }
-    }
+      : 0
 
     return {
       unitId: input.unitId,
@@ -426,6 +375,178 @@ export async function updateVideoUnitMembers(input: {
       }),
       invalidated: invalidatedCount,
     }
+  })
+}
+
+/**
+ * 失效该 unit 已完成的旧视频版本（needs_review + invalidation 记录）。
+ * 只碰 unit batch 里的 versions；anchorRevisionIds 用于解析 RemakeInvalidation
+ * 必填的 shotId（取第一个命中成员镜头）。
+ */
+async function invalidateUnitCompletedVersions(
+  client: Client,
+  input: { unitId: string; reason: string; anchorRevisionIds: string[] },
+): Promise<number> {
+  const unitBatches = await client.remakeVideoUnitBatch.findMany({
+    where: { track: { unitId: input.unitId } },
+    include: { versions: { include: { outputVersion: true } } },
+  })
+  const versionIds: Array<{ id: string; outputVersionId: string; batchId: string }> = []
+  for (const batch of unitBatches) {
+    for (const version of batch.versions) {
+      if (version.outputVersion.invalidatedAt || version.outputVersion.status !== 'completed') {
+        continue
+      }
+      versionIds.push({
+        id: version.id,
+        outputVersionId: version.outputVersionId,
+        batchId: batch.id,
+      })
+    }
+  }
+  if (versionIds.length === 0) return 0
+  await client.remakeOutputVersion.updateMany({
+    where: { id: { in: versionIds.map((version) => version.outputVersionId) } },
+    data: { invalidatedAt: new Date(), status: 'needs_review' },
+  })
+  const unitTrack = await client.remakeVideoUnitTrack.findUnique({
+    where: { unitId: input.unitId },
+    select: { id: true },
+  })
+  const anchorRevision = await client.remakeShotRevision.findFirst({
+    where: { id: { in: input.anchorRevisionIds } },
+    select: { shotId: true },
+  })
+  const anchorShotId = anchorRevision?.shotId ?? null
+  for (const version of versionIds) {
+    const existingInvalidation = await client.remakeInvalidation.findFirst({
+      where: {
+        shotId: anchorShotId ?? undefined,
+        unitTrackId: unitTrack?.id ?? null,
+        unitVersionId: version.id,
+        reason: input.reason,
+      },
+      select: { id: true },
+    })
+    if (existingInvalidation) continue
+    await client.remakeInvalidation.create({
+      data: {
+        shotId: anchorShotId ?? '',
+        unitTrackId: unitTrack?.id ?? null,
+        unitBatchId: version.batchId,
+        unitVersionId: version.id,
+        reason: input.reason,
+        status: 'needs_review',
+      },
+    })
+  }
+  return versionIds.length
+}
+
+/** DB 读出的 Json 列可能是对象或字符串，统一成对象。 */
+function gridObject(value: unknown): ActionSheetGrid | null {
+  if (!value) return null
+  if (typeof value === 'string') return parseObject(value) as ActionSheetGrid
+  if (typeof value === 'object') return value as ActionSheetGrid
+  return null
+}
+
+/**
+ * Phase 09.3: save the unit action-sheet x-grid layout. Validates the grid
+ * shape and that every cell media belongs to the unit's member shots (original
+ * frames or adopted keyframes — never arbitrary media), then persists it and
+ * invalidates the unit's old versions when the layout actually changed.
+ */
+export async function updateVideoUnitLayout(input: {
+  projectId: string
+  userId: string
+  unitId: string
+  actionSheetGrid: unknown
+}) {
+  return await prisma.$transaction(async (tx) => {
+    const client = tx as Client
+    const unit = await client.remakeVideoUnit.findFirst({
+      where: {
+        id: input.unitId,
+        remakeProject: { projectId: input.projectId, project: { userId: input.userId } },
+      },
+      select: { id: true, actionSheetGrid: true },
+    })
+    if (!unit) throw new Error('REMAKE_VIDEO_UNIT_NOT_FOUND')
+
+    const pendingTask = await client.task.findFirst({
+      where: {
+        targetType: 'remake_unit',
+        targetId: input.unitId,
+        status: { in: [TASK_STATUS.QUEUED, TASK_STATUS.PROCESSING] },
+      },
+      select: { id: true },
+    })
+    if (pendingTask) throw new Error('REMAKE_VIDEO_UNIT_GENERATION_IN_FLIGHT')
+
+    const shape = validateActionSheetGridShape(input.actionSheetGrid)
+    if (!shape.ok) {
+      throw new Error(`REMAKE_VIDEO_UNIT_ACTION_SHEET_GRID_INVALID:${shape.reason}`)
+    }
+    const grid = input.actionSheetGrid as ActionSheetGrid
+
+    // mediaId 归属：必须是成员镜头的原始帧或已采用关键帧。
+    const members = await client.remakeVideoUnitMember.findMany({
+      where: { unitId: input.unitId },
+      select: { shotRevisionId: true },
+    })
+    const revisions = await client.remakeShotRevision.findMany({
+      where: { id: { in: members.map((member) => member.shotRevisionId) } },
+      include: {
+        keyframeTracks: { include: { adoptedCandidate: { include: { outputVersion: true } } } },
+      },
+    })
+    const allowed = new Set<string>()
+    for (const revision of revisions) {
+      const refs = parseObject(revision.keyframeMediaRefs)
+      for (const key of ['first', 'middle', 'last']) {
+        const mediaId = refs[key]
+        if (typeof mediaId === 'string' && mediaId) allowed.add(mediaId)
+      }
+      for (const track of (revision.keyframeTracks as unknown as Record<string, unknown>[] | undefined) ?? []) {
+        const candidate = track.adoptedCandidate as Record<string, unknown> | null | undefined
+        const mediaId = (candidate?.outputVersion as Record<string, unknown> | undefined)?.mediaId
+        if (typeof mediaId === 'string' && mediaId) allowed.add(mediaId)
+      }
+    }
+    const unknown = grid.cells.filter((cell) => !allowed.has(cell.mediaId))
+    if (unknown.length > 0) {
+      throw new Error(
+        `REMAKE_VIDEO_UNIT_ACTION_SHEET_GRID_INVALID:${unknown.length} 个格子的素材不属于该 unit 的成员镜头`,
+      )
+    }
+
+    const normalized = {
+      columns: grid.columns,
+      cells: grid.cells.map((cell) => ({
+        shotNumber: cell.shotNumber,
+        slot: cell.slot,
+        mediaId: cell.mediaId,
+      })),
+    }
+    const current = gridObject(unit.actionSheetGrid)
+    const changed =
+      JSON.stringify(current ? { columns: current.columns, cells: current.cells } : null) !==
+      JSON.stringify(normalized)
+    if (!changed) {
+      return { unitId: input.unitId, changed: false, invalidated: 0 }
+    }
+
+    await client.remakeVideoUnit.update({
+      where: { id: unit.id },
+      data: { actionSheetGrid: normalized as unknown as Prisma.InputJsonValue },
+    })
+    const invalidated = await invalidateUnitCompletedVersions(client, {
+      unitId: input.unitId,
+      reason: 'unit_action_sheet_layout_changed',
+      anchorRevisionIds: members.map((member) => member.shotRevisionId),
+    })
+    return { unitId: input.unitId, changed: true, invalidated }
   })
 }
 
@@ -497,10 +618,36 @@ export async function assertVideoUnitSubmissionCurrent(
 
   const unit = await client.remakeVideoUnit.findUnique({
     where: { id: snapshot.unitId },
-    select: { id: true, remakeProjectId: true },
+    select: { id: true, remakeProjectId: true, actionSheetGrid: true },
   })
   if (!unit || unit.remakeProjectId !== snapshot.remakeProjectId) {
     throw new Error('REMAKE_VIDEO_UNIT_INPUT_STALE')
+  }
+
+  // Phase 09.3: a frozen custom action-sheet grid must match the unit's saved
+  // layout. When the unit has NO saved layout (null), the snapshot carries the
+  // deterministic default auto layout — its inputs (original frames from the
+  // revision row + adopted keyframes) are already covered by the revision
+  // currentness + adopted-keyframe media equality checks below, so no extra
+  // comparison is needed here.
+  if (snapshot.actionSheetGrid && unit.actionSheetGrid) {
+    const currentGrid = (unit.actionSheetGrid as unknown as ActionSheetGrid | null) ?? null
+    const frozen = JSON.stringify(snapshot.actionSheetGrid)
+    const current = JSON.stringify(
+      currentGrid
+        ? {
+            columns: currentGrid.columns,
+            cells: currentGrid.cells.map((cell) => ({
+              shotNumber: cell.shotNumber,
+              slot: cell.slot,
+              mediaId: cell.mediaId,
+            })),
+          }
+        : null,
+    )
+    if (frozen !== current) {
+      throw new Error('REMAKE_VIDEO_UNIT_INPUT_STALE')
+    }
   }
 
   const frozenMembers = await client.remakeVideoUnitMember.findMany({

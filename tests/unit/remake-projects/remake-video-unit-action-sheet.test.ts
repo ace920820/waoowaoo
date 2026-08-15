@@ -131,38 +131,47 @@ describe('renderUnitActionSheet grid layout (D-07)', () => {
   })
 })
 
-describe('unitActionSheetFingerprint (D-07 deterministic fingerprint)', () => {
-  it('is deterministic over (renderer version, unit member ordinal+mediaId list)', async () => {
+describe('unitActionSheetFingerprint (D-07 / Phase 09.3 deterministic fingerprint)', () => {
+  it('is deterministic over (renderer version, unit id, ordered cell mediaId list)', async () => {
     const { unitActionSheetFingerprint } = await import('@/lib/remake-projects/keyframes/action-sheet')
-    const sources = [
-      { ordinal: 1, mediaId: 'media-a' },
-      { ordinal: 2, mediaId: 'media-b' },
-      { ordinal: 3, mediaId: 'media-c' },
+    const cells = [
+      { mediaId: 'media-a' },
+      { mediaId: 'media-b' },
+      { mediaId: 'media-c' },
     ]
-    const first = unitActionSheetFingerprint({ unitId: 'unit-1', sources })
-    const second = unitActionSheetFingerprint({ unitId: 'unit-1', sources })
+    const first = unitActionSheetFingerprint({ unitId: 'unit-1', cells })
+    const second = unitActionSheetFingerprint({ unitId: 'unit-1', cells })
     expect(first).toBe(second)
     expect(first).toMatch(/^[a-f0-9]{64}$/)
   })
 
-  it('changes when a member mediaId changes or the unit id changes', async () => {
+  it('changes when a cell mediaId changes, the cell order changes, or the unit id changes', async () => {
     const { unitActionSheetFingerprint } = await import('@/lib/remake-projects/keyframes/action-sheet')
-    const sources = [
-      { ordinal: 1, mediaId: 'media-a' },
-      { ordinal: 2, mediaId: 'media-b' },
-      { ordinal: 3, mediaId: 'media-c' },
+    const cells = [
+      { mediaId: 'media-a' },
+      { mediaId: 'media-b' },
+      { mediaId: 'media-c' },
     ]
-    const baseline = unitActionSheetFingerprint({ unitId: 'unit-1', sources })
+    const baseline = unitActionSheetFingerprint({ unitId: 'unit-1', cells })
     const changedMedia = unitActionSheetFingerprint({
       unitId: 'unit-1',
-      sources: [
-        { ordinal: 1, mediaId: 'media-a' },
-        { ordinal: 2, mediaId: 'media-B-CHANGED' },
-        { ordinal: 3, mediaId: 'media-c' },
+      cells: [
+        { mediaId: 'media-a' },
+        { mediaId: 'media-B-CHANGED' },
+        { mediaId: 'media-c' },
       ],
     })
-    const changedUnit = unitActionSheetFingerprint({ unitId: 'unit-2', sources })
+    const reordered = unitActionSheetFingerprint({
+      unitId: 'unit-1',
+      cells: [
+        { mediaId: 'media-c' },
+        { mediaId: 'media-a' },
+        { mediaId: 'media-b' },
+      ],
+    })
+    const changedUnit = unitActionSheetFingerprint({ unitId: 'unit-2', cells })
     expect(changedMedia).not.toBe(baseline)
+    expect(reordered).not.toBe(baseline)
     expect(changedUnit).not.toBe(baseline)
   })
 })
@@ -177,10 +186,10 @@ describe('renderUnitActionSheet source count bounds (T-091-07)', () => {
     ).rejects.toThrow('REMAKE_ACTION_SHEET_SOURCE_COUNT_INVALID')
   })
 
-  it('rejects more than 9 sources', async () => {
+  it('rejects more than 16 sources (Phase 09.3 x-grid upper bound)', async () => {
     const { renderUnitActionSheet } = await import('@/lib/remake-projects/keyframes/action-sheet')
     const sources = await Promise.all(
-      Array.from({ length: 10 }, async (_, i) => ({
+      Array.from({ length: 17 }, async (_, i) => ({
         ordinal: i + 1,
         mediaId: `media-${i + 1}`,
         timestamp: i * 500,
@@ -190,5 +199,19 @@ describe('renderUnitActionSheet source count bounds (T-091-07)', () => {
     await expect(renderUnitActionSheet(sources)).rejects.toThrow(
       'REMAKE_ACTION_SHEET_SOURCE_COUNT_INVALID',
     )
+  })
+
+  it('renders 10-16 cells in the requested column layout (Phase 09.3)', async () => {
+    const { renderUnitActionSheet } = await import('@/lib/remake-projects/keyframes/action-sheet')
+    const sources = await Promise.all(
+      Array.from({ length: 10 }, async (_, i) => ({
+        ordinal: i + 1,
+        mediaId: `media-${i + 1}`,
+        timestamp: i * 500,
+        buffer: await solid(COLORS[i % COLORS.length]!),
+      })),
+    )
+    const result = await renderUnitActionSheet(sources, { columns: 4 })
+    expect(Buffer.isBuffer(result)).toBe(true)
   })
 })

@@ -12,6 +12,11 @@ import { buildUnitSubmissionPreview } from './preview'
 import { buildVideoUnitTaskDescriptor } from './task-contract'
 import { assertVideoUnitSubmissionCurrent } from './service'
 import { videoUnitInputSnapshotSchema } from './contracts'
+import {
+  buildDefaultActionSheetGrid,
+  validateActionSheetGridShape,
+  type ActionSheetGrid,
+} from './action-sheet-layout'
 import { unitActionSheetFingerprint } from '../keyframes/action-sheet'
 import { parseTimecodeSeconds } from './timecode'
 import { deriveDefaultVideoDuration } from '../video/duration'
@@ -94,11 +99,14 @@ type CollectedMember = {
   shotRevisionId: string
   ordinal: number
   shotId: string
+  shotSequence: number | null
   durationSeconds: number
   adoptedPrompt: string
   promptVersionId: string
   timeRangeSeconds: { start: number; end: number }
   keyframe: UnitMemberKeyframeCandidate
+  /** 原始帧引用（revision.keyframeMediaRefs：first/middle/last → mediaId），用于默认宫格布局 */
+  originalKeyframes: { first: string | null; middle: string | null; last: string | null }
 }
 
 export async function buildVideoUnitSubmission(input: {
@@ -135,6 +143,7 @@ export async function buildVideoUnitSubmission(input: {
       shot: {
         select: {
           id: true,
+          sequence: true,
           currentRevision: true,
           remakeProjectId: true,
           sceneAssetId: true,
@@ -202,11 +211,20 @@ export async function buildVideoUnitSubmission(input: {
       shotRevisionId: member.shotRevisionId,
       ordinal: member.ordinal,
       shotId: revision.shot.id,
+      shotSequence: revision.shot.sequence ?? null,
       durationSeconds: Math.max(0.1, range.end - range.start),
       adoptedPrompt: prompt.integratedGenerationPrompt,
       promptVersionId: prompt.id,
       timeRangeSeconds: range,
       keyframe,
+      originalKeyframes: (() => {
+        const refs = parseObject(revision.keyframeMediaRefs)
+        return {
+          first: typeof refs.first === 'string' && refs.first ? refs.first : null,
+          middle: typeof refs.middle === 'string' && refs.middle ? refs.middle : null,
+          last: typeof refs.last === 'string' && refs.last ? refs.last : null,
+        }
+      })(),
     })
   }
 
@@ -305,19 +323,50 @@ export async function buildVideoUnitSubmission(input: {
   )
   const dedupedAssets = dedupeUnitAssetCandidates(assetCandidates)
 
-  // W5: the merged action sheet is a deterministic deferred entry — its source
-  // list (member ordinals + adopted keyframe mediaIds) is frozen and covered by
-  // unitActionSheetFingerprint; rendering + persisting is the worker's job
-  // (Plan 09.1-05) and the preview endpoint renders on demand without persisting.
+  // Phase 09.3: the action-sheet x-grid is frozen into the snapshot. A saved
+  // unit layout wins; otherwise the default auto layout (member original
+  // keyframes, first 9 cells) is used. Cells carry only {shotNumber, slot,
+  // mediaId} — timestamps are worker-filled at render time.
+  let actionSheetGrid: ActionSheetGrid
+  const savedGrid = (unit as { actionSheetGrid?: unknown }).actionSheetGrid
+  if (savedGrid) {
+    const shape = validateActionSheetGridShape(savedGrid)
+    if (!shape.ok) {
+      throw new Error(`REMAKE_VIDEO_UNIT_ACTION_SHEET_GRID_INVALID:${shape.reason}`)
+    }
+    actionSheetGrid = savedGrid as ActionSheetGrid
+  } else {
+    actionSheetGrid = buildDefaultActionSheetGrid(
+      collected.map((member) => ({
+        shotNumber: member.shotSequence ?? member.ordinal,
+        originals: {
+          start: member.originalKeyframes.first ?? null,
+          middle: member.originalKeyframes.middle ?? null,
+          end: member.originalKeyframes.last ?? null,
+        },
+        adopted: { [member.keyframe.slot]: member.keyframe.mediaId ?? null },
+      })),
+    )
+  }
+  const frozenGrid = {
+    columns: actionSheetGrid.columns,
+    cells: actionSheetGrid.cells.map((cell) => ({
+      shotNumber: cell.shotNumber,
+      slot: cell.slot,
+      mediaId: cell.mediaId,
+    })),
+  }
+
+  // W5: the merged action sheet is a deterministic deferred entry — its grid
+  // (ordered cell mediaIds) is frozen and covered by unitActionSheetFingerprint;
+  // rendering + persisting is the worker's job (Plan 09.1-05) and the preview
+  // endpoint renders on demand without persisting.
   const deferredSheetRef = {
     mediaUrl:
       `${UNIT_ACTION_SHEET_DEFERRED_PREFIX}` +
       unitActionSheetFingerprint({
         unitId: input.unitId,
-        sources: collected.map((member) => ({
-          ordinal: member.ordinal,
-          mediaId: member.keyframe.mediaId ?? '',
-        })),
+        cells: frozenGrid.cells,
       }),
   }
 
@@ -380,6 +429,7 @@ export async function buildVideoUnitSubmission(input: {
       timeRangeSeconds: member.timeRangeSeconds,
     })),
     orderedReferences,
+    actionSheetGrid: frozenGrid,
     model: { id: resolvedModel },
     options: capabilityOptions,
     referenceMode,
