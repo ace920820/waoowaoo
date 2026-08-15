@@ -8,6 +8,12 @@ import { useRefreshRemakeProject } from '@/lib/query/hooks'
 import { adaptRemakeUnit, unitToneForIndex } from '@/lib/remake-projects/unit/adapter'
 import type { RemakeKeyframeSlotName } from '@/lib/remake-projects/unit/adapter'
 import { buildUnitSubmissionPreview } from '@/lib/remake-projects/unit/preview'
+import {
+  UnitDragWorkbench,
+  buildUnitDragAssets,
+  autoFillCells,
+  type UnitGridDraft,
+} from './UnitDragWorkbench'
 
 function apiErrorMessage(data: unknown, fallback: string) {
   if (!data || typeof data !== 'object') return fallback
@@ -65,12 +71,15 @@ export function RemakeVideoUnitPanel({
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   // 编辑成员引用关键帧 slot 的本地草稿（key: shotRevisionId）
   const [memberSlotDrafts, setMemberSlotDrafts] = useState<Record<string, RemakeKeyframeSlotName>>({})
+  // 动作表 x 宫格草稿（编辑模式；null = 未进入编辑）
+  const [gridDraft, setGridDraft] = useState<UnitGridDraft | null>(null)
 
   useEffect(() => {
     if (!unit) return
     setMemberOrder(unit.members.map((member) => member.shotRevisionId))
     setEditingMembers(false)
     setMemberSlotDrafts({})
+    setGridDraft(null)
     const adopted = unit.track?.adoptedVersionId ?? null
     const firstVersion = unit.track?.batches[0]?.versions[0]?.id ?? null
     setSelectedVersionId((current) => {
@@ -98,6 +107,44 @@ export function RemakeVideoUnitPanel({
       .map((revisionId) => byRevision.get(revisionId))
       .filter((member): member is NonNullable<typeof member> => Boolean(member))
   }, [unit, memberOrder])
+
+  // Phase 09.3: 拖拽工作台数据 —— 素材抽屉 + 引用槽。
+  const dragAssets = useMemo(
+    () => buildUnitDragAssets(snapshot, orderedMembers),
+    [snapshot, orderedMembers],
+  )
+  const dockSlots = useMemo(
+    () =>
+      orderedMembers.map((member) => {
+        const activeSlot = memberSlotDrafts[member.shotRevisionId] ?? member.keyframeSlot ?? 'middle'
+        const activeRef = member.keyframeOptions.find((option) => option.slot === activeSlot) ?? null
+        return {
+          shotRevisionId: member.shotRevisionId,
+          shotNumber: member.sequence ?? member.ordinal,
+          durationSeconds: member.durationSeconds,
+          activeSlot,
+          refMediaUrl: activeRef?.mediaUrl ?? null,
+          options: member.keyframeOptions,
+        }
+      }),
+    [orderedMembers, memberSlotDrafts],
+  )
+
+  const initialGridDraft = useCallback((): UnitGridDraft => {
+    if (unit?.actionSheetGrid) {
+      return {
+        columns: unit.actionSheetGrid.columns,
+        cells: unit.actionSheetGrid.cells.map((cell) => ({
+          id: `${cell.slot}:${cell.mediaId ?? ''}`,
+          shotNumber: cell.shotNumber,
+          slot: cell.slot,
+          mediaId: cell.mediaId ?? '',
+          mediaUrl: cell.mediaUrl ?? '',
+        })),
+      }
+    }
+    return { columns: 3, cells: autoFillCells(dragAssets) }
+  }, [unit?.actionSheetGrid, dragAssets])
 
   // WYSIWYG preview — same pure functions the server freezes (D-16).
   const preview = useMemo(() => {
@@ -151,6 +198,7 @@ export function RemakeVideoUnitPanel({
     if (!unit) return
     setErrorMsg(null)
     try {
+      // 1) 成员顺序 + 引用关键帧 slot（现有 members 通道）
       const res = await fetch(
         `/api/remake-projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unit.id)}/members`,
         {
@@ -168,13 +216,40 @@ export function RemakeVideoUnitPanel({
         },
       )
       if (!res.ok) throw new Error(apiErrorMessage(await res.json().catch(() => null), '保存成员失败'))
+
+      // 2) 动作表 x 宫格布局（Phase 09.3 save-layout 通道）
+      if (gridDraft) {
+        const layoutRes = await fetch(
+          `/api/remake-projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unit.id)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'save-layout',
+              actionSheetGrid: {
+                columns: gridDraft.columns,
+                cells: gridDraft.cells.map((cell) => ({
+                  shotNumber: cell.shotNumber,
+                  slot: cell.slot,
+                  mediaId: cell.mediaId,
+                })),
+              },
+            }),
+          },
+        )
+        if (!layoutRes.ok) {
+          throw new Error(apiErrorMessage(await layoutRes.json().catch(() => null), '保存动作表布局失败'))
+        }
+      }
+
       setEditingMembers(false)
       setMemberSlotDrafts({})
+      setGridDraft(null)
       await refresh()
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : '保存成员失败')
+      setErrorMsg(err instanceof Error ? err.message : '保存失败')
     }
-  }, [unit, projectId, memberOrder, memberSlotDrafts, refresh])
+  }, [unit, projectId, memberOrder, memberSlotDrafts, gridDraft, refresh])
 
   const handleGenerate = useCallback(async () => {
     if (!unit || !preview) return
@@ -415,13 +490,47 @@ export function RemakeVideoUnitPanel({
             <button
               type="button"
               data-testid="edit-members-button"
-              onClick={() => setEditingMembers((value) => !value)}
+              onClick={() => {
+                if (editingMembers) {
+                  setEditingMembers(false)
+                } else {
+                  setGridDraft(initialGridDraft())
+                  setEditingMembers(true)
+                }
+              }}
               className="text-xs text-violet-300 hover:text-violet-200"
             >
-              {editingMembers ? '取消编辑' : '调整成员/关键帧'}
+              {editingMembers ? '取消编辑' : '调整成员/关键帧（拖拽）'}
             </button>
           )}
         </div>
+        {editingMembers && canEditMembers ? (
+          <>
+            <UnitDragWorkbench
+              assets={dragAssets}
+              dockSlots={dockSlots}
+              grid={gridDraft ?? initialGridDraft()}
+              onGridChange={setGridDraft}
+              onReorderDock={(ordered) => setMemberOrder(ordered)}
+              onSlotAssetDrop={(shotRevisionId, slot) =>
+                setMemberSlotDrafts((prev) => ({ ...prev, [shotRevisionId]: slot }))
+              }
+            />
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="save-member-layout-button"
+                onClick={persistMembers}
+                className="rounded-lg bg-violet-600/80 px-3 py-1 text-xs text-white hover:bg-violet-600"
+              >
+                保存成员与动作表布局
+              </button>
+              <span className="text-[10px] text-zinc-600">
+                保存后旧版本将标记为「需复核」，重新生成即更新动作表
+              </span>
+            </div>
+          </>
+        ) : (
         <div className="space-y-2">
           {orderedMembers.map((member, index) => {
             const activeSlot = memberSlotDrafts[member.shotRevisionId] ?? member.keyframeSlot ?? 'middle'
@@ -531,14 +640,6 @@ export function RemakeVideoUnitPanel({
             )
           })}
         </div>
-        {editingMembers && canEditMembers && (
-          <button
-            type="button"
-            onClick={persistMembers}
-            className="mt-2 rounded-lg bg-violet-600/80 px-3 py-1 text-xs text-white hover:bg-violet-600"
-          >
-            保存成员与关键帧
-          </button>
         )}
         {frozen && (
           <p className="mt-2 text-xs text-zinc-500" data-testid="members-frozen-hint">
@@ -552,7 +653,8 @@ export function RemakeVideoUnitPanel({
         )}
       </div>
 
-      {/* 动作表（合并参考图，Phase 09.2） */}
+      {/* 动作表（合并参考图，Phase 09.2；编辑模式在宫格编辑器中） */}
+      {(!editingMembers || !canEditMembers) && (
       <div data-testid="unit-action-sheet-card">
         <h4 className="mb-2 text-xs font-medium text-zinc-400">动作表（合并参考图）</h4>
         {unit.actionSheets[0]?.mediaUrl ? (
@@ -580,6 +682,7 @@ export function RemakeVideoUnitPanel({
           </p>
         )}
       </div>
+      )}
 
       {/* Preview (D-16 WYSIWYG) */}
       {preview && (
