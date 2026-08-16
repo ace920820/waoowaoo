@@ -62,6 +62,8 @@ export type UnitReferenceDockSlot = {
   shotNumber: number
   durationSeconds: number
   activeSlot: ActionSheetGridSlot
+  /** 镜头原始中间帧缩略图（顺序条展示用） */
+  thumbMediaUrl: string | null
   refMediaUrl: string | null
   options: UnitMemberKeyframeOption[]
 }
@@ -122,7 +124,21 @@ function AssetCard({ asset }: { asset: UnitDragAsset }) {
   )
 }
 
-function DockSlotView({ slot, readOnly }: { slot: UnitReferenceDockSlot; readOnly: boolean }) {
+/** 顺序徽标：1 → ① … 9 → ⑨（>9 用 #N） */
+function orderBadge(order: number): string {
+  const digits = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨']
+  return order <= digits.length ? digits[order - 1]! : `#${order}`
+}
+
+function ShotOrderRow({
+  slot,
+  order,
+  readOnly,
+}: {
+  slot: UnitReferenceDockSlot
+  order: number
+  readOnly: boolean
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortableCell(
     `${DOCK_PREFIX}${slot.shotRevisionId}`,
     readOnly,
@@ -132,24 +148,42 @@ function DockSlotView({ slot, readOnly }: { slot: UnitReferenceDockSlot; readOnl
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      data-testid={`dock-slot-${slot.shotRevisionId}`}
-      className={`flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 ${
-        isDragging ? 'opacity-50' : ''
+      data-testid={`shot-order-row-${slot.shotRevisionId}`}
+      data-order={order}
+      className={`flex cursor-grab items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-950/60 px-2.5 py-1.5 transition-colors ${
+        isDragging ? 'opacity-50 ring-1 ring-violet-500/50' : 'hover:border-zinc-600'
       }`}
       style={{ transform: CSS.Transform.toString(transform) || undefined, transition }}
     >
-      <span className="text-[10px] text-zinc-500">#{slot.shotNumber}</span>
-      {slot.refMediaUrl ? (
+      <span
+        data-testid={`shot-order-badge-${order}`}
+        className="w-6 shrink-0 text-center text-sm text-violet-300"
+      >
+        {orderBadge(order)}
+      </span>
+      {slot.thumbMediaUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={slot.refMediaUrl} alt="引用关键帧" className="h-10 w-16 rounded object-cover" />
+        <img src={slot.thumbMediaUrl} alt={`镜头${slot.shotNumber}`} className="h-9 w-14 shrink-0 rounded object-cover" />
       ) : (
-        <div className="flex h-10 w-16 items-center justify-center rounded bg-zinc-950 text-[9px] text-zinc-700">
-          无引用
+        <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded bg-zinc-950 text-[9px] text-zinc-700">
+          无帧
         </div>
       )}
-      <div className="min-w-0">
-        <p className="truncate text-xs text-zinc-200">{slot.durationSeconds.toFixed(1)}s</p>
-        <p className="text-[10px] text-zinc-500">引用 {slot.activeSlot} 关键帧</p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs text-zinc-200">镜头{slot.shotNumber}</p>
+        <p className="text-[10px] text-zinc-500">{slot.durationSeconds.toFixed(1)}s</p>
+      </div>
+      {/* 当前引用关键帧（拖入已采用素材 = 换引用） */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        {slot.refMediaUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={slot.refMediaUrl} alt="引用关键帧" className="h-8 w-12 rounded object-cover" />
+        ) : (
+          <div className="flex h-8 w-12 items-center justify-center rounded bg-zinc-950 text-[9px] text-zinc-700">
+            无引用
+          </div>
+        )}
+        <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-400">{slot.activeSlot}</span>
       </div>
     </div>
   )
@@ -357,24 +391,27 @@ export function UnitDragWorkbench({
   return (
     <div className="space-y-4" data-testid="unit-drag-workbench">
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        {/* 引用槽（排序 = 成员顺序） */}
-        <div data-testid="reference-dock">
+        {/* 镜头顺序条（= 成员顺序 = 视频镜头出现顺序 / 引用顺序 / 时间锚点顺序） */}
+        <div data-testid="shot-order-list">
           <p className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
-            引用关键帧（成员顺序 = 拖拽排序；拖入已采用关键帧 = 换引用）
+            镜头顺序（拖拽整行调整 = 视频中镜头出现顺序；拖入已采用关键帧 = 换该镜头引用图）
           </p>
           <SortableContext items={dockSlots.map((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}`)} strategy={verticalListSortingStrategy}>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {dockSlots.map((slot) => (
-                <DockSlotView key={slot.shotRevisionId} slot={slot} readOnly={readOnly} />
+            <div className="space-y-1.5">
+              {dockSlots.map((slot, index) => (
+                <ShotOrderRow key={slot.shotRevisionId} slot={slot} order={index + 1} readOnly={readOnly} />
               ))}
             </div>
           </SortableContext>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600" data-testid="shot-order-hint">
+            顺序 = 引用顺序 / 提示词时间锚点顺序（0-1s 镜头①…）/ 动作表自动填充顺序；调整后点「保存成员与动作表布局」生效。
+          </p>
         </div>
 
         {/* 素材抽屉 */}
         <div data-testid="asset-drawer">
           <p className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
-            素材抽屉（原始帧 首/中/尾 + 已采用关键帧 —— 拖入引用槽或宫格）
+            素材抽屉（原始帧 首/中/尾 + 已采用关键帧 —— 拖入镜头顺序条换引用，或拖入宫格）
           </p>
           <div className="flex flex-wrap gap-2">
             {groupedAssets.map(([shotNumber, list]) => (

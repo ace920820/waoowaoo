@@ -90,10 +90,14 @@ function snapshotWithShot(): RemakeSnapshot {
   } as RemakeSnapshot
 }
 
-function renderWorkbench(grid: UnitGridDraft, previewUrl?: string | null): string {
+function renderWorkbench(
+  grid: UnitGridDraft,
+  previewUrl?: string | null,
+  dockSlots: Parameters<typeof UnitDragWorkbench>[0]['dockSlots'] = [],
+): string {
   const node = createElement(UnitDragWorkbench, {
     assets: [],
-    dockSlots: [],
+    dockSlots,
     grid,
     onGridChange: () => {},
     onReorderDock: () => {},
@@ -203,5 +207,51 @@ describe('UnitDragWorkbench static render', () => {
   it('hides the preview zone when previewUrl is null', () => {
     const html = renderWorkbench({ columns: 3, cells: [] }, null)
     expect(html).not.toContain('action-sheet-live-preview')
+  })
+
+  it('renders the shot-order list with order badges, thumbnails, ref image and slot label (Phase 09.3)', () => {
+    const dockSlots: Parameters<typeof UnitDragWorkbench>[0]['dockSlots'] = [
+      {
+        shotRevisionId: 'rev-1', shotNumber: 1, durationSeconds: 2, activeSlot: 'start',
+        thumbMediaUrl: '/thumb/1', refMediaUrl: '/ref/1', options: [],
+      },
+      {
+        shotRevisionId: 'rev-2', shotNumber: 3, durationSeconds: 1.5, activeSlot: 'middle',
+        thumbMediaUrl: '/thumb/3', refMediaUrl: null, options: [],
+      },
+      {
+        shotRevisionId: 'rev-3', shotNumber: 2, durationSeconds: 3, activeSlot: 'end',
+        thumbMediaUrl: null, refMediaUrl: '/ref/2', options: [],
+      },
+    ]
+    const html = renderWorkbench({ columns: 3, cells: [] }, null, dockSlots)
+    expect(html).toContain('shot-order-list')
+    expect(html).toContain('shot-order-row-rev-1')
+    expect(html).toContain('shot-order-row-rev-2')
+    expect(html).toContain('shot-order-row-rev-3')
+    // order badges ①②③ with data-order matching the list position
+    expect(html).toContain('shot-order-badge-1')
+    expect(html).toContain('shot-order-badge-3')
+    expect(html).toContain('data-order="1"')
+    expect(html).toContain('data-order="3"')
+    expect(html).toContain('①')
+    expect(html).toContain('/thumb/1')
+    expect(html).toContain('/ref/1')
+    expect(html).toContain('>start<')
+    expect(html).toContain('镜头3')
+    // member shots with no thumbnail show the placeholder
+    expect(html).toContain('无帧')
+    expect(html).toContain('无引用')
+    expect(html).toContain('shot-order-hint')
+  })
+
+  it('panel integration: shot-order hint in readonly view + workbench embed (source contract)', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs')
+    const panel = readFileSync(
+      'src/app/[locale]/workspace/[projectId]/modes/remake/video/RemakeVideoUnitPanel.tsx',
+      'utf8',
+    )
+    expect(panel).toContain('shot-order-readonly-hint')
+    expect(panel).toContain('thumbMediaUrl')
   })
 })

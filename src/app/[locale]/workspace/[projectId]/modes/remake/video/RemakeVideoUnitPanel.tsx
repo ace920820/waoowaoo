@@ -118,16 +118,18 @@ export function RemakeVideoUnitPanel({
       orderedMembers.map((member) => {
         const activeSlot = memberSlotDrafts[member.shotRevisionId] ?? member.keyframeSlot ?? 'middle'
         const activeRef = member.keyframeOptions.find((option) => option.slot === activeSlot) ?? null
+        const shot = snapshot.shots.find((entry) => entry.id === member.shotId)
         return {
           shotRevisionId: member.shotRevisionId,
           shotNumber: member.sequence ?? member.ordinal,
           durationSeconds: member.durationSeconds,
           activeSlot,
+          thumbMediaUrl: shot?.keyframes?.middle?.mediaUrl ?? null,
           refMediaUrl: activeRef?.mediaUrl ?? null,
           options: member.keyframeOptions,
         }
       }),
-    [orderedMembers, memberSlotDrafts],
+    [orderedMembers, memberSlotDrafts, snapshot.shots],
   )
 
   const initialGridDraft = useCallback((): UnitGridDraft => {
@@ -674,6 +676,11 @@ export function RemakeVideoUnitPanel({
         {!frozen && unit.hasCommittedBatch && !readOnly && (
           <p className="mt-2 text-xs text-amber-400/80" data-testid="members-invalidate-hint">
             已生成过版本 —— 保存成员/关键帧变更后，旧版本将标记为「需复核」
+          </p>
+        )}
+        {!frozen && !readOnly && (
+          <p className="mt-2 text-[10px] text-zinc-600" data-testid="shot-order-readonly-hint">
+            镜头顺序 = 视频中出现顺序（引用/时间锚点顺序）；点「调整成员/关键帧（拖拽）」可拖拽调整
           </p>
         )}
       </div>
