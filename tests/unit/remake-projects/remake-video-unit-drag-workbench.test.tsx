@@ -90,7 +90,7 @@ function snapshotWithShot(): RemakeSnapshot {
   } as RemakeSnapshot
 }
 
-function renderWorkbench(grid: UnitGridDraft): string {
+function renderWorkbench(grid: UnitGridDraft, previewUrl?: string | null): string {
   const node = createElement(UnitDragWorkbench, {
     assets: [],
     dockSlots: [],
@@ -98,6 +98,7 @@ function renderWorkbench(grid: UnitGridDraft): string {
     onGridChange: () => {},
     onReorderDock: () => {},
     onSlotAssetDrop: () => {},
+    previewUrl,
   })
   return renderToStaticMarkup(node)
 }
@@ -170,5 +171,22 @@ describe('UnitDragWorkbench static render', () => {
     expect(panel).toContain('save-member-layout-button')
     expect(panel).toContain("action: 'save-layout'")
     expect(panel).toContain('调整成员/关键帧（拖拽）')
+  })
+
+  it('renders the live composed preview with a download link when previewUrl is set (Phase 09.3)', () => {
+    const html = renderWorkbench(
+      { columns: 3, cells: [{ id: 'a', shotNumber: 3, slot: 'start', mediaId: 'm', mediaUrl: '/a.jpg' }] },
+      '/api/remake-projects/p1/units/preview?unitId=u1&grid=%7B%22columns%22%3A3%7D',
+    )
+    expect(html).toContain('action-sheet-live-preview')
+    expect(html).toContain('动作参考表实时预览')
+    expect(html).toContain('action-sheet-preview-download')
+    expect(html).toContain('download="动作参考表.jpg"')
+    expect(html).toContain('href="/api/remake-projects/p1/units/preview')
+  })
+
+  it('hides the preview zone when previewUrl is null', () => {
+    const html = renderWorkbench({ columns: 3, cells: [] }, null)
+    expect(html).not.toContain('action-sheet-live-preview')
   })
 })

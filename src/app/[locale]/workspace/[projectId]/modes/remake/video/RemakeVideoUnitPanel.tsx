@@ -146,6 +146,30 @@ export function RemakeVideoUnitPanel({
     return { columns: 3, cells: autoFillCells(dragAssets) }
   }, [unit?.actionSheetGrid, dragAssets])
 
+  // Phase 09.3: 动作参考表实时预览 —— 编辑模式下按当前草稿（debounced）请求
+  // 服务端合成图；生成前即可查看/下载最终动作参考表。
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!unit || !editingMembers || !gridDraft || gridDraft.cells.length < 2) {
+      setPreviewUrl(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      const gridJson = JSON.stringify({
+        columns: gridDraft.columns,
+        cells: gridDraft.cells.map((cell) => ({
+          shotNumber: cell.shotNumber,
+          slot: cell.slot,
+          mediaId: cell.mediaId,
+        })),
+      })
+      setPreviewUrl(
+        `/api/remake-projects/${encodeURIComponent(projectId)}/units/preview?unitId=${encodeURIComponent(unit.id)}&grid=${encodeURIComponent(gridJson)}`,
+      )
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [unit?.id, editingMembers, gridDraft, projectId])
+
   // WYSIWYG preview — same pure functions the server freezes (D-16).
   const preview = useMemo(() => {
     if (!unit || orderedMembers.length < 2) return null
@@ -515,6 +539,7 @@ export function RemakeVideoUnitPanel({
               onSlotAssetDrop={(shotRevisionId, slot) =>
                 setMemberSlotDrafts((prev) => ({ ...prev, [shotRevisionId]: slot }))
               }
+              previewUrl={previewUrl}
             />
             <div className="mt-2 flex items-center gap-3">
               <button

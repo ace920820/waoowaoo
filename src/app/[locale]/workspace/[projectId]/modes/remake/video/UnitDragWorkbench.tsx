@@ -72,6 +72,8 @@ type WorkbenchProps = {
   onReorderDock: (ordered: string[]) => void
   /** 素材拖入引用槽（仅已采用）→ 设置该成员 keyframeSlot */
   onSlotAssetDrop: (shotRevisionId: string, slot: ActionSheetGridSlot) => void
+  /** 动作参考表实时预览 URL（服务端按当前草稿合成，不持久化）；null = 不显示 */
+  previewUrl?: string | null
   readOnly?: boolean
 }
 
@@ -239,6 +241,7 @@ export function UnitDragWorkbench({
   onGridChange,
   onReorderDock,
   onSlotAssetDrop,
+  previewUrl = null,
   readOnly = false,
 }: WorkbenchProps) {
   const sensors = useSensors(
@@ -446,6 +449,32 @@ export function UnitDragWorkbench({
           </SortableContext>
           {!readOnly && <div className="mt-2"><TrashZone readOnly={readOnly} /></div>}
         </div>
+
+        {/* 动作参考表实时预览（Phase 09.3：保存布局/生成前即可看到合成效果） */}
+        {previewUrl && (
+          <div
+            data-testid="action-sheet-live-preview"
+            className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3"
+          >
+            <p className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
+              动作参考表实时预览（生成视频时将按此布局合成一张大图）
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="动作参考表预览"
+              className="max-h-72 w-full rounded object-contain"
+            />
+            <a
+              href={previewUrl}
+              download="动作参考表.jpg"
+              data-testid="action-sheet-preview-download"
+              className="mt-2 inline-block rounded bg-zinc-800 px-2.5 py-1 text-[10px] text-zinc-200 hover:bg-zinc-700"
+            >
+              下载这张动作参考表
+            </a>
+          </div>
+        )}
       </DndContext>
     </div>
   )
