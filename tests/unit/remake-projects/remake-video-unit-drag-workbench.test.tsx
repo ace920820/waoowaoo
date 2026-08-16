@@ -6,6 +6,7 @@ import {
   UnitDragWorkbench,
   autoFillCells,
   buildUnitDragAssets,
+  resolveShotOrderDrag,
   type UnitGridDraft,
 } from '@/app/[locale]/workspace/[projectId]/modes/remake/video/UnitDragWorkbench'
 import type { UnitMemberView } from '@/lib/remake-projects/unit/adapter'
@@ -108,6 +109,36 @@ function renderWorkbench(
 }
 
 // ─── Tests ────────────────────────────────────────────
+
+describe('resolveShotOrderDrag (debug: drag reorder was a no-op)', () => {
+  const dockSlots: Parameters<typeof UnitDragWorkbench>[0]['dockSlots'] = [
+    { shotRevisionId: 'rev-1', shotNumber: 1, durationSeconds: 1, activeSlot: 'start', thumbMediaUrl: null, refMediaUrl: null, options: [] },
+    { shotRevisionId: 'rev-2', shotNumber: 3, durationSeconds: 1, activeSlot: 'start', thumbMediaUrl: null, refMediaUrl: null, options: [] },
+    { shotRevisionId: 'rev-3', shotNumber: 2, durationSeconds: 1, activeSlot: 'start', thumbMediaUrl: null, refMediaUrl: null, options: [] },
+  ]
+
+  it('reorders the shot list when dragging a row onto another row', () => {
+    const ordered = resolveShotOrderDrag(dockSlots, 'dock:rev-1', 'dock:rev-3')
+    expect(ordered).toEqual(['rev-2', 'rev-3', 'rev-1'])
+  })
+
+  it('returns null for same-position or invalid targets', () => {
+    expect(resolveShotOrderDrag(dockSlots, 'dock:rev-1', 'dock:rev-1')).toBeNull()
+    expect(resolveShotOrderDrag(dockSlots, 'dock:rev-1', 'cell:xyz')).toBeNull()
+    expect(resolveShotOrderDrag(dockSlots, 'dock:unknown', 'dock:rev-2')).toBeNull()
+  })
+
+  it('sortable rows and cells carry their kind in drag data (source contract)', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs')
+    const source = readFileSync(
+      'src/app/[locale]/workspace/[projectId]/modes/remake/video/UnitDragWorkbench.tsx',
+      'utf8',
+    )
+    expect(source).toContain("useSortable({ id, disabled, data })")
+    expect(source).toContain("{ kind: 'dock-slot' }")
+    expect(source).toContain("{ kind: 'grid-cell' }")
+  })
+})
 
 describe('buildUnitDragAssets (Phase 09.3)', () => {
   it('collects original frames + adopted keyframes per member shot', () => {

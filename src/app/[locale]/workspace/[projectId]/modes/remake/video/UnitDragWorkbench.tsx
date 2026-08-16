@@ -87,8 +87,8 @@ const ASSET_ID_PREFIX = 'asset:'
 const DOCK_PREFIX = 'dock:'
 const CELL_PREFIX = 'cell:'
 
-function useSortableCell(id: string, disabled: boolean) {
-  const sortable = useSortable({ id, disabled })
+function useSortableCell(id: string, disabled: boolean, data: Record<string, unknown>) {
+  const sortable = useSortable({ id, disabled, data })
   return {
     ...sortable,
     style: {
@@ -142,6 +142,7 @@ function ShotOrderRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortableCell(
     `${DOCK_PREFIX}${slot.shotRevisionId}`,
     readOnly,
+    { kind: 'dock-slot' },
   )
   return (
     <div
@@ -204,6 +205,7 @@ function GridCellView({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortableCell(
     id,
     readOnly || !cell,
+    { kind: 'grid-cell' },
   )
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `${id}:drop`, disabled: readOnly })
   return (
@@ -350,13 +352,8 @@ export function UnitDragWorkbench({
     }
 
     if (activeData?.kind === 'dock-slot') {
-      if (overId.startsWith(DOCK_PREFIX)) {
-        const from = dockSlots.findIndex((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}` === active.id)
-        const to = dockSlots.findIndex((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}` === overId)
-        if (from >= 0 && to >= 0 && from !== to) {
-          onReorderDock(arrayMove(dockSlots, from, to).map((slot) => slot.shotRevisionId))
-        }
-      }
+      const ordered = resolveShotOrderDrag(dockSlots, String(active.id), overId)
+      if (ordered) onReorderDock(ordered)
       return
     }
 
@@ -534,7 +531,22 @@ export function UnitDragWorkbench({
 
 /** 自动填充：按素材序（成员序）取原始帧填充格子（最多 9 格）。 */
 /**
- * 自动填充：按成员顺序（引用顺序）取每镜头原始帧填充格子。
+ * 镜头顺序条拖拽解析（纯函数）：返回重排后的 shotRevisionId 顺序；
+ * 无效目标/同位置返回 null（不触发重排）。
+ */
+export function resolveShotOrderDrag(
+  dockSlots: UnitReferenceDockSlot[],
+  activeId: string,
+  overId: string,
+): string[] | null {
+  if (!overId.startsWith(DOCK_PREFIX)) return null
+  const from = dockSlots.findIndex((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}` === activeId)
+  const to = dockSlots.findIndex((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}` === overId)
+  if (from < 0 || to < 0 || from === to) return null
+  return arrayMove(dockSlots, from, to).map((slot) => slot.shotRevisionId)
+}
+
+/** 自动填充：按成员顺序（引用顺序）取每镜头原始帧填充格子。
  * 格数上限 = 布局上限（16 格）：4 个镜头（12 帧）可全量填充，
  * 5 个镜头以上才截断（超出部分不会自动加入）。
  */
