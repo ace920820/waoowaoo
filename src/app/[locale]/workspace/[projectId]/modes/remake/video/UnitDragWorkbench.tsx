@@ -297,6 +297,8 @@ export function UnitDragWorkbench({
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   )
 
+  // 按成员顺序（assets 遍历序 = 镜头顺序条顺序）分组 —— 不按镜头编号排序，
+  // 这样镜头顺序拖拽后，素材抽屉的镜头组顺序与上方顺序条保持一致。
   const groupedAssets = useMemo(() => {
     const groups = new Map<number, UnitDragAsset[]>()
     for (const asset of assets) {
@@ -304,7 +306,7 @@ export function UnitDragWorkbench({
       list.push(asset)
       groups.set(asset.shotNumber, list)
     }
-    return [...groups.entries()].sort(([a], [b]) => a - b)
+    return [...groups.entries()]
   }, [assets])
 
   const handleDragEnd = (event: DragEndEvent) => {

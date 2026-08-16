@@ -151,6 +151,41 @@ describe('buildUnitDragAssets (Phase 09.3)', () => {
     expect(originals[0]).toMatchObject({ shotNumber: 3, mediaUrl: '/kf/1s', label: '镜头3·首帧' })
     expect(adopted[0]).toMatchObject({ shotNumber: 3, slot: 'middle', mediaUrl: '/kfm/1' })
   })
+
+  it('keeps asset order = member order so the drawer follows the shot-order list (debug fix)', () => {
+    const assets = buildUnitDragAssets(snapshotWithShot(), [
+      member({ shotRevisionId: 'rev-1', ordinal: 1, sequence: 3 }),
+      member({ shotRevisionId: 'rev-2', ordinal: 2, sequence: 5 }),
+    ])
+    // drawer groups by shotNumber in first-appearance order → 3 before 5,
+    // matching the order bar, NOT sorted by shot number
+    const seen: number[] = []
+    for (const asset of assets) {
+      if (seen[seen.length - 1] !== asset.shotNumber) seen.push(asset.shotNumber)
+    }
+    expect(seen).toEqual([3, 5])
+
+    // reorder the members → the drawer order must follow
+    const reordered = buildUnitDragAssets(snapshotWithShot(), [
+      member({ shotRevisionId: 'rev-2', ordinal: 1, sequence: 5 }),
+      member({ shotRevisionId: 'rev-1', ordinal: 2, sequence: 3 }),
+    ])
+    const seenReordered: number[] = []
+    for (const asset of reordered) {
+      if (seenReordered[seenReordered.length - 1] !== asset.shotNumber) seenReordered.push(asset.shotNumber)
+    }
+    expect(seenReordered).toEqual([5, 3])
+  })
+
+  it('drawer grouping no longer sorts by shot number (source contract)', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs')
+    const source = readFileSync(
+      'src/app/[locale]/workspace/[projectId]/modes/remake/video/UnitDragWorkbench.tsx',
+      'utf8',
+    )
+    expect(source).toContain('[...groups.entries()]')
+    expect(source).not.toContain('[...groups.entries()].sort')
+  })
 })
 
 describe('autoFillCells (Phase 09.3)', () => {
