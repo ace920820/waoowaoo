@@ -133,6 +133,21 @@ describe('autoFillCells (Phase 09.3)', () => {
     expect(cells.every((cell) => cell.mediaUrl)).toBe(true)
   })
 
+  it('fills ALL four members (12 frames) instead of truncating at 9 (debug: 4-shot unit only got 3)', () => {
+    const assets = buildUnitDragAssets(snapshotWithShot(), [
+      member(),
+      member({ shotRevisionId: 'rev-2', ordinal: 2, sequence: 5 }),
+      member({ shotRevisionId: 'rev-3', ordinal: 3, sequence: 7 }),
+      member({ shotRevisionId: 'rev-4', ordinal: 4, sequence: 9 }),
+    ])
+    const cells = autoFillCells(assets)
+    // 4 members × (3 originals + 1 adopted) = 16 assets → all 16 cells kept
+    // (previously truncated at 9, dropping the 4th member entirely)
+    expect(cells).toHaveLength(16)
+    expect(cells.slice(0, 12).map((cell) => cell.shotNumber)).toEqual([3, 3, 3, 5, 5, 5, 7, 7, 7, 9, 9, 9])
+    expect(cells[15]).toMatchObject({ shotNumber: 9, slot: 'middle' })
+  })
+
   it('skips assets without media', () => {
     const snapshot = snapshotWithShot()
     const assets = buildUnitDragAssets(snapshot, [member({ keyframeOptions: [{ slot: 'start', mediaId: null, mediaUrl: null }, { slot: 'middle', mediaId: null, mediaUrl: null }, { slot: 'end', mediaId: null, mediaUrl: null }] })])

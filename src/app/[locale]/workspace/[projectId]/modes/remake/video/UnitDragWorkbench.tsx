@@ -19,7 +19,10 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
 import type { UnitMemberKeyframeOption, UnitMemberView } from '@/lib/remake-projects/unit/adapter'
-import type { ActionSheetGridSlot } from '@/lib/remake-projects/unit/action-sheet-layout'
+import {
+  ACTION_SHEET_GRID_MAX_CELLS,
+  type ActionSheetGridSlot,
+} from '@/lib/remake-projects/unit/action-sheet-layout'
 
 /**
  * Phase 09.3: 拖拽工作台 —— 引用槽（关键帧引用）+ 素材抽屉 + 动作表 x 宫格。
@@ -231,6 +234,16 @@ function TrashZone({ readOnly }: { readOnly: boolean }) {
   )
 }
 
+/** 自动填充顺序说明（编辑模式下显示在宫格下方）。 */
+function AutoFillHint() {
+  return (
+    <p className="text-[10px] leading-relaxed text-zinc-600" data-testid="auto-fill-hint">
+      自动填充按成员顺序（引用顺序）排列每个镜头的原始关键帧；
+      格子顺序与镜头编号不一致属正常（引用顺序 = 创建 unit 时的勾选顺序），可拖拽调整。
+    </p>
+  )
+}
+
 /**
  * 拖拽工作台主体（编辑模式）。
  */
@@ -384,7 +397,7 @@ export function UnitDragWorkbench({
         <div data-testid="action-sheet-grid-editor">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-              动作表 x 宫格（{grid.cells.length}/{grid.columns * 3} 格 · {grid.columns} 列）
+              动作表 x 宫格（{grid.cells.length} 格 · {grid.columns} 列）
             </p>
             <div className="flex items-center gap-2 text-[10px] text-zinc-400">
               {!readOnly && (
@@ -407,6 +420,7 @@ export function UnitDragWorkbench({
                   <button
                     type="button"
                     data-testid="grid-auto-fill"
+                    title="按成员顺序（引用顺序）填充每个镜头的原始关键帧；最多 16 格"
                     onClick={() => onGridChange({ ...grid, cells: autoFillCells(assets) })}
                     className="rounded border border-zinc-800 px-1.5 py-0.5 hover:border-zinc-600"
                   >
@@ -448,6 +462,7 @@ export function UnitDragWorkbench({
             </div>
           </SortableContext>
           {!readOnly && <div className="mt-2"><TrashZone readOnly={readOnly} /></div>}
+          {!readOnly && <div className="mt-1.5"><AutoFillHint /></div>}
         </div>
 
         {/* 动作参考表实时预览（Phase 09.3：保存布局/生成前即可看到合成效果） */}
@@ -481,11 +496,16 @@ export function UnitDragWorkbench({
 }
 
 /** 自动填充：按素材序（成员序）取原始帧填充格子（最多 9 格）。 */
+/**
+ * 自动填充：按成员顺序（引用顺序）取每镜头原始帧填充格子。
+ * 格数上限 = 布局上限（16 格）：4 个镜头（12 帧）可全量填充，
+ * 5 个镜头以上才截断（超出部分不会自动加入）。
+ */
 export function autoFillCells(assets: UnitDragAsset[]): UnitGridCellDraft[] {
   const originals = assets.filter((asset) => asset.kind === 'original')
   const adopted = assets.filter((asset) => asset.kind === 'adopted')
   const ordered = [...originals, ...adopted]
-  return ordered.slice(0, 9).map((asset) => ({
+  return ordered.slice(0, ACTION_SHEET_GRID_MAX_CELLS).map((asset) => ({
     id: asset.id,
     shotNumber: asset.shotNumber,
     slot: asset.slot,
