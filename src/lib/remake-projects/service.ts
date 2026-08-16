@@ -4,6 +4,7 @@ import { isArtStyleValue } from '@/lib/constants'
 import { serializeStoryboardMoodPresets, DEFAULT_STORYBOARD_MOOD_PRESETS } from '@/lib/storyboard-mood-presets'
 import { evaluateSceneDetectReviewGate } from './scenedetect/review-gate'
 import { invalidateKeyframeOutputsForRevision } from './keyframes/invalidation'
+import { parseTimecodeSeconds } from './unit/timecode'
 
 type Row = Record<string, unknown>
 type PromptSlot = 'start' | 'middle' | 'end'
@@ -12,6 +13,14 @@ function parseObject(value: unknown): Row {
   if (!value) return {}
   if (typeof value === 'object' && !Array.isArray(value)) return value as Row
   try { return JSON.parse(String(value)) as Row } catch { return {} }
+}
+
+/** 时间字段一侧转秒：number 直用，字符串时间码解析，其余 null（Pitfall 1：
+ * 可解析的时间码绝不静默 fallback —— 与 unit/service 的 timeRangeSideToSeconds 一致）。 */
+function timeSideToSeconds(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') return parseTimecodeSeconds(value)
+  return null
 }
 
 function mediaUrl(projectId: string, mediaId: unknown): string | null {
@@ -447,8 +456,8 @@ export async function getRemakeProjectSnapshot(input: { projectId: string; userI
             const payload = parseObject(owningRevision?.payload)
             const start = payload.startTimecode ?? payload.startTime ?? null
             const end = payload.endTimecode ?? payload.endTime ?? null
-            const startSeconds = typeof start === 'number' ? start : null
-            const endSeconds = typeof end === 'number' ? end : null
+            const startSeconds = timeSideToSeconds(start)
+            const endSeconds = timeSideToSeconds(end)
             const durationSeconds =
               startSeconds !== null && endSeconds !== null
                 ? Math.max(0.1, endSeconds - startSeconds)

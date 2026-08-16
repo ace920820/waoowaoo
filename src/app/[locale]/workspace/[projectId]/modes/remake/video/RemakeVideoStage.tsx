@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
-import { useProjectAssets, useProjectData, useRefreshRemakeProject, useUserModels } from '@/lib/query/hooks'
+import { useProjectAssets, useProjectData, useRefreshRemakeProject } from '@/lib/query/hooks'
 import { adaptRemakeShots } from '@/lib/remake-projects/keyframes/adapter'
 import {
   buildOrderedVideoReferences,
@@ -19,41 +19,12 @@ import { RemakeShotOverview } from '../ShotOverview'
 import { RemakeVideoUnitPanel, RemakeUnitList } from './RemakeVideoUnitPanel'
 import { buildShotToUnitMap, buildShotUnitBadgeMap } from '@/lib/remake-projects/unit/adapter'
 import { canSelectShotForUnit, filterSelectableUnitShots } from '@/lib/remake-projects/unit/selection'
-import {
-  normalizeVideoGenerationSelections,
-  resolveEffectiveVideoCapabilityDefinitions,
-  resolveEffectiveVideoCapabilityFields,
-} from '@/lib/model-capabilities/video-effective'
-import type { CapabilityValue, VideoCapabilities } from '@/lib/model-config-contract'
-import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
-import { deriveDefaultVideoDuration } from '@/lib/remake-projects/video/duration'
-import {
-  readShotGroupCapabilitySelection,
-} from '@/lib/shot-group/video-config'
-
-const VISIBLE_CAPABILITY_FIELDS = ['duration', 'resolution', 'generateAudio'] as const
+import { useVideoGenerationParams, toCapabilityFieldLabel } from '@/lib/remake-projects/video/use-video-generation-params'
 
 function mediaUrl(projectId: string, mediaId: string | null | undefined) {
   return mediaId
     ? `/api/remake-projects/${encodeURIComponent(projectId)}/scenedetect/media/${encodeURIComponent(mediaId)}`
     : null
-}
-
-function toCapabilityFieldLabel(field: string): string {
-  const labels: Record<string, string> = {
-    duration: '时长',
-    resolution: '分辨率',
-    generateAudio: '生成音频',
-    seed: '随机种子',
-    fps: '帧率',
-  }
-  return labels[field] ?? field
-}
-
-function parseGenerationOptionValue(raw: string | boolean, sample: CapabilityValue): CapabilityValue {
-  if (typeof sample === 'boolean') return Boolean(raw)
-  if (typeof sample === 'number') return Number(raw)
-  return String(raw)
 }
 
 function apiErrorMessage(data: unknown, fallback: string) {
@@ -98,24 +69,11 @@ export default function RemakeVideoStage({
   )
 
   const projectQuery = useProjectData(projectId)
-  const modelsQuery = useUserModels()
   const refresh = useRefreshRemakeProject(projectId)
 
   const projectConfig = (projectQuery.data?.novelPromotionData ?? {}) as Record<string, unknown>
   const defaultVideoModel = typeof projectConfig.videoModel === 'string' ? projectConfig.videoModel : ''
   const capabilityOverrides = projectConfig.capabilityOverrides as Record<string, unknown> | undefined
-
-  const videoModelOptions = useMemo(() => {
-    const videoModels = modelsQuery.data?.video ?? []
-    return videoModels.map((model) => ({
-      value: model.value,
-      label: model.label,
-      provider: model.provider,
-      providerName: model.providerName,
-      capabilities: model.capabilities,
-      videoPricingTiers: model.videoPricingTiers,
-    }))
-  }, [modelsQuery.data])
 
   // Latest remake_video_generate task per shot, so the card can surface the
   // running/failed result instead of silently doing nothing.
@@ -387,7 +345,6 @@ export default function RemakeVideoStage({
                 shot={selectedCard.shot}
                 input={selectedCard.input}
                 defaultVideoModel={defaultVideoModel}
-                videoModelOptions={videoModelOptions}
                 capabilityOverrides={capabilityOverrides}
                 generationTask={videoTaskByShot.get(selectedCard.shot.id) ?? null}
                 onGenerated={refresh}
@@ -402,22 +359,12 @@ export default function RemakeVideoStage({
   )
 }
 
-type VideoModelOption = {
-  value: string
-  label: string
-  provider?: string
-  providerName?: string
-  capabilities?: unknown
-  videoPricingTiers?: unknown
-}
-
 function VideoShotCard({
   projectId,
   sourceMediaUrl,
   shot,
   input,
   defaultVideoModel,
-  videoModelOptions,
   capabilityOverrides,
   generationTask,
   onGenerated,
@@ -429,7 +376,6 @@ function VideoShotCard({
   shot: ReturnType<typeof adaptRemakeShots>[number]
   input: ReturnType<typeof mapRemakeVideoInputs>
   defaultVideoModel: string
-  videoModelOptions: VideoModelOption[]
   capabilityOverrides: Record<string, unknown> | undefined
   generationTask: RemakeSnapshot['tasks'][number] | null
   onGenerated: () => void
@@ -494,79 +440,21 @@ function VideoShotCard({
     }
   }, [shot.videoPrompt.trackId, promptEditText, projectId, onGenerated])
 
-  // Model + capability state
-  const [selectedModel, setSelectedModel] = useState(defaultVideoModel)
-  useEffect(() => {
-    if (defaultVideoModel && !selectedModel) {
-      setSelectedModel(defaultVideoModel)
-    }
-  }, [defaultVideoModel, selectedModel])
-
-  const selectedModelOption = useMemo(
-    () => videoModelOptions.find((opt) => opt.value === selectedModel),
-    [videoModelOptions, selectedModel],
-  )
-
-  const capabilityDefinitions = useMemo(() => {
-    try {
-      return resolveEffectiveVideoCapabilityDefinitions({
-        videoCapabilities: (selectedModelOption?.capabilities as { video?: VideoCapabilities } | undefined)?.video,
-        pricingTiers: selectedModelOption?.videoPricingTiers as VideoPricingTier[] | undefined,
-      })
-    } catch {
-      return []
-    }
-  }, [selectedModelOption])
-
-  const visibleCapabilityFields = useMemo(
-    () => resolveEffectiveVideoCapabilityFields({ definitions: capabilityDefinitions })
-      .filter((field) => VISIBLE_CAPABILITY_FIELDS.includes(field.field as typeof VISIBLE_CAPABILITY_FIELDS[number])),
-    [capabilityDefinitions],
-  )
-
-  const [generationOptions, setGenerationOptions] = useState<Record<string, CapabilityValue>>({})
-
-  // Normalize options when model changes (D-09)
-  useEffect(() => {
-    if (!selectedModel || capabilityDefinitions.length === 0) return
-    const projectDefaults = readShotGroupCapabilitySelection(
-      { video: capabilityOverrides ?? {} } as never,
-      selectedModel,
-    )
-    const defaultDuration = deriveDefaultVideoDuration(
-      shot.durationSeconds,
-      capabilityDefinitions,
-    )
-    const normalized = normalizeVideoGenerationSelections({
-      definitions: capabilityDefinitions,
-      pricingTiers: selectedModelOption?.videoPricingTiers as VideoPricingTier[] | undefined,
-      selection: {
-        ...projectDefaults,
-        duration: defaultDuration,
-      },
-    })
-    setGenerationOptions(normalized)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, capabilityDefinitions.length])
-
-  const handleModelChange = useCallback((modelKey: string) => {
-    setSelectedModel(modelKey)
-    setErrorMsg(null)
-  }, [])
-
-  const handleCapabilityChange = useCallback((field: string, rawValue: string | boolean) => {
-    if (!capabilityDefinitions.length) return
-    const fieldDef = capabilityDefinitions.find((d) => d.field === field)
-    const sample = fieldDef?.options?.[0] ?? ''
-    const parsedValue = parseGenerationOptionValue(rawValue, sample as CapabilityValue)
-    const normalized = normalizeVideoGenerationSelections({
-      definitions: capabilityDefinitions,
-      pricingTiers: selectedModelOption?.videoPricingTiers as VideoPricingTier[] | undefined,
-      selection: { ...generationOptions, [field]: parsedValue },
-      pinnedFields: [field],
-    })
-    setGenerationOptions(normalized)
-  }, [capabilityDefinitions, generationOptions, selectedModelOption])
+  // 模型 + 能力参数（与 unit 面板共享同一 hook，行为一致）
+  const params = useVideoGenerationParams({
+    projectId,
+    shotDurationSeconds: shot.durationSeconds,
+    defaultModel: defaultVideoModel,
+    capabilityOverrides,
+  })
+  const {
+    videoModelOptions,
+    selectedModel,
+    handleModelChange,
+    visibleCapabilityFields,
+    generationOptions,
+    handleCapabilityChange,
+  } = params
 
   const orderedRefs = useMemo(
     () => buildOrderedVideoReferences(input, selected, assetsData),

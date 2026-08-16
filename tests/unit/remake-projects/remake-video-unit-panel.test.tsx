@@ -225,6 +225,37 @@ vi.mock('@/components/ui/icons', () => ({
 
 vi.mock('@/lib/query/hooks', () => ({
   useRefreshRemakeProject: () => vi.fn(),
+  useProjectData: () => ({
+    data: {
+      id: 'project-1',
+      name: 'Test Project',
+      type: 'remake',
+      novelPromotionData: { videoModel: 'ark::test-video-model', capabilityOverrides: {} },
+    },
+    isLoading: false,
+  }),
+  useUserModels: () => ({
+    data: {
+      video: [
+        {
+          value: 'ark::test-video-model',
+          label: 'Test Video Model',
+          provider: 'ark',
+          providerName: 'Ark',
+          capabilities: {
+            video: {
+              durationOptions: [4, 8],
+              resolutionOptions: ['480p', '720p'],
+              generateAudioOptions: [true, false],
+              fieldI18n: { duration: { label: '时长' }, resolution: { label: '分辨率' }, generateAudio: { label: '生成音频' } },
+            },
+          },
+          videoPricingTiers: [],
+        },
+      ],
+    },
+    isLoading: false,
+  }),
 }))
 
 describe('RemakeVideoUnitPanel (D-19 revised lifecycle)', () => {
@@ -267,6 +298,25 @@ describe('RemakeVideoUnitPanel (D-19 revised lifecycle)', () => {
     expect(html).toContain('dissolve-unit-button')
     expect(html).toContain('generate-unit-button')
     expect(html).toContain('生成 unit 视频')
+  })
+
+  it('renders generation params: model select + capability controls (Phase 09.3)', () => {
+    const html = renderPanel(unitSnapshot(), 'unit-1')
+    expect(html).toContain('unit-generation-params')
+    expect(html).toContain('unit-model-select')
+    expect(html).toContain('Test Video Model')
+    expect(html).toContain('unit-capability-duration')
+    expect(html).toContain('unit-capability-resolution')
+    expect(html).toContain('unit-capability-generateAudio')
+    expect(html).toContain('默认使用项目配置，本次修改不影响项目默认值')
+  })
+
+  it('hides generation params for dissolved units (read-only)', () => {
+    const html = renderPanel(
+      unitSnapshot({ dissolvedAt: '2026-08-14T09:00:00Z', dissolvedReason: '镜头重排' }),
+      'unit-1',
+    )
+    expect(html).not.toContain('unit-generation-params')
   })
 
   it('committed batch no longer freezes members; regenerate + invalidate hint (D-19 revised)', () => {

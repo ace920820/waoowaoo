@@ -4,10 +4,14 @@ import React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { RemakeSnapshot } from '@/lib/query/hooks/useRemakeProject'
-import { useRefreshRemakeProject } from '@/lib/query/hooks'
+import { useProjectData, useRefreshRemakeProject } from '@/lib/query/hooks'
 import { adaptRemakeUnit, unitToneForIndex } from '@/lib/remake-projects/unit/adapter'
 import type { RemakeKeyframeSlotName } from '@/lib/remake-projects/unit/adapter'
 import { buildUnitSubmissionPreview } from '@/lib/remake-projects/unit/preview'
+import {
+  useVideoGenerationParams,
+  toCapabilityFieldLabel,
+} from '@/lib/remake-projects/video/use-video-generation-params'
 import {
   UnitDragWorkbench,
   buildUnitDragAssets,
@@ -203,6 +207,29 @@ export function RemakeVideoUnitPanel({
     })
   }, [unit, orderedMembers, snapshot.shots])
 
+  // Phase 09.3: 本次生成参数（与成片页共享 hook；覆盖项目默认，不回写）
+  const projectQuery = useProjectData(projectId)
+  const projectConfig = (projectQuery.data?.novelPromotionData ?? {}) as Record<string, unknown>
+  const defaultVideoModel = typeof projectConfig.videoModel === 'string' ? projectConfig.videoModel : ''
+  const capabilityOverrides = projectConfig.capabilityOverrides as Record<string, unknown> | undefined
+  const unitDurationSeconds = useMemo(
+    () => orderedMembers.reduce((sum, member) => sum + member.durationSeconds, 0),
+    [orderedMembers],
+  )
+  const {
+    videoModelOptions,
+    selectedModel,
+    handleModelChange,
+    visibleCapabilityFields,
+    generationOptions,
+    handleCapabilityChange,
+  } = useVideoGenerationParams({
+    projectId,
+    shotDurationSeconds: unitDurationSeconds,
+    defaultModel: defaultVideoModel,
+    capabilityOverrides,
+  })
+
   const moveMember = useCallback(
     (index: number, direction: -1 | 1) => {
       setMemberOrder((current) => {
@@ -290,6 +317,9 @@ export function RemakeVideoUnitPanel({
           body: JSON.stringify({
             action: 'generate',
             operationKey: `unit-gen-${Date.now()}`,
+            // Phase 09.3: 本次生成参数（模型 + 能力选项，覆盖项目默认）
+            ...(selectedModel ? { model: selectedModel } : {}),
+            options: generationOptions,
           }),
         },
       )
@@ -300,7 +330,7 @@ export function RemakeVideoUnitPanel({
     } finally {
       setSubmitting(false)
     }
-  }, [unit, projectId, preview, refresh])
+  }, [unit, projectId, preview, refresh, selectedModel, generationOptions])
 
   const handleDissolve = useCallback(async () => {
     if (!unit) return
@@ -728,6 +758,74 @@ export function RemakeVideoUnitPanel({
             <span>音频 {preview.referenceCounts.audio} 段</span>
             <span>总时长 {preview.totalDurationSeconds}s</span>
           </div>
+        </div>
+      )}
+
+      {/* 生成参数（Phase 09.3，与成片页一致：本次覆盖，不回写项目默认） */}
+      {canGenerate && (
+        <div
+          data-testid="unit-generation-params"
+          className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3"
+        >
+          <p className="text-xs font-medium text-zinc-300">生成参数</p>
+          <p className="mt-0.5 text-[10px] text-zinc-500">默认使用项目配置，本次修改不影响项目默认值。</p>
+          <label className="mt-2 block text-[11px] text-zinc-400">视频模型</label>
+          <select
+            value={selectedModel}
+            onChange={(event) => handleModelChange(event.target.value)}
+            data-testid="unit-model-select"
+            className="mt-1 w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-500/50"
+          >
+            {videoModelOptions.length === 0 ? (
+              <option value="">加载中...</option>
+            ) : (
+              videoModelOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))
+            )}
+          </select>
+          {visibleCapabilityFields.length > 0 && (
+            <div className="mt-2 space-y-2 border-t border-zinc-800/60 pt-2">
+              {visibleCapabilityFields.map((field) => {
+                const currentValue = generationOptions[field.field]
+                const isBoolean =
+                  field.options.length === 2 && field.options.every((o) => typeof o === 'boolean')
+                return (
+                  <div key={field.field} className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] text-zinc-400">
+                      {toCapabilityFieldLabel(field.field)}
+                    </label>
+                    {isBoolean ? (
+                      <label className="flex items-center gap-2 text-xs text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(currentValue)}
+                          onChange={(event) => handleCapabilityChange(field.field, event.target.checked)}
+                          data-testid={`unit-capability-${field.field}`}
+                        />
+                        <span>{Boolean(currentValue) ? '开启' : '关闭'}</span>
+                      </label>
+                    ) : (
+                      <select
+                        value={String(currentValue ?? '')}
+                        onChange={(event) => handleCapabilityChange(field.field, event.target.value)}
+                        data-testid={`unit-capability-${field.field}`}
+                        className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-violet-500/50"
+                      >
+                        {field.options.map((opt) => (
+                          <option key={String(opt)} value={String(opt)}>
+                            {typeof opt === 'boolean' ? (opt ? '开启' : '关闭') : String(opt)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
