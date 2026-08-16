@@ -75,8 +75,8 @@ type WorkbenchProps = {
   onGridChange: (grid: UnitGridDraft) => void
   /** 引用槽拖拽重排（新顺序的 shotRevisionId 数组） */
   onReorderDock: (ordered: string[]) => void
-  /** 素材拖入引用槽（仅已采用）→ 设置该成员 keyframeSlot */
-  onSlotAssetDrop: (shotRevisionId: string, slot: ActionSheetGridSlot) => void
+  /** 镜头顺序行内选择该成员引用的已采用关键帧 slot（AI 生成图不进素材抽屉） */
+  onSlotSelect: (shotRevisionId: string, slot: ActionSheetGridSlot) => void
   /** 动作参考表实时预览 URL（服务端按当前草稿合成，不持久化）；null = 不显示 */
   previewUrl?: string | null
   readOnly?: boolean
@@ -134,10 +134,12 @@ function ShotOrderRow({
   slot,
   order,
   readOnly,
+  onSlotSelect,
 }: {
   slot: UnitReferenceDockSlot
   order: number
   readOnly: boolean
+  onSlotSelect: (shotRevisionId: string, slot: ActionSheetGridSlot) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortableCell(
     `${DOCK_PREFIX}${slot.shotRevisionId}`,
@@ -174,17 +176,35 @@ function ShotOrderRow({
         <p className="truncate text-xs text-zinc-200">镜头{slot.shotNumber}</p>
         <p className="text-[10px] text-zinc-500">{slot.durationSeconds.toFixed(1)}s</p>
       </div>
-      {/* 当前引用关键帧（拖入已采用素材 = 换引用） */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        {slot.refMediaUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={slot.refMediaUrl} alt="引用关键帧" className="h-8 w-12 rounded object-cover" />
-        ) : (
-          <div className="flex h-8 w-12 items-center justify-center rounded bg-zinc-950 text-[9px] text-zinc-700">
-            无引用
-          </div>
-        )}
-        <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-400">{slot.activeSlot}</span>
+      {/* 引用关键帧 slot 行内选择（已采用关键帧，AI 生成图不进抽屉） */}
+      <div className="flex shrink-0 items-center gap-1">
+        {(['start', 'middle', 'end'] as const).map((optionSlot) => {
+          const option = slot.options.find((entry) => entry.slot === optionSlot) ?? null
+          const selected = slot.activeSlot === optionSlot
+          return (
+            <button
+              key={optionSlot}
+              type="button"
+              disabled={readOnly}
+              data-testid={`shot-order-slot-${slot.shotRevisionId}-${optionSlot}`}
+              data-selected={selected ? 'true' : 'false'}
+              title={`引用 ${optionSlot} 已采用关键帧`}
+              onClick={() => onSlotSelect(slot.shotRevisionId, optionSlot)}
+              className={`flex h-8 w-12 items-center justify-center overflow-hidden rounded border transition-colors ${
+                selected
+                  ? 'border-violet-500/60 ring-1 ring-violet-500/40'
+                  : 'border-zinc-800 opacity-60 hover:opacity-100'
+              } ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              {option?.mediaUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={option.mediaUrl} alt={`${optionSlot} 已采用`} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[9px] text-zinc-600">未采用</span>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -289,7 +309,7 @@ export function UnitDragWorkbench({
   grid,
   onGridChange,
   onReorderDock,
-  onSlotAssetDrop,
+  onSlotSelect,
   previewUrl = null,
   readOnly = false,
 }: WorkbenchProps) {
@@ -316,11 +336,7 @@ export function UnitDragWorkbench({
     const overId = String(over.id)
 
     if (activeData?.kind === 'asset') {
-      const asset = activeData as unknown as UnitDragAsset & { kind: string }
-      if (overId.startsWith(DOCK_PREFIX) && asset.kind === 'adopted') {
-        onSlotAssetDrop(overId.slice(DOCK_PREFIX.length), asset.slot)
-        return
-      }
+      const asset = activeData as unknown as UnitDragAsset
       if (overId.startsWith(CELL_PREFIX)) {
         const target = overId.slice(CELL_PREFIX.length)
         if (target.startsWith('empty-')) {
@@ -398,7 +414,13 @@ export function UnitDragWorkbench({
           <SortableContext items={dockSlots.map((slot) => `${DOCK_PREFIX}${slot.shotRevisionId}`)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1.5">
               {dockSlots.map((slot, index) => (
-                <ShotOrderRow key={slot.shotRevisionId} slot={slot} order={index + 1} readOnly={readOnly} />
+                <ShotOrderRow
+                  key={slot.shotRevisionId}
+                  slot={slot}
+                  order={index + 1}
+                  readOnly={readOnly}
+                  onSlotSelect={onSlotSelect}
+                />
               ))}
             </div>
           </SortableContext>
@@ -410,7 +432,7 @@ export function UnitDragWorkbench({
         {/* 素材抽屉 */}
         <div data-testid="asset-drawer">
           <p className="mb-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
-            素材抽屉（原始帧 首/中/尾 + 已采用关键帧 —— 拖入镜头顺序条换引用，或拖入宫格）
+            素材抽屉（仅原镜头片段关键帧 首/中/尾 —— 拖入宫格组成动作参考表；引用图在镜头顺序行内选择）
           </p>
           <div className="flex flex-wrap gap-2">
             {groupedAssets.map(([shotNumber, list]) => (
@@ -553,10 +575,7 @@ export function resolveShotOrderDrag(
  * 5 个镜头以上才截断（超出部分不会自动加入）。
  */
 export function autoFillCells(assets: UnitDragAsset[]): UnitGridCellDraft[] {
-  const originals = assets.filter((asset) => asset.kind === 'original')
-  const adopted = assets.filter((asset) => asset.kind === 'adopted')
-  const ordered = [...originals, ...adopted]
-  return ordered.slice(0, ACTION_SHEET_GRID_MAX_CELLS).map((asset) => ({
+  return assets.slice(0, ACTION_SHEET_GRID_MAX_CELLS).map((asset) => ({
     id: asset.id,
     shotNumber: asset.shotNumber,
     slot: asset.slot,
@@ -566,6 +585,12 @@ export function autoFillCells(assets: UnitDragAsset[]): UnitGridCellDraft[] {
 }
 
 /** 从快照解析素材列表（panel 调用）：每成员镜头 3 原始帧 + 3 已采用关键帧。 */
+/**
+ * 从快照解析素材列表（panel 调用）：每成员镜头 3 张原始关键帧
+ * （scenedetect 提取帧）。AI 生成/已采用的关键帧图（keyframeOptions）
+ * 不进入可拖拽素材列表 —— 动作表只由原始镜头片段帧构成；
+ * 成员引用图在镜头顺序行内直接选择（见 onSlotSelect）。
+ */
 export function buildUnitDragAssets(
   snapshot: RemakeSnapshot,
   members: UnitMemberView[],
@@ -587,19 +612,6 @@ export function buildUnitDragAssets(
           slot,
           kind: 'original',
           label: `镜头${shotNumber}·${SLOT_LABEL[slot]}帧`,
-        })
-      }
-    }
-    for (const option of member.keyframeOptions) {
-      if (option.mediaUrl) {
-        assets.push({
-          id: `adopted:${member.shotRevisionId}:${option.slot}`,
-          mediaId: option.mediaId ?? option.slot,
-          mediaUrl: option.mediaUrl,
-          shotNumber,
-          slot: option.slot,
-          kind: 'adopted',
-          label: `镜头${shotNumber}·已采用${SLOT_LABEL[option.slot]}`,
         })
       }
     }

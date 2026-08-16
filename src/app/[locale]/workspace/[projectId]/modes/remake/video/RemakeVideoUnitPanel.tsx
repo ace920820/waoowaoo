@@ -538,7 +538,7 @@ export function RemakeVideoUnitPanel({
               grid={gridDraft ?? initialGridDraft()}
               onGridChange={setGridDraft}
               onReorderDock={(ordered) => setMemberOrder(ordered)}
-              onSlotAssetDrop={(shotRevisionId, slot) =>
+              onSlotSelect={(shotRevisionId, slot) =>
                 setMemberSlotDrafts((prev) => ({ ...prev, [shotRevisionId]: slot }))
               }
               previewUrl={previewUrl}

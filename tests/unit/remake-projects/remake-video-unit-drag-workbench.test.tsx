@@ -102,7 +102,7 @@ function renderWorkbench(
     grid,
     onGridChange: () => {},
     onReorderDock: () => {},
-    onSlotAssetDrop: () => {},
+    onSlotSelect: () => {},
     previewUrl,
   })
   return renderToStaticMarkup(node)
@@ -141,15 +141,14 @@ describe('resolveShotOrderDrag (debug: drag reorder was a no-op)', () => {
 })
 
 describe('buildUnitDragAssets (Phase 09.3)', () => {
-  it('collects original frames + adopted keyframes per member shot', () => {
+  it('collects ONLY original frames — AI-generated/adopted keyframes are excluded (debug fix)', () => {
     const assets = buildUnitDragAssets(snapshotWithShot(), [member()])
     const originals = assets.filter((asset) => asset.kind === 'original')
     const adopted = assets.filter((asset) => asset.kind === 'adopted')
     expect(originals).toHaveLength(3)
-    expect(adopted).toHaveLength(1)
+    expect(adopted).toHaveLength(0)
     expect(originals.map((asset) => asset.slot)).toEqual(['start', 'middle', 'end'])
     expect(originals[0]).toMatchObject({ shotNumber: 3, mediaUrl: '/kf/1s', label: '镜头3·首帧' })
-    expect(adopted[0]).toMatchObject({ shotNumber: 3, slot: 'middle', mediaUrl: '/kfm/1' })
   })
 
   it('keeps asset order = member order so the drawer follows the shot-order list (debug fix)', () => {
@@ -189,17 +188,16 @@ describe('buildUnitDragAssets (Phase 09.3)', () => {
 })
 
 describe('autoFillCells (Phase 09.3)', () => {
-  it('fills cells with originals first, then adopted (member order)', () => {
+  it('fills cells with member original frames in member order', () => {
     const assets = buildUnitDragAssets(snapshotWithShot(), [
       member(),
       member({ shotRevisionId: 'rev-2', ordinal: 2, sequence: 5 }),
     ])
     const cells = autoFillCells(assets)
-    // 2 members × (3 originals + 1 adopted) = 8 assets → 8 cells
-    expect(cells).toHaveLength(8)
+    // 2 members × 3 originals = 6 assets → 6 cells
+    expect(cells).toHaveLength(6)
     expect(cells[0]).toMatchObject({ shotNumber: 3, slot: 'start' })
     expect(cells[5]).toMatchObject({ shotNumber: 5, slot: 'end' })
-    expect(cells[7]).toMatchObject({ shotNumber: 5, slot: 'middle' })
     expect(cells.every((cell) => cell.mediaUrl)).toBe(true)
   })
 
@@ -211,11 +209,10 @@ describe('autoFillCells (Phase 09.3)', () => {
       member({ shotRevisionId: 'rev-4', ordinal: 4, sequence: 9 }),
     ])
     const cells = autoFillCells(assets)
-    // 4 members × (3 originals + 1 adopted) = 16 assets → all 16 cells kept
+    // 4 members × 3 originals = 12 assets → all 12 cells kept
     // (previously truncated at 9, dropping the 4th member entirely)
-    expect(cells).toHaveLength(16)
-    expect(cells.slice(0, 12).map((cell) => cell.shotNumber)).toEqual([3, 3, 3, 5, 5, 5, 7, 7, 7, 9, 9, 9])
-    expect(cells[15]).toMatchObject({ shotNumber: 9, slot: 'middle' })
+    expect(cells).toHaveLength(12)
+    expect(cells.map((cell) => cell.shotNumber)).toEqual([3, 3, 3, 5, 5, 5, 7, 7, 7, 9, 9, 9])
   })
 
   it('skips assets without media', () => {
@@ -275,7 +272,7 @@ describe('UnitDragWorkbench static render', () => {
     expect(html).not.toContain('action-sheet-live-preview')
   })
 
-  it('renders the shot-order list with order badges, thumbnails, ref image and slot label (Phase 09.3)', () => {
+  it('renders the shot-order list with order badges, thumbnails and inline slot pickers (Phase 09.3)', () => {
     const dockSlots: Parameters<typeof UnitDragWorkbench>[0]['dockSlots'] = [
       {
         shotRevisionId: 'rev-1', shotNumber: 1, durationSeconds: 2, activeSlot: 'start',
@@ -302,13 +299,17 @@ describe('UnitDragWorkbench static render', () => {
     expect(html).toContain('data-order="3"')
     expect(html).toContain('①')
     expect(html).toContain('/thumb/1')
-    expect(html).toContain('/ref/1')
-    expect(html).toContain('>start<')
     expect(html).toContain('镜头3')
     // member shots with no thumbnail show the placeholder
     expect(html).toContain('无帧')
-    expect(html).toContain('无引用')
     expect(html).toContain('shot-order-hint')
+    // inline slot pickers (3 per row), current slot highlighted — no ref img anymore
+    expect(html).toContain('shot-order-slot-rev-1-start')
+    expect(html).toContain('shot-order-slot-rev-1-middle')
+    expect(html).toContain('shot-order-slot-rev-1-end')
+    expect(html).toContain('data-selected="true"')
+    expect(html).toContain('未采用')
+    expect(html).not.toContain('/ref/1')
   })
 
   it('panel integration: shot-order hint in readonly view + workbench embed (source contract)', () => {
